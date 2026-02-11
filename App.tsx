@@ -17,17 +17,18 @@ import CustomerDatabase from './components/CustomerDatabase';
 import Agenda from './components/Agenda';
 import MarketingAutomationDashboard from './components/MarketingAutomation';
 import ScriptsLibrary from './components/ScriptsLibrary';
+import UserManagementView from './components/UserManagementView';
+import UserProfileModal from './components/UserProfileModal';
 import { 
   NavigationState, Lead, LeadStatus, UserRole, User, 
   SystemConfig, OnboardingTemplate, UserGoal, SdrQualification, AgendaEvent, AutomationFlow, Task, SalesScript
 } from './types';
 import { INITIAL_LEADS, DEFAULT_ONBOARDING_TEMPLATES } from './constants';
-import { seedDatabase } from './services/dataGeneratorService';
 
-const CONFIG_KEY = 'ciatos_config_v57';
-const LEADS_KEY = 'ciatos_leads_v57';
-const FLOWS_KEY = 'ciatos_flows_v57';
-const SCRIPTS_KEY = 'ciatos_scripts_v57';
+const CONFIG_KEY = 'ciatos_config_v58';
+const LEADS_KEY = 'ciatos_leads_v58';
+const SCRIPTS_KEY = 'ciatos_scripts_v58';
+const USERS_KEY = 'ciatos_users_v58';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
@@ -64,36 +65,60 @@ const App: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [scripts, setScripts] = useState<SalesScript[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [config, setConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
 
-  const [allUsers] = useState<User[]>([
-    { id: 'user-01', name: 'Diretor Admin', email: 'admin@ciatos.com', role: UserRole.ADMIN, department: 'Comercial', avatar: 'https://ui-avatars.com/api/?name=Admin&background=0a192f&color=c5a059' },
-    { id: 'user-mgr', name: 'Gerente Comercial', email: 'gerente@ciatos.com', role: UserRole.MANAGER, department: 'Comercial', avatar: 'https://ui-avatars.com/api/?name=Gerente&background=334155&color=fff' },
-    { id: 'user-sdr', name: 'SDR 01', email: 'sdr1@ciatos.com', role: UserRole.SDR, department: 'Comercial', avatar: 'https://ui-avatars.com/api/?name=SDR&background=6366f1&color=fff' },
-    { id: 'user-closer', name: 'Consultor Fechamento', email: 'closer@ciatos.com', role: UserRole.CLOSER, department: 'Comercial', avatar: 'https://ui-avatars.com/api/?name=Consultor&background=c5a059&color=fff' }
-  ]);
-  const [currentUser, setCurrentUser] = useState<User>(allUsers[0]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     const savedLeads = localStorage.getItem(LEADS_KEY);
     const savedConfig = localStorage.getItem(CONFIG_KEY);
     const savedScripts = localStorage.getItem(SCRIPTS_KEY);
+    const savedUsers = localStorage.getItem(USERS_KEY);
 
     if (savedLeads) setLeads(JSON.parse(savedLeads)); else setLeads(INITIAL_LEADS);
     if (savedConfig) setConfig(JSON.parse(savedConfig));
     if (savedScripts) setScripts(JSON.parse(savedScripts));
+    
+    if (savedUsers) {
+      const parsedUsers = JSON.parse(savedUsers);
+      setUsers(parsedUsers);
+      setCurrentUser(parsedUsers[0]);
+    } else {
+      const initialUsers: User[] = [
+        { id: 'user-01', name: 'Diretor Admin', email: 'admin@ciatos.com', password: 'admin', role: UserRole.ADMIN, department: 'Comercial', avatar: '' },
+        { id: 'user-sdr', name: 'SDR 01', email: 'sdr1@ciatos.com', password: '123', role: UserRole.SDR, department: 'Comercial', avatar: '' }
+      ];
+      setUsers(initialUsers);
+      setCurrentUser(initialUsers[0]);
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
     localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
-  }, [leads, config, scripts]);
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }, [leads, config, scripts, users]);
 
   const handleUpdateLead = (updatedLead: Lead) => {
     setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+  };
+
+  const handleAddUser = (user: User) => {
+    setUsers(prev => [...prev, user]);
+  };
+
+  const handleUpdateUser = (updatedUser: User) => {
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    if (currentUser?.id === updatedUser.id) setCurrentUser(updatedUser);
+  };
+
+  const handleDeleteUser = (id: string) => {
+    setUsers(prev => prev.filter(u => u.id !== id));
   };
 
   const handleAddLead = async (leadData: any) => {
@@ -102,7 +127,7 @@ const App: React.FC = () => {
       id: leadData.id || `lead-${Date.now()}`,
       status: leadData.status || LeadStatus.QUALIFICATION,
       phaseId: leadData.phaseId || 'ph-qualificado',
-      ownerId: leadData.ownerId || currentUser.id,
+      ownerId: leadData.ownerId || currentUser?.id,
       createdAt: new Date().toISOString(),
       interactions: [],
       tasks: [],
@@ -112,11 +137,16 @@ const App: React.FC = () => {
     return { success: true, message: 'Lead gerado com sucesso.' };
   };
 
+  if (!currentUser) return null;
+
   const renderView = () => {
     switch (nav.view) {
       case 'dashboard': 
         return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
       
+      case 'user_management':
+        return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
+
       case 'scripts':
         return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={s => setScripts(prev => {
           const exists = prev.find(item => item.id === s.id);
@@ -124,10 +154,10 @@ const App: React.FC = () => {
         })} onDeleteScript={id => setScripts(prev => prev.filter(s => s.id !== id))} />;
 
       case 'sdr_dashboard':
-        return <SdrDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={[]} onUpdateStatus={()=>{}} />;
+        return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={[]} onUpdateStatus={()=>{}} />;
       
       case 'closer_dashboard':
-        return <CloserDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={[]} />;
+        return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={[]} />;
 
       case 'prospecting':
         return <Prospector onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
@@ -136,13 +166,13 @@ const App: React.FC = () => {
         return <QualificationQueue leads={leads} config={config} onApprove={(id) => setLeads(leads.map(l => l.id === id ? {...l, inQueue: false, qualifiedById: currentUser.id} : l))} onUpdateLead={handleUpdateLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
 
       case 'marketing_automation': 
-        return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={allUsers} />;
+        return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
       
       case 'kanban': 
-        return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => setLeads(leads.map(l => l.id === id ? {...l, phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId} : l))} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={allUsers} />;
+        return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => setLeads(leads.map(l => l.id === id ? {...l, phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId} : l))} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       
       case 'agenda':
-        return <Agenda events={events} leads={leads} users={allUsers} currentUser={currentUser} config={config} onSaveEvent={(e) => setEvents(prev => [...prev, e])} onDeleteEvent={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onSelectLead={setSelectedLeadId} />;
+        return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={(e) => setEvents(prev => [...prev, e])} onDeleteEvent={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onSelectLead={setSelectedLeadId} />;
 
       case 'operational_dashboard':
         return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={[]} />;
@@ -151,10 +181,10 @@ const App: React.FC = () => {
         return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} />;
 
       case 'post_sales':
-        return <PostSalesDashboard leads={leads} users={allUsers} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={[]} />;
+        return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={[]} />;
 
       case 'settings':
-        return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={[]} allUsers={allUsers} onSaveGoals={()=>{}} onSeedDatabase={()=>{}} onClearDatabase={() => setLeads([])} templates={[]} onSaveTemplates={()=>{}} onSyncTemplate={()=>{}} />;
+        return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={[]} allUsers={users} onSaveGoals={()=>{}} onSeedDatabase={()=>{}} onClearDatabase={() => setLeads([])} templates={[]} onSaveTemplates={()=>{}} onSyncTemplate={()=>{}} />;
 
       default: 
         return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;
@@ -179,8 +209,9 @@ const App: React.FC = () => {
           onClearAll={() => {}} 
           onOpenNewLead={() => setShowNewLeadForm(true)} 
           currentUser={currentUser} 
-          onSwitchRole={(r) => setCurrentUser(allUsers.find(u => u.role === r) || currentUser)} 
+          onSwitchRole={(r) => setCurrentUser(users.find(u => u.role === r) || currentUser)} 
           canCreate={true} 
+          onOpenUserProfile={() => setShowUserProfileModal(true)}
         />
         <main className="flex-1 ml-64 pt-28 p-12 max-w-[1800px]">
            {renderView()}
@@ -198,6 +229,14 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {showUserProfileModal && (
+        <UserProfileModal 
+          user={currentUser} 
+          onSave={handleUpdateUser} 
+          onClose={() => setShowUserProfileModal(false)} 
+        />
+      )}
+
       {selectedLead && (
         <LeadDetails 
           lead={selectedLead} 
@@ -210,7 +249,7 @@ const App: React.FC = () => {
           onAddAgendaEvent={(e) => setEvents([...events, e])}
           onDeleteAgendaEvent={(id) => setEvents(events.filter(e => e.id !== id))}
           currentUser={currentUser} 
-          allUsers={allUsers} 
+          allUsers={users} 
           scripts={scripts}
         />
       )}

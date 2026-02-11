@@ -80,10 +80,9 @@ export interface ScriptVersion {
   changeNote?: string;
 }
 
-// Interface atualizada conforme a solicitação exata
 export interface ObjectionAnalysis {
-  quick_lines: string[]; // 3 respostas curta (direto, empático, consultivo)
-  long_scripts: string[]; // 2 scripts (3-5 frases)
+  quick_lines: string[]; 
+  long_scripts: string[]; 
   whatsapp_msg: string;
   follow_up: string;
   tags: string[];
@@ -103,6 +102,22 @@ export interface ScriptUsage {
   date: string;
 }
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password?: string; // Novo campo para gestão de identidade
+  role: UserRole;
+  department: Department;
+  avatar?: string;
+  managerTypeId?: string;
+}
+
+export interface NavigationState {
+  view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management';
+}
+
+// Mantendo as outras interfaces conforme os arquivos originais
 export interface LeadPartner {
   name: string;
   sharePercentage: string;
@@ -154,8 +169,10 @@ export interface OnboardingTemplate {
   phases: OnboardingPhaseTemplate[];
 }
 
+// Added tradeName to fix miningService.ts error
 export interface ProspectCompany {
   name: string;
+  tradeName?: string;
   cnpj?: string;
   cnpjRaw?: string;
   segment: string;
@@ -384,51 +401,6 @@ export interface AuditLog {
   newState?: any;
 }
 
-export interface CampaignComment {
-  id: string;
-  userId: string;
-  userName: string;
-  text: string;
-  timestamp: string;
-}
-
-export interface Campaign {
-  id: string;
-  name: string;
-  smartListId: string;
-  templates: {
-    email?: string;
-    whatsapp?: string;
-  };
-  status: 'InReview' | 'Approved' | 'Running' | 'Completed';
-  comments: CampaignComment[];
-  createdAt: string;
-  stats: {
-    sent: number;
-    opened: number;
-    clicked: number;
-    replied: number;
-    errors: number;
-  };
-}
-
-export interface ChatThread {
-  id: string;
-  title: string;
-  leadId?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  threadId: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  timestamp: string;
-  fileUrl?: string;
-  fileName?: string;
-}
-
 export interface Participant {
   userId: string;
   status: string;
@@ -552,18 +524,15 @@ export interface SystemConfig {
   publicSchedulerLink: string;
 }
 
-export interface NavigationState {
-  view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts';
-}
-
-export interface User {
+export interface UserGoal {
   id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  department: Department;
-  avatar?: string;
-  managerTypeId?: string;
+  userId: string;
+  month: number;
+  year: number;
+  qualsGoal: number;
+  callsGoal: number;
+  proposalsGoal: number; 
+  contractsGoal: number;
 }
 
 export interface AgendaEvent {
@@ -582,13 +551,49 @@ export interface AgendaEvent {
   creatorId: string;
 }
 
-export interface UserGoal {
+// Added missing interfaces for MarketingHub and ReportsDashboard
+export interface CampaignComment {
   id: string;
   userId: string;
-  month: number;
-  year: number;
-  qualsGoal: number;
-  callsGoal: number;
-  proposalsGoal: number; 
-  contractsGoal: number;
+  userName: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  smartListId: string;
+  templates: {
+    email?: string;
+    whatsapp?: string;
+  };
+  status: 'InReview' | 'Approved' | 'Running' | 'Completed';
+  comments: CampaignComment[];
+  createdAt: string;
+  stats: {
+    sent: number;
+    opened: number;
+    clicked: number;
+    replied: number;
+    errors: number;
+  };
+}
+
+// Added missing interfaces for ChatModule
+export interface ChatThread {
+  id: string;
+  title: string;
+  leadId?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: string;
+  fileUrl?: string;
+  fileName?: string;
 }
