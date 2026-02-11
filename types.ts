@@ -32,79 +32,6 @@ export enum CompanySize {
   LARGE = 'Grande Empresa'
 }
 
-export interface WelcomeData {
-  callDate?: string;
-  callNotes?: string;
-  emailDate?: string;
-  kitSent?: boolean;
-  kitDate?: string;
-}
-
-export type AutomationPhase = 'POST_QUALIFICATION' | 'POST_MEETING' | 'POST_PROPOSAL' | 'NURTURING' | 'WIN_BACK' | 'CUSTOM';
-
-export interface Lead {
-  id: string;
-  name: string; 
-  email: string; 
-  phone: string; 
-  company: string;
-  tradeName: string;
-  legalName: string;
-  cnpj: string;
-  cnpjRaw: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  segment: string;
-  size: CompanySize;
-  taxRegime: string;
-  annualRevenue: string;
-  monthlyRevenue?: string;
-  payrollValue?: string;
-  status: LeadStatus;
-  phaseId: string;
-  ownerId: string;
-  qualifiedById?: string;
-  scheduledById?: string;
-  closedById?: string;
-  createdAt: string;
-  debtStatus: string; 
-  inQueue: boolean;
-  interactions: Interaction[];
-  tasks: any[];
-  onboardingChecklist?: OnboardingItem[];
-  welcomeData?: WelcomeData;
-  npsSurveys?: NpsSurvey[];
-  successTasks?: SuccessTask[];
-  feedbackPoints?: CustomerFeedbackPoint[];
-  healthScore?: number;
-  engagementScore?: number;
-  contractStart?: string;
-  contractEnd?: string;
-  serviceType?: string;
-  contractValue?: string;
-  icpScore: number;
-  city: string;
-  state: string;
-  address?: string;
-  detailedPartners: LeadPartner[];
-  contractNumber?: string;
-  notes?: string;
-  strategicPains?: string;
-  expectations?: string;
-  role?: string;
-  website?: string;
-  linkedinDM?: string;
-  instagramDM?: string;
-  linkedinCompany?: string;
-  instagramCompany?: string;
-  closeProbability: number;
-  marketingAutomation?: MarketingAutomation;
-  onboardingTemplateId?: string;
-  lgpdConsent?: { status: 'OPT_IN' | 'OPT_OUT'; date: string; };
-  location?: string;
-  enriched?: boolean;
-}
-
 export interface Interaction {
   id: string;
   type: InteractionType;
@@ -117,175 +44,63 @@ export interface Interaction {
   errorMessage?: string;
   latency?: number;
   scoreImpact?: number;
+  scriptVersionId?: string; 
 }
 
-export type InteractionType = 'NEW' | 'EDIT' | 'CALL' | 'MEETING' | 'NOTE' | 'WHATSAPP' | 'EMAIL' | 'REJECTION' | 'CONTRACT' | 'SMS' | 'FEEDBACK' | 'MARKETING_EVENT';
+export type InteractionType = 'NEW' | 'EDIT' | 'CALL' | 'MEETING' | 'NOTE' | 'WHATSAPP' | 'EMAIL' | 'REJECTION' | 'CONTRACT' | 'SMS' | 'FEEDBACK' | 'MARKETING_EVENT' | 'SCRIPT_USAGE';
 
-export interface KanbanPhase {
-  id: string;
-  name: string;
-  order: number;
-  color: string;
-  authorizedUserIds: string[];
-}
-
-export interface TaskType {
-  id: string;
-  name: string;
-  channel: string;
-  color: string;
-  icon: string;
-  requireDecisor: boolean;
-  template: string;
-}
-
-export interface SystemConfig {
-  phases: KanbanPhase[];
-  taskTypes: TaskType[];
-  companySizes: string[];
-  taxRegimes: string[];
-  serviceTypes: string[];
-  messaging: MessagingConfig;
-  bonus: any;
-  publicSchedulerLink: string;
-}
-
-export interface NavigationState {
-  view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation';
-}
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  department: Department;
-  avatar?: string;
-  managerTypeId?: string;
-}
-
-export interface AgendaEvent {
+export interface SalesScript {
   id: string;
   title: string;
-  start: string;
-  end: string;
-  assignedToId: string;
-  leadId?: string;
-  typeId?: string;
-  type: string;
-  description?: string;
-  status: string;
-  participants: Participant[];
-  department: string;
-  creatorId: string;
-}
-
-export interface Participant {
-  userId: string;
-  status: 'pending' | 'accepted' | 'declined';
-}
-
-export interface SdrQualification {
-  id: string;
-  leadId: string;
-  sdrId: string;
-  companyName: string;
-  date: string;
-  type: 'QUALIFICATION' | 'MEETING' | 'CONTRACT' | 'PROPOSAL';
-  bonusValue: number;
-  status: 'Aprovado' | 'Revertido' | 'Pendente';
-}
-
-export interface UserGoal {
-  id: string;
-  userId: string;
-  month: number;
-  year: number;
-  qualsGoal: number;
-  callsGoal: number;
-  proposalsGoal: number; 
-  contractsGoal: number;
-}
-
-export interface MessagingConfig {
-  smtp: { host: string; };
-  whatsapp: { apiKey: string; phoneId?: string; };
-}
-
-export interface CustomerFeedbackPoint {
-  id: string;
-  type: 'POSITIVE' | 'NEGATIVE';
-  text: string;
-  date: string;
-  authorName: string;
-}
-
-export interface OnboardingTemplate {
-  id: string;
+  objective: 'pitch' | 'follow-up' | 'objection' | 'closing';
   serviceType: string;
-  name: string;
-  description: string;
-  updatedAt: string;
-  updatedBy: string;
-  phases: OnboardingPhaseTemplate[];
-}
-
-export interface OnboardingPhaseTemplate {
-  id: string;
-  name: string;
-  description: string;
-  order: number;
-  defaultDueDays: number;
-  mandatory: boolean;
-}
-
-export interface OnboardingItem {
-  id: string;
-  title: string;
-  description: string;
-  status: 'Pendente' | 'Em Andamento' | 'Bloqueado' | 'Concluido';
-  responsibleId: string;
-  dueDate: string;
-  updatedAt: string;
-  items: any[];
-  comments: OnboardingComment[];
-  attachments: OnboardingAttachment[];
-  templatePhaseId?: string;
-}
-
-export interface OnboardingComment {
-  id: string;
+  funnelPhaseId: string;
+  tone: 'formal' | 'tecnico' | 'consultivo' | 'direto';
+  targetSegment?: string;
+  estimatedDuration: number; 
+  bullets: string[];
+  tags: string[];
+  isGlobal: boolean; 
   authorId: string;
-  authorName: string;
-  text: string;
+  versions: ScriptVersion[];
+  currentVersionId: string;
+  usageStats: {
+    totalUsed: number;
+    resolvedObjections: number;
+    convertedToMeeting: number;
+  };
+}
+
+export interface ScriptVersion {
+  id: string;
+  body: string; 
+  versionNumber: number;
+  createdAt: string;
+  createdBy: string;
+  changeNote?: string;
+}
+
+// Interface atualizada conforme a solicitação exata
+export interface ObjectionAnalysis {
+  quick_lines: string[]; // 3 respostas curta (direto, empático, consultivo)
+  long_scripts: string[]; // 2 scripts (3-5 frases)
+  whatsapp_msg: string;
+  follow_up: string;
+  tags: string[];
+  confidence: {
+    percentual: number;
+    razão: string;
+  };
+}
+
+export interface ScriptUsage {
+  id: string;
+  scriptId: string;
+  versionId: string;
+  leadId: string;
+  userId: string;
+  outcome: 'Interessado' | 'Objeção resolvida' | 'Precisa de proposta' | 'Não interessado';
   date: string;
-}
-
-export interface OnboardingAttachment {
-  id: string;
-  name: string;
-  url: string;
-  date: string;
-  uploadedBy: string;
-}
-
-export interface NpsSurvey {
-  id: string;
-  scheduledAt: string;
-  performedAt?: string;
-  score?: number;
-  notes?: string;
-  channel: string;
-  status: 'Pendente' | 'Concluido';
-  type: '90_DAYS' | 'ANNUAL';
-}
-
-export interface SuccessTask {
-  id: string;
-  title: string;
-  dueDate: string;
-  status: 'Pendente' | 'Concluido';
-  category: 'Boas-Vindas' | 'Expansao' | 'NPS_FollowUp';
 }
 
 export interface LeadPartner {
@@ -297,7 +112,7 @@ export interface LeadPartner {
 export interface MarketingHistory {
   id: string;
   step: string;
-  action: 'EMAIL_SENT' | 'EMAIL_OPENED' | 'LINK_CLICKED' | 'OPT_OUT' | 'MANUAL' | 'SCORE_UPDATED' | 'RE-SENT';
+  action: string;
   timestamp: string;
   details: string;
 }
@@ -314,69 +129,48 @@ export interface MarketingAutomation {
 export interface MasterTemplate {
   id: string;
   name: string;
-  category: string;
+  category: 'RECUPERACAO' | 'HOLDING' | 'URGENCIA' | 'PROPOSTA';
   subject: string;
   content: string;
-  logoUrl?: string;
   lastUpdated: string;
 }
 
-export interface AutomationFlow {
+export interface OnboardingPhaseTemplate {
   id: string;
   name: string;
-  trigger: AutomationTrigger;
-  triggerValue?: string; 
-  triggerSubValue?: string; // Ex: ID da Fase ou Nome do Serviço
-  steps: AutomationStep[];
-  active: boolean;
-  stats: { 
-    enrolled: number; 
-    completed: number; 
-    emailsSent?: number; 
-    opens?: number; 
-    clicks?: number; 
-  };
-  logs: AutomationLog[];
-  createdAt: string;
+  description: string;
+  order: number;
+  defaultDueDays: number;
+  mandatory: boolean;
 }
 
-export interface AutomationStep {
+export interface OnboardingTemplate {
   id: string;
-  type: 'SEND_MESSAGE' | 'WAIT' | 'CONDITION' | 'CREATE_TASK' | 'CHANGE_STATUS' | 'NOTIFY_USER';
-  templateId?: string;
-  waitDays?: number;
-  status?: LeadStatus;
-  content?: string;
-  userId?: string;
-  conditionType?: 'OPENED' | 'CLICKED';
-  trueStepId?: string;
-  falseStepId?: string;
-}
-
-export type AutomationTrigger = 'LEAD_QUALIFIED' | 'PHASE_CHANGED' | 'PROPOSAL_SENT_SERVICE' | 'EMAIL_OPENED' | 'LINK_CLICKED';
-
-export interface AutomationLog {
-  id: string;
-  timestamp: string;
-  leadName: string;
-  action: string;
-  status: 'Success' | 'Failure';
+  serviceType: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+  updatedBy: string;
+  phases: OnboardingPhaseTemplate[];
 }
 
 export interface ProspectCompany {
-  cnpjRaw: string;
   name: string;
+  cnpj?: string;
+  cnpjRaw?: string;
+  segment: string;
+  city: string;
+  state: string;
   phone?: string;
   email?: string;
+  emailCompany?: string;
+  website?: string;
   partners?: string[];
   decisionMakerName?: string;
   decisionMakerPhoneFormatted?: string;
   icpScore?: number;
   debtStatus?: string;
   estimatedRevenue?: string;
-  emailCompany?: string;
-  // Added fix for Property 'website' does not exist on type 'ProspectCompany' error in miningService
-  website?: string;
 }
 
 export interface Notification {
@@ -413,7 +207,7 @@ export interface SmartListFilters extends LeadFilters {
 export interface SmartList {
   id: string;
   name: string;
-  filters: any;
+  filters: SmartListFilters | LeadFilters;
   leadsCount: number;
   createdAt: string;
 }
@@ -450,7 +244,6 @@ export interface MiningJob {
 export interface MiningLead extends ProspectCompany {
   id: string;
   jobId: string;
-  tradeName: string;
   phoneCompany: string;
   emailCompany: string;
   partners: string[];
@@ -458,12 +251,11 @@ export interface MiningLead extends ProspectCompany {
   contactPhone: string;
   contactEmail: string;
   scoreIa: number;
-  debtStatus: string;
   debtValueEst: string;
   sources: string[];
   isGarimpo: boolean;
-  createdAt: string;
   isImported?: boolean;
+  createdAt: string;
 }
 
 export interface EmailTemplate {
@@ -471,6 +263,47 @@ export interface EmailTemplate {
   name: string;
   subject: string;
   content: string;
+}
+
+export interface SdrQualification {
+  id: string;
+  sdrId: string;
+  leadId: string;
+  companyName: string;
+  date: string;
+  type: 'QUALIFICATION' | 'MEETING' | 'PROPOSAL' | 'CONTRACT';
+  status: 'Pendente' | 'Aprovado' | 'Rejeitado';
+  bonusValue: number;
+}
+
+export interface AutomationStep {
+  id: string;
+  type: 'SEND_MESSAGE' | 'WAIT' | 'CHANGE_STATUS' | 'NOTIFY_USER' | 'CREATE_TASK';
+  templateId?: string;
+  waitDays?: number;
+  status?: LeadStatus;
+  userId?: string;
+  content?: string;
+}
+
+export type AutomationTrigger = 'LEAD_QUALIFIED' | 'PHASE_CHANGED' | 'PROPOSAL_SENT_SERVICE' | 'LINK_CLICKED';
+
+export interface AutomationFlow {
+  id: string;
+  name: string;
+  trigger: AutomationTrigger;
+  triggerSubValue?: string;
+  steps: AutomationStep[];
+  active: boolean;
+  stats: {
+    enrolled: number;
+    completed: number;
+    emailsSent: number;
+    opens: number;
+    clicks: number;
+  };
+  logs: any[];
+  createdAt: string;
 }
 
 export interface Task {
@@ -481,6 +314,74 @@ export interface Task {
   priority: 'Alta' | 'Média' | 'Baixa';
   leadId?: string;
   completed: boolean;
+}
+
+export interface OnboardingComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  date: string;
+}
+
+export interface OnboardingAttachment {
+  id: string;
+  name: string;
+  url: string;
+  date: string;
+  uploadedBy: string;
+}
+
+export interface OnboardingItem {
+  id: string;
+  title: string;
+  description: string;
+  status: 'Pendente' | 'Em Andamento' | 'Bloqueado' | 'Concluido';
+  responsibleId: string;
+  dueDate: string;
+  updatedAt: string;
+  items: any[];
+  comments: OnboardingComment[];
+  attachments: OnboardingAttachment[];
+  templatePhaseId?: string;
+}
+
+export interface NpsSurvey {
+  id: string;
+  scheduledAt: string;
+  performedAt?: string;
+  status: 'Pendente' | 'Concluido';
+  type: '90_DAYS' | 'ANNUAL';
+  channel: 'Telefone' | 'Email' | 'WhatsApp';
+  score?: number;
+  notes?: string;
+}
+
+export interface SuccessTask {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: 'Pendente' | 'Concluido';
+  category: 'Expansao' | 'NPS_FollowUp';
+}
+
+export interface WelcomeData {
+  callDate?: string;
+  callNotes?: string;
+  emailDate?: string;
+  kitSent?: boolean;
+  kitDate?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entityId: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+  previousState?: any;
+  newState?: any;
 }
 
 export interface CampaignComment {
@@ -528,19 +429,166 @@ export interface ChatMessage {
   fileName?: string;
 }
 
+export interface Participant {
+  userId: string;
+  status: string;
+}
+
 export interface ManagerType {
   id: string;
   name: string;
   color: string;
 }
 
-export interface AuditLog {
+export interface CustomerFeedbackPoint {
   id: string;
-  action: string;
-  entityId: string;
+  type: 'POSITIVE' | 'NEGATIVE';
+  text: string;
+  date: string;
+  authorName: string;
+}
+
+export interface MessagingConfig {
+  smtp: {
+    host: string;
+    user?: string;
+    pass?: string;
+  };
+  whatsapp: {
+    apiKey: string;
+    phoneId?: string;
+  };
+}
+
+export interface Lead {
+  id: string;
+  name: string; 
+  email: string; 
+  phone: string; 
+  company: string;
+  tradeName: string;
+  legalName: string;
+  cnpj: string;
+  cnpjRaw: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  segment: string;
+  size: CompanySize;
+  taxRegime: string;
+  annualRevenue: string;
+  monthlyRevenue?: string;
+  payrollValue?: string;
+  status: LeadStatus;
+  phaseId: string;
+  ownerId: string;
+  qualifiedById?: string;
+  scheduledById?: string;
+  closedById?: string;
+  createdAt: string;
+  debtStatus: string; 
+  inQueue: boolean;
+  interactions: Interaction[];
+  tasks: Task[];
+  onboardingChecklist?: OnboardingItem[];
+  welcomeData?: WelcomeData;
+  npsSurveys?: NpsSurvey[];
+  successTasks?: SuccessTask[];
+  feedbackPoints?: CustomerFeedbackPoint[];
+  healthScore?: number;
+  engagementScore?: number;
+  contractStart?: string;
+  contractEnd?: string;
+  serviceType?: string;
+  contractValue?: string;
+  icpScore: number;
+  city: string;
+  state: string;
+  address?: string;
+  detailedPartners: LeadPartner[];
+  contractNumber?: string;
+  notes?: string;
+  strategicPains?: string;
+  expectations?: string;
+  role?: string;
+  website?: string;
+  linkedinDM?: string;
+  instagramDM?: string;
+  linkedinCompany?: string;
+  instagramCompany?: string;
+  closeProbability: number;
+  marketingAutomation?: MarketingAutomation;
+  onboardingTemplateId?: string;
+  lgpdConsent?: { status: 'OPT_IN' | 'OPT_OUT'; date: string; };
+  location?: string;
+  enriched?: boolean;
+}
+
+export interface KanbanPhase {
+  id: string;
+  name: string;
+  order: number;
+  color: string;
+  authorizedUserIds: string[];
+}
+
+export interface TaskType {
+  id: string;
+  name: string;
+  channel: string;
+  color: string;
+  icon: string;
+  requireDecisor: boolean;
+  template: string;
+}
+
+export interface SystemConfig {
+  phases: KanbanPhase[];
+  taskTypes: TaskType[];
+  companySizes: string[];
+  taxRegimes: string[];
+  serviceTypes: string[];
+  messaging: MessagingConfig;
+  bonus: any;
+  publicSchedulerLink: string;
+}
+
+export interface NavigationState {
+  view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts';
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department: Department;
+  avatar?: string;
+  managerTypeId?: string;
+}
+
+export interface AgendaEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  assignedToId: string;
+  leadId?: string;
+  typeId?: string;
+  type: string;
+  description?: string;
+  status: string;
+  participants: { userId: string; status: string }[];
+  department: string;
+  creatorId: string;
+}
+
+export interface UserGoal {
+  id: string;
   userId: string;
-  userName: string;
-  timestamp: string;
-  previousState?: any;
-  newState?: any;
+  month: number;
+  year: number;
+  qualsGoal: number;
+  callsGoal: number;
+  proposalsGoal: number; 
+  contractsGoal: number;
 }

@@ -16,10 +16,10 @@ import PostSalesDashboard from './components/PostSalesDashboard';
 import CustomerDatabase from './components/CustomerDatabase';
 import Agenda from './components/Agenda';
 import MarketingAutomationDashboard from './components/MarketingAutomation';
-import TasksManager from './components/TasksManager';
+import ScriptsLibrary from './components/ScriptsLibrary';
 import { 
   NavigationState, Lead, LeadStatus, UserRole, User, 
-  SystemConfig, OnboardingTemplate, UserGoal, SdrQualification, AgendaEvent, AutomationFlow, Task
+  SystemConfig, OnboardingTemplate, UserGoal, SdrQualification, AgendaEvent, AutomationFlow, Task, SalesScript
 } from './types';
 import { INITIAL_LEADS, DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
@@ -27,9 +27,7 @@ import { seedDatabase } from './services/dataGeneratorService';
 const CONFIG_KEY = 'ciatos_config_v57';
 const LEADS_KEY = 'ciatos_leads_v57';
 const FLOWS_KEY = 'ciatos_flows_v57';
-const TASKS_KEY = 'ciatos_tasks_v57';
-const EVENTS_KEY = 'ciatos_events_v57';
-const GOALS_KEY = 'ciatos_goals_v57';
+const SCRIPTS_KEY = 'ciatos_scripts_v57';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
@@ -65,11 +63,8 @@ const App: React.FC = () => {
   const [nav, setNav] = useState<NavigationState>({ view: 'dashboard' });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [flows, setFlows] = useState<AutomationFlow[]>([]);
+  const [scripts, setScripts] = useState<SalesScript[]>([]);
   const [config, setConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
-  const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
-  const [onboardingTemplates, setOnboardingTemplates] = useState<OnboardingTemplate[]>(DEFAULT_ONBOARDING_TEMPLATES);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
 
@@ -83,28 +78,19 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedLeads = localStorage.getItem(LEADS_KEY);
-    const savedFlows = localStorage.getItem(FLOWS_KEY);
-    const savedTasks = localStorage.getItem(TASKS_KEY);
-    const savedEvents = localStorage.getItem(EVENTS_KEY);
     const savedConfig = localStorage.getItem(CONFIG_KEY);
-    const savedGoals = localStorage.getItem(GOALS_KEY);
+    const savedScripts = localStorage.getItem(SCRIPTS_KEY);
 
     if (savedLeads) setLeads(JSON.parse(savedLeads)); else setLeads(INITIAL_LEADS);
-    if (savedFlows) setFlows(JSON.parse(savedFlows));
-    if (savedTasks) setTasks(JSON.parse(savedTasks));
-    if (savedEvents) setEvents(JSON.parse(savedEvents));
     if (savedConfig) setConfig(JSON.parse(savedConfig));
-    if (savedGoals) setUserGoals(JSON.parse(savedGoals));
+    if (savedScripts) setScripts(JSON.parse(savedScripts));
   }, []);
 
   useEffect(() => {
     localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
-    localStorage.setItem(FLOWS_KEY, JSON.stringify(flows));
-    localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-    localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    localStorage.setItem(GOALS_KEY, JSON.stringify(userGoals));
-  }, [leads, flows, tasks, events, config, userGoals]);
+    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
+  }, [leads, config, scripts]);
 
   const handleUpdateLead = (updatedLead: Lead) => {
     setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
@@ -126,22 +112,22 @@ const App: React.FC = () => {
     return { success: true, message: 'Lead gerado com sucesso.' };
   };
 
-  const handleSeed = () => {
-    const { leads: seedLeads } = seedDatabase(60, currentUser, allUsers);
-    setLeads(seedLeads);
-    alert("Base carregada com 60 registros de teste.");
-  };
-
   const renderView = () => {
     switch (nav.view) {
       case 'dashboard': 
-        return <Dashboard leads={leads} tasks={tasks} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
+        return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
       
+      case 'scripts':
+        return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={s => setScripts(prev => {
+          const exists = prev.find(item => item.id === s.id);
+          return exists ? prev.map(item => item.id === s.id ? s : item) : [...prev, s];
+        })} onDeleteScript={id => setScripts(prev => prev.filter(s => s.id !== id))} />;
+
       case 'sdr_dashboard':
-        return <SdrDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
+        return <SdrDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={[]} onUpdateStatus={()=>{}} />;
       
       case 'closer_dashboard':
-        return <CloserDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
+        return <CloserDashboard currentUser={currentUser} allUsers={allUsers} leads={leads} qualifications={[]} config={config} userGoals={[]} />;
 
       case 'prospecting':
         return <Prospector onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
@@ -159,19 +145,19 @@ const App: React.FC = () => {
         return <Agenda events={events} leads={leads} users={allUsers} currentUser={currentUser} config={config} onSaveEvent={(e) => setEvents(prev => [...prev, e])} onDeleteEvent={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onSelectLead={setSelectedLeadId} />;
 
       case 'operational_dashboard':
-        return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={onboardingTemplates} />;
+        return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={[]} />;
 
       case 'customers':
         return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} />;
 
       case 'post_sales':
-        return <PostSalesDashboard leads={leads} users={allUsers} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={onboardingTemplates} />;
+        return <PostSalesDashboard leads={leads} users={allUsers} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={[]} />;
 
       case 'settings':
-        return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={userGoals} allUsers={allUsers} onSaveGoals={setUserGoals} onSeedDatabase={handleSeed} onClearDatabase={() => setLeads([])} templates={onboardingTemplates} onSaveTemplates={setOnboardingTemplates} onSyncTemplate={()=>{}} />;
+        return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={[]} allUsers={allUsers} onSaveGoals={()=>{}} onSeedDatabase={()=>{}} onClearDatabase={() => setLeads([])} templates={[]} onSaveTemplates={()=>{}} onSyncTemplate={()=>{}} />;
 
       default: 
-        return <Dashboard leads={leads} tasks={tasks} notifications={[]} currentUser={currentUser} />;
+        return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;
     }
   };
 
@@ -225,6 +211,7 @@ const App: React.FC = () => {
           onDeleteAgendaEvent={(id) => setEvents(events.filter(e => e.id !== id))}
           currentUser={currentUser} 
           allUsers={allUsers} 
+          scripts={scripts}
         />
       )}
     </div>

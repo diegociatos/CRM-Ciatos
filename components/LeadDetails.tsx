@@ -1,7 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lead, SystemConfig, User, Interaction, InteractionType, LeadStatus, AgendaEvent, OnboardingItem, UserRole, LeadPartner, CompanySize } from '../types';
+import { Lead, SystemConfig, User, Interaction, InteractionType, LeadStatus, AgendaEvent, OnboardingItem, UserRole, LeadPartner, CompanySize, SalesScript } from '../types';
 import Timeline360 from './Timeline360';
+import Teleprompter from './Teleprompter';
+import ObjectionAssistant from './ObjectionAssistant';
 
 interface LeadDetailsProps {
   lead: Lead;
@@ -15,16 +17,17 @@ interface LeadDetailsProps {
   onDeleteAgendaEvent: (id: string) => void;
   currentUser: User;
   allUsers: User[];
+  scripts?: SalesScript[];
   canEdit?: boolean;
 }
 
 const LeadDetails: React.FC<LeadDetailsProps> = ({ 
-  lead, config, agendaEvents, onClose, onUpdateLead, onDeleteLead, onAddInteraction, onAddAgendaEvent, onDeleteAgendaEvent, currentUser, allUsers, canEdit 
+  lead, config, agendaEvents, onClose, onUpdateLead, onDeleteLead, onAddInteraction, onAddAgendaEvent, onDeleteAgendaEvent, currentUser, allUsers, scripts = [], canEdit 
 }) => {
-  const [activeTab, setActiveTab] = useState<'perfil' | 'timeline' | 'agenda' | 'marketing' | 'contrato'>('perfil');
+  const [activeTab, setActiveTab] = useState<'perfil' | 'timeline' | 'call' | 'marketing'>('perfil');
   const [isEditing, setIsEditing] = useState(false);
-  const [showAddEvent, setShowAddEvent] = useState(false);
   const [quickNote, setQuickNote] = useState('');
+  const [activeScript, setActiveScript] = useState<SalesScript | undefined>(undefined);
 
   const [editForm, setEditForm] = useState<Lead>(lead);
 
@@ -54,6 +57,19 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       authorId: currentUser.id
     });
     setQuickNote('');
+  };
+
+  const handleScriptUsage = (usage: any, parsedText: string) => {
+    onAddInteraction(lead.id, {
+      type: 'SCRIPT_USAGE',
+      title: `🎤 Chamada com Script: ${usage.outcome}`,
+      content: parsedText.substring(0, 300) + '...',
+      author: currentUser.name,
+      authorId: currentUser.id,
+      scriptVersionId: usage.versionId
+    });
+    setActiveTab('timeline');
+    alert("Interação registrada na timeline com o script utilizado.");
   };
 
   const getTempColor = (val: number) => {
@@ -111,13 +127,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </div>
           
           <div className="flex gap-12 relative z-10">
-            {(['perfil', 'timeline', 'marketing'] as const).map(tab => (
+            {(['perfil', 'timeline', 'call', 'marketing'] as const).map(tab => (
               <button 
                 key={tab}
                 onClick={() => { setActiveTab(tab); setIsEditing(false); }} 
                 className={`pb-4 text-[11px] font-black uppercase tracking-[0.3em] border-b-4 transition-all ${activeTab === tab ? 'border-[#c5a059] text-[#c5a059]' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
               >
-                {tab === 'perfil' ? 'Dossiê SDR' : tab === 'timeline' ? 'Interações 360º' : 'Jornada Marketing'}
+                {tab === 'perfil' ? 'Dossiê SDR' : tab === 'timeline' ? 'Interações 360º' : tab === 'call' ? 'Teleprompter & Script' : 'Jornada Marketing'}
               </button>
             ))}
           </div>
@@ -164,7 +180,6 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                      </div>
                   </section>
 
-                  {/* QUICK NOTE NA TAB PERFIL TAMBÉM */}
                   <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
                     <h4 className={labelClass}>Lançar Nota Rápida</h4>
                     <div className="flex gap-4 mt-6">
@@ -208,6 +223,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           {activeTab === 'timeline' && (
             <div className="p-10 h-full animate-in fade-in">
               <Timeline360 lead={lead} agendaEvents={agendaEvents} currentUser={currentUser} />
+            </div>
+          )}
+
+          {activeTab === 'call' && (
+            <div className="p-10 h-full animate-in fade-in flex gap-10">
+               <div className="flex-1 min-w-[600px]">
+                  <Teleprompter 
+                    lead={lead} 
+                    scripts={scripts} 
+                    currentUser={currentUser} 
+                    onLogUsage={handleScriptUsage}
+                    onScriptSelect={setActiveScript}
+                  />
+               </div>
+               <div className="w-[450px]">
+                  <ObjectionAssistant 
+                    lead={lead} 
+                    activeScript={activeScript}
+                    onUseResponse={(txt) => setQuickNote(prev => prev + ' ' + txt)} 
+                  />
+               </div>
             </div>
           )}
 
