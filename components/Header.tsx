@@ -11,10 +11,11 @@ interface HeaderProps {
   onSwitchRole: (role: UserRole) => void;
   canCreate: boolean;
   onOpenUserProfile: () => void;
+  onLogout: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
-  notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canCreate, onOpenUserProfile 
+  notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canCreate, onOpenUserProfile, onLogout
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -87,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({
 
         <div className="h-10 w-px bg-slate-200"></div>
 
-        {/* Perfil do Usuário - Estilo Conforme Anexo */}
+        {/* Perfil do Usuário */}
         <div className="relative">
           <button 
             onClick={() => setShowProfileDropdown(!showProfileDropdown)}
@@ -127,7 +128,7 @@ const Header: React.FC<HeaderProps> = ({
                 </button>
                 <div className="border-t border-slate-100 my-1"></div>
                 <button 
-                  onClick={() => alert("Logout efetuado.")}
+                  onClick={onLogout}
                   className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-3 transition"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>

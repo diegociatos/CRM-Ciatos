@@ -25,6 +25,13 @@ export enum UserRole {
 
 export type Department = 'Comercial' | 'Operacional' | 'Inteligência' | 'Marketing';
 
+export enum EmailProvider {
+  SENDGRID = 'SendGrid',
+  MAILGUN = 'Mailgun',
+  AMAZON_SES = 'Amazon SES',
+  CUSTOM_SMTP = 'SMTP Customizado'
+}
+
 export enum CompanySize {
   ME = 'Microempresa (ME)',
   EPP = 'Pequeno Porte (EPP)',
@@ -47,110 +54,202 @@ export interface Interaction {
   scriptVersionId?: string; 
 }
 
-export type InteractionType = 'NEW' | 'EDIT' | 'CALL' | 'MEETING' | 'NOTE' | 'WHATSAPP' | 'EMAIL' | 'REJECTION' | 'CONTRACT' | 'SMS' | 'FEEDBACK' | 'MARKETING_EVENT' | 'SCRIPT_USAGE';
+export type InteractionType = 'NEW' | 'EDIT' | 'CALL' | 'MEETING' | 'NOTE' | 'WHATSAPP' | 'EMAIL' | 'REJECTION' | 'CONTRACT' | 'SMS' | 'FEEDBACK' | 'MARKETING_EVENT' | 'SCRIPT_USAGE' | 'EMAIL_OPEN' | 'EMAIL_CLICK' | 'EMAIL_BOUNCE';
 
-export interface SalesScript {
-  id: string;
-  title: string;
-  objective: 'pitch' | 'follow-up' | 'objection' | 'closing';
-  serviceType: string;
-  funnelPhaseId: string;
-  tone: 'formal' | 'tecnico' | 'consultivo' | 'direto';
-  targetSegment?: string;
-  estimatedDuration: number; 
-  bullets: string[];
-  tags: string[];
-  isGlobal: boolean; 
-  authorId: string;
-  versions: ScriptVersion[];
-  currentVersionId: string;
-  usageStats: {
-    totalUsed: number;
-    resolvedObjections: number;
-    convertedToMeeting: number;
+export interface MessagingConfig {
+  email: {
+    senderName: string;
+    senderEmail: string;
+    provider: EmailProvider;
+    apiKey: string; // Salva criptografada
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUser?: string;
+    webhookSecret: string;
   };
-}
-
-export interface ScriptVersion {
-  id: string;
-  body: string; 
-  versionNumber: number;
-  createdAt: string;
-  createdBy: string;
-  changeNote?: string;
-}
-
-export interface ObjectionAnalysis {
-  quick_lines: string[]; 
-  long_scripts: string[]; 
-  whatsapp_msg: string;
-  follow_up: string;
-  tags: string[];
-  confidence: {
-    percentual: number;
-    razão: string;
+  whatsapp: {
+    apiKey: string;
+    phoneId?: string;
   };
-}
-
-export interface ScriptUsage {
-  id: string;
-  scriptId: string;
-  versionId: string;
-  leadId: string;
-  userId: string;
-  outcome: 'Interessado' | 'Objeção resolvida' | 'Precisa de proposta' | 'Não interessado';
-  date: string;
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Novo campo para gestão de identidade
+  password?: string;
   role: UserRole;
   department: Department;
   avatar?: string;
   managerTypeId?: string;
 }
 
-export interface NavigationState {
-  view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management';
-}
-
-// Mantendo as outras interfaces conforme os arquivos originais
-export interface LeadPartner {
-  name: string;
-  sharePercentage: string;
-  cpf?: string;
-}
-
+// Added to fix marketingService.ts and Timeline360.tsx errors
 export interface MarketingHistory {
   id: string;
   step: string;
-  action: string;
+  action: 'EMAIL_SENT' | 'EMAIL_OPENED' | 'LINK_CLICKED' | 'RE-SENT' | 'OPT_OUT';
   timestamp: string;
   details: string;
 }
 
-export interface MarketingAutomation {
-  currentStepId: string;
-  status: 'IDLE' | 'RUNNING' | 'OPENED' | 'CLICKED' | 'PAUSED' | 'OPT_OUT';
-  lastActionAt: string;
-  history: MarketingHistory[];
-  isAutomatic: boolean;
-  aiContent?: string;
+// Updated history type to MarketingHistory[]
+export interface MarketingAutomation { 
+  currentStepId: string; 
+  status: string; 
+  lastActionAt: string; 
+  history: MarketingHistory[]; 
+  isAutomatic: boolean; 
+  aiContent?: string; 
 }
 
-export interface MasterTemplate {
+// Added to fix OperationalDashboard.tsx errors
+export interface OnboardingComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  date: string;
+}
+
+// Added to fix OperationalDashboard.tsx errors
+export interface OnboardingAttachment {
   id: string;
   name: string;
-  category: 'RECUPERACAO' | 'HOLDING' | 'URGENCIA' | 'PROPOSTA';
-  subject: string;
-  content: string;
-  lastUpdated: string;
+  url: string;
+  date: string;
+  uploadedBy: string;
 }
 
-export interface OnboardingPhaseTemplate {
+// Updated status, comments and attachments types
+export interface OnboardingItem { 
+  id: string; 
+  title: string; 
+  description: string; 
+  status: 'Pendente' | 'Em Andamento' | 'Bloqueado' | 'Concluido'; 
+  responsibleId: string; 
+  dueDate: string; 
+  updatedAt: string; 
+  items: any[]; 
+  comments: OnboardingComment[]; 
+  attachments: OnboardingAttachment[]; 
+  templatePhaseId?: string; 
+}
+
+export interface WelcomeData { callDate?: string; callNotes?: string; emailDate?: string; kitSent?: boolean; kitDate?: string; }
+export interface NpsSurvey { id: string; scheduledAt: string; performedAt?: string; status: string; type: string; channel: string; score?: number; notes?: string; }
+export interface SuccessTask { id: string; title: string; dueDate: string; status: string; category: string; }
+export interface CustomerFeedbackPoint { id: string; type: string; text: string; date: string; authorName: string; }
+
+export interface Lead {
+  id: string;
+  name: string; 
+  email: string; 
+  phone: string; 
+  company: string;
+  tradeName: string;
+  legalName: string;
+  cnpj: string;
+  cnpjRaw: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  segment: string;
+  size: CompanySize;
+  taxRegime: string;
+  annualRevenue: string;
+  payrollValue?: string; // Added to fix dataGeneratorService.ts error
+  monthlyRevenue?: string; // Added to fix NewLeadForm.tsx usage
+  status: LeadStatus;
+  phaseId: string;
+  ownerId: string;
+  createdAt: string;
+  debtStatus: string; 
+  inQueue: boolean;
+  interactions: Interaction[];
+  tasks: Task[];
+  icpScore: number;
+  city: string;
+  state: string;
+  address?: string;
+  location?: string; // Added to fix MarketingHub.tsx and LeadsManager.tsx error
+  enriched?: boolean; // Added to fix LeadsManager.tsx usage
+  qualifiedById?: string; // Added to fix KanbanBoard.tsx usage
+  detailedPartners: LeadPartner[];
+  closeProbability: number;
+  engagementScore?: number;
+  serviceType?: string;
+  contractValue?: string;
+  contractStart?: string;
+  contractNumber?: string;
+  marketingAutomation?: MarketingAutomation;
+  onboardingChecklist?: OnboardingItem[];
+  welcomeData?: WelcomeData;
+  npsSurveys?: NpsSurvey[];
+  successTasks?: SuccessTask[];
+  feedbackPoints?: CustomerFeedbackPoint[];
+  healthScore?: number;
+  website?: string;
+  role?: string;
+  notes?: string;
+  strategicPains?: string;
+  expectations?: string;
+  onboardingTemplateId?: string;
+  linkedinDM?: string;
+  instagramDM?: string;
+  linkedinCompany?: string;
+  instagramCompany?: string;
+}
+
+export interface SystemConfig {
+  phases: KanbanPhase[];
+  taskTypes: TaskType[];
+  companySizes: string[];
+  taxRegimes: string[];
+  serviceTypes: string[];
+  messaging: MessagingConfig;
+  bonus: any;
+  publicSchedulerLink: string;
+}
+
+export interface Task { id: string; title: string; description: string; dueDate: string; priority: string; leadId?: string; completed: boolean; }
+export interface KanbanPhase { id: string; name: string; order: number; color: string; authorizedUserIds: string[]; }
+export interface TaskType { id: string; name: string; channel: string; color: string; icon: string; requireDecisor: boolean; template: string; }
+export interface LeadPartner { name: string; sharePercentage: string; cpf?: string; }
+
+export interface NavigationState { view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management'; }
+
+// Added to fix ScriptsLibrary.tsx error
+export interface ScriptVersion {
+  id: string;
+  body: string;
+  versionNumber: number;
+  createdAt: string;
+  createdBy: string;
+}
+
+// Updated versions type
+export interface SalesScript { 
+  id: string; 
+  title: string; 
+  objective: string; 
+  serviceType: string; 
+  funnelPhaseId: string; 
+  tone: string; 
+  estimatedDuration: number; 
+  bullets: string[]; 
+  tags: string[]; 
+  isGlobal: boolean; 
+  authorId: string; 
+  versions: ScriptVersion[]; 
+  currentVersionId: string; 
+  usageStats: any; 
+}
+
+export interface ScriptUsage { id: string; scriptId: string; versionId: string; leadId: string; userId: string; outcome: string; date: string; }
+export interface MasterTemplate { id: string; name: string; category: string; subject: string; content: string; lastUpdated: string; }
+
+// Added for better typing of onboarding templates
+export interface OnboardingTemplatePhase {
   id: string;
   name: string;
   description: string;
@@ -159,46 +258,40 @@ export interface OnboardingPhaseTemplate {
   mandatory: boolean;
 }
 
-export interface OnboardingTemplate {
-  id: string;
-  serviceType: string;
-  name: string;
-  description: string;
-  updatedAt: string;
-  updatedBy: string;
-  phases: OnboardingPhaseTemplate[];
+// Updated phases type
+export interface OnboardingTemplate { 
+  id: string; 
+  serviceType: string; 
+  name: string; 
+  description: string; 
+  updatedAt: string; 
+  updatedBy: string; 
+  phases: OnboardingTemplatePhase[]; 
 }
 
-// Added tradeName to fix miningService.ts error
-export interface ProspectCompany {
-  name: string;
-  tradeName?: string;
-  cnpj?: string;
-  cnpjRaw?: string;
-  segment: string;
-  city: string;
-  state: string;
-  phone?: string;
-  email?: string;
-  emailCompany?: string;
-  website?: string;
-  partners?: string[];
-  decisionMakerName?: string;
-  decisionMakerPhoneFormatted?: string;
-  icpScore?: number;
-  debtStatus?: string;
-  estimatedRevenue?: string;
+export interface ProspectCompany { 
+  name: string; 
+  tradeName?: string; 
+  cnpj?: string; 
+  cnpjRaw?: string; 
+  segment: string; 
+  city: string; 
+  state: string; 
+  phone?: string; 
+  email?: string; 
+  emailCompany?: string; 
+  website?: string; 
+  partners?: string[]; 
+  decisionMakerName?: string; 
+  decisionMakerPhoneFormatted?: string; 
+  icpScore?: number; 
+  debtStatus?: string; 
+  estimatedRevenue?: string; 
 }
 
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  type: 'success' | 'warning' | 'info';
-  read: boolean;
-}
+export interface Notification { id: string; title: string; message: string; timestamp: string; type: 'success' | 'warning' | 'info'; read: boolean; }
 
+// Added to fix LeadsManager.tsx and MarketingHub.tsx errors
 export interface LeadFilters {
   status: LeadStatus[];
   size: CompanySize[];
@@ -207,6 +300,7 @@ export interface LeadFilters {
   hasInteractions: 'any' | 'none' | 'recent' | 'old';
 }
 
+// Added to fix MarketingHub.tsx errors
 export interface SmartListFilters extends LeadFilters {
   operator: 'AND' | 'OR';
   state: string;
@@ -221,18 +315,17 @@ export interface SmartListFilters extends LeadFilters {
   };
 }
 
-export interface SmartList {
-  id: string;
-  name: string;
-  filters: SmartListFilters | LeadFilters;
-  leadsCount: number;
-  createdAt: string;
-}
+export interface SmartList { id: string; name: string; filters: any; leadsCount: number; createdAt: string; }
+export interface UserGoal { id: string; userId: string; month: number; year: number; qualsGoal: number; callsGoal: number; proposalsGoal: number; contractsGoal: number; }
+export interface AgendaEvent { id: string; title: string; start: string; end: string; assignedToId: string; leadId?: string; typeId?: string; type: string; description?: string; status: string; participants: { userId: string; status: string }[]; department: string; creatorId: string; }
+export interface ObjectionAnalysis { quick_lines: string[]; long_scripts: string[]; whatsapp_msg: string; follow_up: string; tags: string[]; confidence: { percentual: number; razão: string; }; }
 
+// Added to fix LeadsManager.tsx error
 export interface CalendarConfig {
   isIntegrated: boolean;
 }
 
+// Added to fix Prospector.tsx and miningService.ts errors
 export interface MiningJob {
   id: string;
   name: string;
@@ -243,9 +336,9 @@ export interface MiningJob {
     segment: string;
     state: string;
     city: string;
-    size: CompanySize | 'all';
+    size: string;
     taxRegime: string;
-    fiscalFilter: 'Dívida Ativa' | 'Indiferente';
+    fiscalFilter: string;
   };
   targetCount: number;
   foundCount: number;
@@ -258,9 +351,11 @@ export interface MiningJob {
   lastNotificationMilestone: number;
 }
 
+// Added to fix Prospector.tsx and miningService.ts errors
 export interface MiningLead extends ProspectCompany {
   id: string;
   jobId: string;
+  tradeName: string;
   phoneCompany: string;
   emailCompany: string;
   partners: string[];
@@ -268,13 +363,16 @@ export interface MiningLead extends ProspectCompany {
   contactPhone: string;
   contactEmail: string;
   scoreIa: number;
+  debtStatus: string;
   debtValueEst: string;
   sources: string[];
   isGarimpo: boolean;
   isImported?: boolean;
   createdAt: string;
+  website: string;
 }
 
+// Added to fix EmailMarketing.tsx and MarketingHub.tsx errors
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -282,6 +380,7 @@ export interface EmailTemplate {
   content: string;
 }
 
+// Added to fix App.tsx, SdrDashboard.tsx, etc errors
 export interface SdrQualification {
   id: string;
   sdrId: string;
@@ -289,10 +388,14 @@ export interface SdrQualification {
   companyName: string;
   date: string;
   type: 'QUALIFICATION' | 'MEETING' | 'PROPOSAL' | 'CONTRACT';
-  status: 'Pendente' | 'Aprovado' | 'Rejeitado';
+  status: 'Pending' | 'Approved' | 'Rejected';
   bonusValue: number;
 }
 
+// Added to fix AutomationManager.tsx errors
+export type AutomationTrigger = 'LEAD_QUALIFIED' | 'PHASE_CHANGED' | 'PROPOSAL_SENT_SERVICE' | 'LINK_CLICKED';
+
+// Added to fix AutomationManager.tsx errors
 export interface AutomationStep {
   id: string;
   type: 'SEND_MESSAGE' | 'WAIT' | 'CHANGE_STATUS' | 'NOTIFY_USER' | 'CREATE_TASK';
@@ -303,8 +406,7 @@ export interface AutomationStep {
   content?: string;
 }
 
-export type AutomationTrigger = 'LEAD_QUALIFIED' | 'PHASE_CHANGED' | 'PROPOSAL_SENT_SERVICE' | 'LINK_CLICKED';
-
+// Added to fix AutomationManager.tsx, MarketingHub.tsx, etc errors
 export interface AutomationFlow {
   id: string;
   name: string;
@@ -323,235 +425,7 @@ export interface AutomationFlow {
   createdAt: string;
 }
 
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  priority: 'Alta' | 'Média' | 'Baixa';
-  leadId?: string;
-  completed: boolean;
-}
-
-export interface OnboardingComment {
-  id: string;
-  authorId: string;
-  authorName: string;
-  text: string;
-  date: string;
-}
-
-export interface OnboardingAttachment {
-  id: string;
-  name: string;
-  url: string;
-  date: string;
-  uploadedBy: string;
-}
-
-export interface OnboardingItem {
-  id: string;
-  title: string;
-  description: string;
-  status: 'Pendente' | 'Em Andamento' | 'Bloqueado' | 'Concluido';
-  responsibleId: string;
-  dueDate: string;
-  updatedAt: string;
-  items: any[];
-  comments: OnboardingComment[];
-  attachments: OnboardingAttachment[];
-  templatePhaseId?: string;
-}
-
-export interface NpsSurvey {
-  id: string;
-  scheduledAt: string;
-  performedAt?: string;
-  status: 'Pendente' | 'Concluido';
-  type: '90_DAYS' | 'ANNUAL';
-  channel: 'Telefone' | 'Email' | 'WhatsApp';
-  score?: number;
-  notes?: string;
-}
-
-export interface SuccessTask {
-  id: string;
-  title: string;
-  dueDate: string;
-  status: 'Pendente' | 'Concluido';
-  category: 'Expansao' | 'NPS_FollowUp';
-}
-
-export interface WelcomeData {
-  callDate?: string;
-  callNotes?: string;
-  emailDate?: string;
-  kitSent?: boolean;
-  kitDate?: string;
-}
-
-export interface AuditLog {
-  id: string;
-  action: string;
-  entityId: string;
-  userId: string;
-  userName: string;
-  timestamp: string;
-  previousState?: any;
-  newState?: any;
-}
-
-export interface Participant {
-  userId: string;
-  status: string;
-}
-
-export interface ManagerType {
-  id: string;
-  name: string;
-  color: string;
-}
-
-export interface CustomerFeedbackPoint {
-  id: string;
-  type: 'POSITIVE' | 'NEGATIVE';
-  text: string;
-  date: string;
-  authorName: string;
-}
-
-export interface MessagingConfig {
-  smtp: {
-    host: string;
-    user?: string;
-    pass?: string;
-  };
-  whatsapp: {
-    apiKey: string;
-    phoneId?: string;
-  };
-}
-
-export interface Lead {
-  id: string;
-  name: string; 
-  email: string; 
-  phone: string; 
-  company: string;
-  tradeName: string;
-  legalName: string;
-  cnpj: string;
-  cnpjRaw: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  segment: string;
-  size: CompanySize;
-  taxRegime: string;
-  annualRevenue: string;
-  monthlyRevenue?: string;
-  payrollValue?: string;
-  status: LeadStatus;
-  phaseId: string;
-  ownerId: string;
-  qualifiedById?: string;
-  scheduledById?: string;
-  closedById?: string;
-  createdAt: string;
-  debtStatus: string; 
-  inQueue: boolean;
-  interactions: Interaction[];
-  tasks: Task[];
-  onboardingChecklist?: OnboardingItem[];
-  welcomeData?: WelcomeData;
-  npsSurveys?: NpsSurvey[];
-  successTasks?: SuccessTask[];
-  feedbackPoints?: CustomerFeedbackPoint[];
-  healthScore?: number;
-  engagementScore?: number;
-  contractStart?: string;
-  contractEnd?: string;
-  serviceType?: string;
-  contractValue?: string;
-  icpScore: number;
-  city: string;
-  state: string;
-  address?: string;
-  detailedPartners: LeadPartner[];
-  contractNumber?: string;
-  notes?: string;
-  strategicPains?: string;
-  expectations?: string;
-  role?: string;
-  website?: string;
-  linkedinDM?: string;
-  instagramDM?: string;
-  linkedinCompany?: string;
-  instagramCompany?: string;
-  closeProbability: number;
-  marketingAutomation?: MarketingAutomation;
-  onboardingTemplateId?: string;
-  lgpdConsent?: { status: 'OPT_IN' | 'OPT_OUT'; date: string; };
-  location?: string;
-  enriched?: boolean;
-}
-
-export interface KanbanPhase {
-  id: string;
-  name: string;
-  order: number;
-  color: string;
-  authorizedUserIds: string[];
-}
-
-export interface TaskType {
-  id: string;
-  name: string;
-  channel: string;
-  color: string;
-  icon: string;
-  requireDecisor: boolean;
-  template: string;
-}
-
-export interface SystemConfig {
-  phases: KanbanPhase[];
-  taskTypes: TaskType[];
-  companySizes: string[];
-  taxRegimes: string[];
-  serviceTypes: string[];
-  messaging: MessagingConfig;
-  bonus: any;
-  publicSchedulerLink: string;
-}
-
-export interface UserGoal {
-  id: string;
-  userId: string;
-  month: number;
-  year: number;
-  qualsGoal: number;
-  callsGoal: number;
-  proposalsGoal: number; 
-  contractsGoal: number;
-}
-
-export interface AgendaEvent {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  assignedToId: string;
-  leadId?: string;
-  typeId?: string;
-  type: string;
-  description?: string;
-  status: string;
-  participants: { userId: string; status: string }[];
-  department: string;
-  creatorId: string;
-}
-
-// Added missing interfaces for MarketingHub and ReportsDashboard
+// Added to fix MarketingHub.tsx errors
 export interface CampaignComment {
   id: string;
   userId: string;
@@ -560,6 +434,7 @@ export interface CampaignComment {
   timestamp: string;
 }
 
+// Added to fix MarketingHub.tsx and ReportsDashboard.tsx errors
 export interface Campaign {
   id: string;
   name: string;
@@ -580,13 +455,14 @@ export interface Campaign {
   };
 }
 
-// Added missing interfaces for ChatModule
+// Added to fix ChatModule.tsx errors
 export interface ChatThread {
   id: string;
   title: string;
   leadId?: string;
 }
 
+// Added to fix ChatModule.tsx errors
 export interface ChatMessage {
   id: string;
   threadId: string;
@@ -596,4 +472,29 @@ export interface ChatMessage {
   timestamp: string;
   fileUrl?: string;
   fileName?: string;
+}
+
+// Added to fix Agenda.tsx error
+export interface Participant {
+  userId: string;
+  status: string;
+}
+
+// Added to fix UserManagement.tsx error
+export interface ManagerType {
+  id: string;
+  name: string;
+  color: string;
+}
+
+// Added to fix sreService.ts error
+export interface AuditLog {
+  id: string;
+  action: string;
+  entityId: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+  previousState?: any;
+  newState?: any;
 }
