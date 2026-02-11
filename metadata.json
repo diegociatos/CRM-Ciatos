@@ -1,0 +1,9 @@
+{
+  "name": "Ciatos CRM",
+  "description": "A modern, high-usability CRM for managing leads, intelligent prospecting with Google Search grounding, and integrated email marketing campaigns.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera",
+    "microphone"
+  ]
+}
