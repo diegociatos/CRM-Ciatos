@@ -37,16 +37,27 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
   const [flows, setFlows] = useState<AutomationFlow[]>([]);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter(l => 
-      l.tradeName.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (activeTab === 'LGPD' ? l.marketingAutomation?.status === 'OPT_OUT' : l.marketingAutomation?.status !== 'OPT_OUT')
-    );
+    return leads.filter(l => {
+      // 1. Filtro de Busca por Nome
+      const matchesSearch = l.tradeName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // 2. Filtro de LGPD (Se estiver na aba LGPD mostra os Opt-out, senão esconde)
+      const matchesLgpd = activeTab === 'LGPD' ? l.marketingAutomation?.status === 'OPT_OUT' : l.marketingAutomation?.status !== 'OPT_OUT';
+      
+      // 3. REGRA SOLICITADA: Apenas leads na fase inicial após a qualificação (ph-qualificado)
+      // Ignora leads que ainda estão na fila (inQueue) ou em fases avançadas do funil
+      const isInitialPhase = l.phaseId === 'ph-qualificado' && !l.inQueue;
+
+      return matchesSearch && matchesLgpd && isInitialPhase;
+    });
   }, [leads, searchTerm, activeTab]);
 
   const stats = useMemo(() => {
-    const active = leads.filter(l => l.marketingAutomation?.status === 'RUNNING').length;
-    const opened = leads.filter(l => l.marketingAutomation?.status === 'OPENED').length;
-    const clicked = leads.filter(l => l.marketingAutomation?.status === 'CLICKED').length;
+    // Estatísticas baseadas apenas nos leads da fase inicial para manter contexto
+    const targetLeads = leads.filter(l => l.phaseId === 'ph-qualificado' && !l.inQueue);
+    const active = targetLeads.filter(l => l.marketingAutomation?.status === 'RUNNING').length;
+    const opened = targetLeads.filter(l => l.marketingAutomation?.status === 'OPENED').length;
+    const clicked = targetLeads.filter(l => l.marketingAutomation?.status === 'CLICKED').length;
     return { active, opened, clicked };
   }, [leads]);
 
@@ -77,6 +88,12 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
     
     setIsTemplateModalOpen(false);
     setEditingTemplate(null);
+  };
+
+  const handleDeleteMasterTemplate = (id: string) => {
+    if (confirm("Deseja excluir este template da biblioteca permanentemente?")) {
+      setMasterTemplates(prev => prev.filter(t => t.id !== id));
+    }
   };
 
   const insertVariable = (variable: string) => {
@@ -125,7 +142,7 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#c5a059]/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
         <div className="relative z-10">
           <h1 className="text-4xl font-black serif-authority mb-2 tracking-tight">Ciatos Marketing Intelligence</h1>
-          <p className="text-slate-400 font-medium">Orquestração de Réguas e Lead Scoring B2B</p>
+          <p className="text-slate-400 font-medium">Foco em Leads Qualificados (Fase Inicial)</p>
         </div>
         
         <div className="grid grid-cols-3 gap-10 relative z-10">
@@ -161,11 +178,12 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
            <div className="flex justify-between items-center px-4">
               <input 
                 type="text" 
-                placeholder="Buscar lead por faturamento ou empresa..." 
+                placeholder="Buscar lead na fase inicial..." 
                 className="bg-white border-2 border-slate-100 rounded-2xl px-6 py-4 w-96 text-sm font-bold shadow-sm outline-none focus:border-[#c5a059]"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exibindo apenas leads na etapa: <strong className="text-[#0a192f]">Lead Qualificado</strong></span>
            </div>
 
            <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
@@ -225,6 +243,11 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
                     })}
                  </tbody>
               </table>
+              {filteredLeads.length === 0 && (
+                <div className="py-20 text-center text-slate-300 italic">
+                  Nenhum lead aguardando régua inicial nesta fase.
+                </div>
+              )}
            </div>
         </div>
       )}
@@ -233,11 +256,18 @@ const MarketingAutomationDashboard: React.FC<MarketingAutomationProps> = ({ lead
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
            {masterTemplates.map(tpl => (
              <div key={tpl.id} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-lg transition-all relative group">
-                <div className="absolute top-0 right-0 p-8">
+                <button 
+                  onClick={() => handleDeleteMasterTemplate(tpl.id)} 
+                  className="absolute top-8 right-8 text-slate-300 hover:text-red-500 transition-colors z-20"
+                  title="Excluir Template"
+                >
+                  ✕
+                </button>
+                <div className="absolute top-0 right-0 p-8 mr-6">
                    <span className="bg-amber-50 text-[#c5a059] px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest">{tpl.category}</span>
                 </div>
                 <div>
-                   <h3 className="text-xl font-bold text-[#0a192f] serif-authority mb-4">{tpl.name}</h3>
+                   <h3 className="text-xl font-bold text-[#0a192f] serif-authority mb-4 pr-10">{tpl.name}</h3>
                    <p className="text-xs text-slate-400 font-bold mb-6 italic truncate">Assunto: {tpl.subject}</p>
                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 mb-8 max-h-40 overflow-hidden relative">
                       <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-slate-50 to-transparent"></div>

@@ -24,14 +24,27 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
   const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   const metrics = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
     const monthQuals = qualifications.filter(q => q.sdrId === selectedUserId && new Date(q.date).getMonth() === selectedMonth);
+    
+    // Métricas do Dia
+    const callsToday = qualifications.filter(q => 
+      q.sdrId === selectedUserId && 
+      q.date.startsWith(todayStr) && 
+      (q.type === 'MEETING' || q.type === 'QUALIFICATION')
+    ).length;
+
     const activity = monthQuals.filter(q => q.type === 'MEETING').length;
     const proposals = monthQuals.filter(q => q.type === 'PROPOSAL').length;
     const contracts = monthQuals.filter(q => q.type === 'CONTRACT').length;
     const commission = monthQuals.reduce((acc, q) => acc + q.bonusValue, 0);
     const goal = userGoals.find(g => g.userId === selectedUserId && g.month === selectedMonth);
     
-    return { activity, proposals, contracts, commission, goal };
+    // Cálculo de Meta Diária (Base 22 dias úteis)
+    const dailyGoal = goal ? Math.ceil(goal.callsGoal / 22) : 0;
+    const dailyProgress = dailyGoal > 0 ? Math.min(100, Math.round((callsToday / dailyGoal) * 100)) : 0;
+
+    return { activity, proposals, contracts, commission, goal, callsToday, dailyGoal, dailyProgress };
   }, [qualifications, userGoals, selectedUserId, selectedMonth]);
 
   const chartData = useMemo(() => {
@@ -50,6 +63,8 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
       contracts: monthQuals.filter(q => q.type === 'CONTRACT')
     };
   }, [qualifications, selectedUserId, selectedMonth]);
+
+  const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-2 block";
 
   return (
     <div className="flex gap-8 animate-in fade-in duration-700">
@@ -78,19 +93,56 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
           </div>
         </div>
 
-        {/* METRIC CARDS GRID */}
+        {/* MÉTRICAS DIÁRIAS (NOVA SEÇÃO) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="bg-[#0a192f] p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group border-b-8 border-[#c5a059]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#c5a059]/10 rounded-full blur-2xl group-hover:scale-150 transition-all"></div>
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[10px] font-black text-[#c5a059] uppercase tracking-[0.3em] mb-4">Ligações / Atividades Dia</p>
+                    <div className="flex items-baseline gap-4">
+                       <p className="text-7xl font-black serif-authority">{metrics.callsToday}</p>
+                       <p className="text-xl font-bold text-slate-400">/ {metrics.dailyGoal}</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyProgress}%</p>
+                    <p className="text-[8px] font-black uppercase text-slate-500">Atingimento Dia</p>
+                 </div>
+              </div>
+              <div className="mt-8 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                 <div className="h-full bg-[#c5a059] transition-all duration-1000" style={{ width: `${metrics.dailyProgress}%` }}></div>
+              </div>
+           </div>
+
+           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex items-center justify-between group">
+              <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status da Meta Diária</p>
+                 <h3 className="text-2xl font-bold text-[#0a192f] serif-authority leading-tight">
+                    {metrics.callsToday >= metrics.dailyGoal 
+                      ? "Objetivo Diário Alcançado! 🎯" 
+                      : `Faltam ${Math.max(0, metrics.dailyGoal - metrics.callsToday)} ligações para a meta.`}
+                 </h3>
+              </div>
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.callsToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                 {metrics.callsToday >= metrics.dailyGoal ? '✅' : '🔥'}
+              </div>
+           </div>
+        </div>
+
+        {/* METRIC CARDS GRID (MENSAIS) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden">
               <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                 <span className="text-lg">📉</span> Atividade - Ligações
+                 <span className="text-lg">📉</span> Reuniões - Mensal
               </p>
               <div className="flex items-baseline gap-2">
                  <p className="text-7xl font-black text-[#0a192f] serif-authority">{metrics.activity}</p>
                  <span className="text-xs font-bold text-emerald-500 uppercase">Mês</span>
               </div>
               <div className="mt-8 pt-6 border-t border-slate-50 flex justify-between text-[8px] font-black uppercase text-slate-300">
-                 <span>Meta Mensal: —</span>
-                 <span className="text-[#0a192f]">Ating. 0%</span>
+                 <span>Meta Mensal: {metrics.goal?.callsGoal || '—'}</span>
+                 <span className="text-[#0a192f]">Ating. {metrics.goal?.callsGoal ? Math.round((metrics.activity / metrics.goal.callsGoal) * 100) : 0}%</span>
               </div>
            </div>
 
@@ -103,8 +155,8 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
                  <span className="text-xs font-bold text-indigo-400 uppercase">Mês</span>
               </div>
               <div className="mt-8 pt-6 border-t border-slate-50 flex justify-between text-[8px] font-black uppercase text-slate-300">
-                 <span>Meta Propostas: —</span>
-                 <span className="text-emerald-500">Atingimento 0%</span>
+                 <span>Meta Propostas: {metrics.goal?.proposalsGoal || '—'}</span>
+                 <span className="text-emerald-500">Ating. {metrics.goal?.proposalsGoal ? Math.round((metrics.proposals / metrics.goal.proposalsGoal) * 100) : 0}%</span>
               </div>
            </div>
 
@@ -118,9 +170,9 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
               </div>
               <div className="mt-8 space-y-4">
                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#c5a059]" style={{ width: '0%' }}></div>
+                    <div className="h-full bg-[#c5a059]" style={{ width: `${metrics.goal?.contractsGoal ? Math.round((metrics.contracts / metrics.goal.contractsGoal) * 100) : 0}%` }}></div>
                  </div>
-                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Meta Mês — Contratos</p>
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Meta Mês: {metrics.goal?.contractsGoal || '—'} Contratos</p>
               </div>
            </div>
         </div>

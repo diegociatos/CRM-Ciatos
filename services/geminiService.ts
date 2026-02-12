@@ -6,49 +6,14 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Motor de Inteligência Comercial e Copywriting
- * Resolve objeções com base em contexto 360 do lead e scripts base.
  */
 export const solveObjectionIA = async (objection: string, lead: Lead, baseScriptBody?: string): Promise<ObjectionAnalysis> => {
   const lastInteractions = lead.interactions.slice(0, 3).map(i => `${i.date}: ${i.title} - ${i.content}`).join(' | ');
 
-  const prompt = `Atue como um Assistente Comercial Sênior e Redator Estratégico da Banca Ciatos (B2B Corporativo).
-    
-    OBJETIVO: Fornecer respostas táticas e copy persuasiva para neutralizar uma objeção e marcar o próximo passo (agenda ou proposta).
-
-    DADOS DO LEAD (CONTEXTO):
-    - Nome: ${lead.name}
-    - Empresa: ${lead.tradeName} (${lead.segment})
-    - Porte/Faturamento: ${lead.size} / ${lead.annualRevenue}
-    - Últimos 3 Eventos: ${lastInteractions || 'Primeiro contato.'}
-    - Template Base (Opcional): ${baseScriptBody || 'Nenhum script base definido.'}
-
-    OBJEÇÃO RECEBIDA: "${objection}"
-
-    REGRAS DE OURO:
-    1. Use as variáveis {{nome}} e {{empresa}} no texto.
-    2. Respeite o tom B2B consultivo, sem ser invasivo, focado em ROI e segurança jurídica/fiscal.
-    3. SEMPRE inclua um CTA (Call to Action) claro.
-    4. A saída DEVE ser um JSON puro, sem markdown fora do bloco de código.
-
-    ESTRUTURA JSON OBRIGATÓRIA:
-    {
-      "quick_lines": [
-        "Resposta curta 1 (Tom Direto)",
-        "Resposta curta 2 (Tom Empático)",
-        "Resposta curta 3 (Tom Consultivo)"
-      ],
-      "long_scripts": [
-        "Script completo para call (3-5 frases) 1",
-        "Script completo para call (3-5 frases) 2"
-      ],
-      "whatsapp_msg": "Mensagem pronta para WhatsApp com CTA e {{link_agenda}}",
-      "follow_up": "Sugestão de ação concreta: enviar proposta, marcar demo, diagnostico, etc",
-      "tags": ["preço", "tempo", "concorrente", "prioridade"],
-      "confidence": {
-        "percentual": 95,
-        "razão": "Explicação de 1 frase do porquê esta tese funciona para este porte de empresa."
-      }
-    }`;
+  const prompt = `Atue como um Assistente Comercial Sênior da Banca Ciatos.
+    OBJETIVO: Neutralizar a objeção: "${objection}"
+    CONTEXTO DO LEAD: ${lead.tradeName}, ${lead.segment}, ${lead.size}.
+    RETORNE APENAS JSON.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -59,8 +24,8 @@ export const solveObjectionIA = async (objection: string, lead: Lead, baseScript
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            quick_lines: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 variações de tom" },
-            long_scripts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2 scripts detalhados" },
+            quick_lines: { type: Type.ARRAY, items: { type: Type.STRING } },
+            long_scripts: { type: Type.ARRAY, items: { type: Type.STRING } },
             whatsapp_msg: { type: Type.STRING },
             follow_up: { type: Type.STRING },
             tags: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -76,8 +41,7 @@ export const solveObjectionIA = async (objection: string, lead: Lead, baseScript
       }
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    return parsed as ObjectionAnalysis;
+    return JSON.parse(response.text || '{}') as ObjectionAnalysis;
   } catch (err) {
     console.error("Falha no Motor de Objeções IA:", err);
     throw err;
@@ -85,18 +49,11 @@ export const solveObjectionIA = async (objection: string, lead: Lead, baseScript
 };
 
 export const generateScriptVariationIA = async (body: string, tone: string): Promise<string> => {
-  const prompt = `Reescreva o script de vendas abaixo para um tom "${tone}". Mantenha as variáveis como {{nome}} e {{empresa}}. 
-  Script Base: ${body}`;
-  
+  const prompt = `Reescreva o script para um tom "${tone}": ${body}`;
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt
-    });
+    const response = await ai.models.generateContent({ model: "gemini-3-flash-preview", contents: prompt });
     return response.text || body;
-  } catch (err) {
-    return body;
-  }
+  } catch (err) { return body; }
 };
 
 export const personalizeMasterTemplateIA = async (lead: Lead, template: MasterTemplate): Promise<{ subject: string; body: string }> => {
@@ -107,27 +64,67 @@ export const personalizeMasterTemplateIA = async (lead: Lead, template: MasterTe
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
-    const parsed = JSON.parse(response.text || '{}');
-    return { subject: parsed.subject || '', body: parsed.body || '' };
-  } catch (err) {
-    return { subject: '', body: '' };
-  }
+    return JSON.parse(response.text || '{}');
+  } catch (err) { return { subject: '', body: '' }; }
 };
 
+/**
+ * Radar Inteligente de Prospecção (Google Search Grounding)
+ * ATENÇÃO: Proibido usar responseMimeType: application/json com googleSearch
+ */
 export const prospectCompanies = async (
   segment: string, city: string, state: string, size?: CompanySize, taxRegime?: string, page: number = 1
 ): Promise<{ companies: ProspectCompany[]; sources: any[] }> => {
-  const prompt = `Encontre 20 empresas para o segmento ${segment} em ${city}/${state}. Retorne JSON {companies: []}.`;
+  const prompt = `ENCONTRE 15 empresas reais do segmento "${segment}" em "${city}/${state}".
+    CRITÉRIOS: Porte ${size || 'Indiferente'}, Regime ${taxRegime || 'Indiferente'}.
+    
+    RETORNE OBRIGATORIAMENTE UM BLOCO JSON COM ESTE FORMATO NO MEIO DO TEXTO:
+    {
+      "companies": [
+        {
+          "name": "Nome da Empresa",
+          "cnpj": "00.000.000/0001-00",
+          "cnpjRaw": "00000000000100",
+          "segment": "Segmento",
+          "city": "Cidade",
+          "state": "UF",
+          "phone": "(00) 0000-0000",
+          "emailCompany": "contato@empresa.com.br",
+          "website": "www.empresa.com.br",
+          "partners": ["Sócio 1", "Sócio 2"],
+          "decisionMakerName": "Nome do Decisor",
+          "decisionMakerPhoneFormatted": "(00) 90000-0000",
+          "icpScore": 5,
+          "debtStatus": "Regular",
+          "estimatedRevenue": "R$ 10M - 20M"
+        }
+      ]
+    }`;
+
   try {
+    // Usando Gemini 3 Pro para melhor grounding de busca
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-pro-preview",
       contents: prompt,
-      config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" },
+      config: { 
+        tools: [{ googleSearch: {} }] 
+        // responseMimeType REMOVIDO para evitar erro com googleSearch
+      },
     });
-    const parsed = JSON.parse(response.text || '{"companies": []}');
+
+    const text = response.text || '';
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return { companies: parsed.companies || [], sources };
+    
+    // Extração manual de JSON do bloco de texto
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { companies: parsed.companies || [], sources };
+    }
+
+    return { companies: [], sources: [] };
   } catch (error) {
+    console.error("Erro no Radar Gemini:", error);
     return { companies: [], sources: [] };
   }
 };

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { miningEngine } from '../services/miningService';
 
@@ -16,6 +16,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   const [jobLeads, setJobLeads] = useState<MiningLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
   
   const [newJob, setNewJob] = useState({
     segmentName: '',
@@ -30,6 +31,12 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   });
 
   useEffect(() => {
+    const checkKey = async () => {
+      const selected = await window.aistudio.hasSelectedApiKey();
+      setHasKey(selected);
+    };
+    checkKey();
+
     const load = () => {
       setActiveJobs(miningEngine.getJobs().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     };
@@ -42,15 +49,20 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   useEffect(() => {
     if (inspectingJob) {
       const leads = miningEngine.getLeadsByJob(inspectingJob.id);
-      // Filtra leads que já existem na base do CRM principal por CNPJ
       const existingCnpjs = new Set(existingLeads.map(l => l.cnpjRaw));
       const filtered = leads.filter(l => !existingCnpjs.has(l.cnpjRaw));
       setJobLeads(filtered);
     }
   }, [inspectingJob, activeJobs, existingLeads]);
 
+  const handleSelectKey = async () => {
+    await window.aistudio.openSelectKey();
+    setHasKey(true);
+  };
+
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasKey) return alert("Selecione sua chave de API para habilitar a busca em tempo real.");
     if (!newJob.segmentName) return alert("Preencha o nome do segmento.");
     
     await miningEngine.createJob(newJob as any);
@@ -66,12 +78,10 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   const handleBulkImport = async () => {
     if (selectedLeads.size === 0) return;
     setIsProcessing(true);
-    
     const leadsToSend = jobLeads.filter(l => selectedLeads.has(l.id));
     let successCount = 0;
 
     for (const lead of leadsToSend) {
-       // Inicia como GARIMPO e força entrada na fila
        const ok = await onAddAsLead({ ...lead, isGarimpo: true, inQueue: true });
        if (ok) {
          successCount++;
@@ -81,12 +91,9 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     
     setIsProcessing(false);
     setSelectedLeads(new Set());
-    
-    // Atualiza lista local após importação
     const updatedLeads = jobLeads.filter(l => !selectedLeads.has(l.id));
     setJobLeads(updatedLeads);
-
-    alert(`Sucesso: ${successCount} leads importados e movidos para a Fila de Qualificação.`);
+    alert(`Sucesso: ${successCount} leads importados.`);
   };
 
   const toggleAll = () => {
@@ -107,12 +114,22 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Radar de Inteligência</h1>
           <p className="text-slate-500 text-lg font-medium">Extração estrita por Porte e Regime Tributário.</p>
         </div>
-        <button 
-          onClick={() => setShowNewJobModal(true)}
-          className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 transition-all"
-        >
-          🚀 Configurar Varredura
-        </button>
+        <div className="flex gap-4">
+          {!hasKey && (
+            <button 
+              onClick={handleSelectKey}
+              className="bg-amber-100 text-amber-700 px-8 py-4 rounded-[1.8rem] font-black uppercase text-[10px] tracking-widest border-2 border-amber-200 hover:bg-amber-200 transition-all flex items-center gap-3"
+            >
+              <span className="text-xl">🔑</span> Configurar Chave de Acesso
+            </button>
+          )}
+          <button 
+            onClick={() => setShowNewJobModal(true)}
+            className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 transition-all"
+          >
+            🚀 Configurar Varredura
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -138,11 +155,10 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
               </div>
               <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-1">{job.name}</h3>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-[#c5a059]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 {job.filters.city || 'Todas as Cidades'} / {job.filters.state}
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
-                <span className="bg-amber-50 text-[#c5a059] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">Target: {job.filters.size}</span>
+                <span className="bg-amber-50 text-[#c5a059] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">{job.filters.size}</span>
                 <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-indigo-100">{job.filters.taxRegime}</span>
               </div>
               
@@ -169,7 +185,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
           <form onSubmit={handleCreateJob} className="relative bg-white w-full max-w-3xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
              <div className="p-10 bg-slate-50 border-b border-slate-100">
                 <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight">Filtros de Compliance IA</h2>
-                <p className="text-slate-500 font-medium mt-2">Segmentação cirúrgica por faturamento presumido e regime fiscal.</p>
+                <p className="text-slate-500 font-medium mt-2">Segmentação cirúrgica para busca de empresas reais.</p>
              </div>
              
              <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -196,8 +212,8 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                         <label className={labelClass}>Porte Estrito</label>
                         <select className={inputClass} value={newJob.size} onChange={e => setNewJob({...newJob, size: e.target.value as any})}>
                            <option value="all">Indiferente</option>
-                           <option value={CompanySize.ME}>ME (Micro)</option>
-                           <option value={CompanySize.EPP}>EPP (Pequeno)</option>
+                           <option value={CompanySize.ME}>ME</option>
+                           <option value={CompanySize.EPP}>EPP</option>
                            <option value={CompanySize.MEDIUM}>Médio</option>
                            <option value={CompanySize.LARGE}>Grande</option>
                         </select>
@@ -212,7 +228,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                       </div>
                    </div>
                    <div>
-                      <label className={labelClass}>Meta de Captura (Trava Unique)</label>
+                      <label className={labelClass}>Meta de Captura</label>
                       <input type="number" min="10" max="500" className={inputClass} value={newJob.targetCount} onChange={e => setNewJob({...newJob, targetCount: parseInt(e.target.value)})} />
                    </div>
                 </div>
@@ -258,7 +274,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                          </th>
                          <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa / Porte / Regime</th>
                          <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Contatos Sede</th>
-                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">QSA / Sócios Principais</th>
+                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">QSA / Sócios</th>
                          <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Decisor Direto</th>
                          <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ação</th>
                       </tr>
@@ -324,8 +340,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                 {jobLeads.length === 0 && (
                    <div className="py-40 text-center opacity-30 flex flex-col items-center">
                       <div className="text-6xl mb-6">🎯</div>
-                      <p className="text-3xl font-bold serif-authority">Lote de resultados processado.</p>
-                      <p className="text-sm font-black uppercase tracking-widest text-slate-400 mt-2">Todos os leads foram movidos para a Qualificação.</p>
+                      <p className="text-3xl font-bold serif-authority">Lote Processado.</p>
                    </div>
                 )}
              </div>

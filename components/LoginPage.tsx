@@ -33,6 +33,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
     }
   };
 
+  const handleQuickLogin = () => {
+    setEmail('diego.garcia@grupociatos.com.br');
+    setPassword('250500');
+    // Pequeno delay para visualização do preenchimento
+    setTimeout(() => {
+      onLogin('diego.garcia@grupociatos.com.br', '250500');
+    }, 500);
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#050a15] flex items-center justify-center p-6 relative overflow-hidden font-serif">
       {/* Elementos de Fundo Orgânicos */}
@@ -63,10 +72,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
                 </div>
                 <input 
                   type="email"
-                  placeholder="Seu e-mail corporativo"
+                  placeholder="diego.garcia@grupociatos.com.br"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if(errors.email) validate(); }}
-                  className={`w-full bg-white/5 border-2 ${errors.email ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-[#c5a059]'} rounded-2xl pl-14 pr-6 py-4 text-white font-bold outline-none transition-all placeholder:text-slate-600 placeholder:font-medium`}
+                  className={`w-full bg-white/5 border-2 ${errors.email ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-[#c5a059]'} rounded-2xl pl-14 pr-6 py-4 text-white font-bold outline-none transition-all placeholder:text-slate-700 placeholder:font-medium`}
                 />
               </div>
               {errors.email && <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest ml-4">{errors.email}</p>}
@@ -84,10 +93,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
                 </div>
                 <input 
                   type={showPassword ? "text" : "password"}
-                  placeholder="Sua senha de acesso"
+                  placeholder="******"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); if(errors.password) validate(); }}
-                  className={`w-full bg-white/5 border-2 ${errors.password ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-[#c5a059]'} rounded-2xl pl-14 pr-14 py-4 text-white font-bold outline-none transition-all placeholder:text-slate-600 placeholder:font-medium`}
+                  className={`w-full bg-white/5 border-2 ${errors.password ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-[#c5a059]'} rounded-2xl pl-14 pr-14 py-4 text-white font-bold outline-none transition-all placeholder:text-slate-700 placeholder:font-medium`}
                 />
                 <button 
                   type="button"
@@ -101,24 +110,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
                   )}
                 </button>
               </div>
-              {errors.password && <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest ml-4">{errors.password}</p>}
             </div>
 
-            {/* Lembrar de mim */}
-            <label className="flex items-center gap-3 cursor-pointer group w-fit">
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="sr-only" 
-                />
-                <div className={`w-5 h-5 rounded-md border-2 transition-all ${rememberMe ? 'bg-[#c5a059] border-[#c5a059]' : 'border-white/10 group-hover:border-white/30'}`}>
-                  {rememberMe && <svg className="w-4 h-4 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+            {/* Lembrar de mim e Demo */}
+            <div className="flex justify-between items-center px-2">
+              <label className="flex items-center gap-3 cursor-pointer group w-fit">
+                <div className="relative">
+                  <input 
+                    type="checkbox" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="sr-only" 
+                  />
+                  <div className={`w-5 h-5 rounded-md border-2 transition-all ${rememberMe ? 'bg-[#c5a059] border-[#c5a059]' : 'border-white/10 group-hover:border-white/30'}`}>
+                    {rememberMe && <svg className="w-4 h-4 text-white mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                  </div>
                 </div>
-              </div>
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Lembrar de mim por 30 dias</span>
-            </label>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Lembrar de mim</span>
+              </label>
+              
+              <button 
+                type="button" 
+                onClick={handleQuickLogin}
+                className="text-[9px] font-black text-[#c5a059] uppercase tracking-widest border border-[#c5a059]/30 px-3 py-1 rounded-lg hover:bg-[#c5a059]/10 transition-all"
+              >
+                ⚡ Acesso Rápido (Demo)
+              </button>
+            </div>
 
             {/* Botão Login */}
             <button 
@@ -140,9 +158,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
 
           {/* Rodapé de Segurança */}
           <div className="mt-12 pt-8 border-t border-white/5 text-center">
-            <div className="flex items-center justify-center gap-2 text-[9px] font-black text-slate-600 uppercase tracking-widest">
-              <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 4.908-3.367 9.126-8 10.111-4.633-.985-8-5.203-8-10.111 0-.68.056-1.35.166-2.001zm8 2a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-              Conexão segura e criptografada
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center justify-center gap-2 text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 2.001 0 4.908-3.367 9.126-8 10.111-4.633-.985-8-5.203-8-10.111 0-.68.056-1.35.166-2.001zm8 2a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                Conexão segura e criptografada
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 w-full">
+                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Credenciais Demo:</p>
+                <p className="text-[10px] font-bold text-slate-400">diego.garcia@grupociatos.com.br / 250500</p>
+              </div>
             </div>
           </div>
         </div>

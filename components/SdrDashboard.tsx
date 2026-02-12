@@ -25,14 +25,27 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
   const sdrUsers = useMemo(() => allUsers.filter(u => u.role === UserRole.SDR || u.role === UserRole.ADMIN || u.role === UserRole.MANAGER), [allUsers]);
 
   const metrics = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
     const monthQuals = qualifications.filter(q => q.sdrId === selectedUserId && new Date(q.date).getMonth() === selectedMonth);
+    
+    // Métricas do Dia
+    const activitiesToday = qualifications.filter(q => 
+      q.sdrId === selectedUserId && 
+      q.date.startsWith(todayStr) && 
+      (q.type === 'QUALIFICATION' || q.type === 'MEETING')
+    ).length;
+
     const qualsCount = monthQuals.filter(q => q.type === 'QUALIFICATION').length;
     const meetingsCount = monthQuals.filter(q => q.type === 'MEETING').length;
     const efficiency = qualsCount > 0 ? Math.round((meetingsCount / qualsCount) * 100) : 0;
     const totalBonus = monthQuals.reduce((acc, q) => acc + q.bonusValue, 0);
     const goal = userGoals.find(g => g.userId === selectedUserId && g.month === selectedMonth);
     
-    return { qualsCount, meetingsCount, efficiency, totalBonus, goal };
+    // Cálculo de Meta Diária (Base 22 dias úteis - Usando callsGoal como proxy de atividades)
+    const dailyGoal = goal ? Math.ceil(goal.callsGoal / 22) : 0;
+    const dailyProgress = dailyGoal > 0 ? Math.min(100, Math.round((activitiesToday / dailyGoal) * 100)) : 0;
+
+    return { qualsCount, meetingsCount, efficiency, totalBonus, goal, activitiesToday, dailyGoal, dailyProgress };
   }, [qualifications, userGoals, selectedUserId, selectedMonth]);
 
   const chartData = useMemo(() => {
@@ -79,7 +92,44 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
           </div>
         </div>
 
-        {/* KPI GRID CORRIGIDO */}
+        {/* MÉTRICAS DIÁRIAS (NOVA SEÇÃO) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="bg-[#0a192f] p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group border-b-8 border-[#c5a059]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#c5a059]/10 rounded-full blur-2xl group-hover:scale-150 transition-all"></div>
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[10px] font-black text-[#c5a059] uppercase tracking-[0.3em] mb-4">Ligações / Atividades Dia</p>
+                    <div className="flex items-baseline gap-4">
+                       <p className="text-7xl font-black serif-authority">{metrics.activitiesToday}</p>
+                       <p className="text-xl font-bold text-slate-400">/ {metrics.dailyGoal}</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyProgress}%</p>
+                    <p className="text-[8px] font-black uppercase text-slate-500">Objetivo Dia</p>
+                 </div>
+              </div>
+              <div className="mt-8 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                 <div className="h-full bg-[#c5a059] transition-all duration-1000" style={{ width: `${metrics.dailyProgress}%` }}></div>
+              </div>
+           </div>
+
+           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex items-center justify-between group">
+              <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status da Produção Diária</p>
+                 <h3 className="text-2xl font-bold text-[#0a192f] serif-authority leading-tight">
+                    {metrics.activitiesToday >= metrics.dailyGoal 
+                      ? "Meta de Atividades Batida! 🚀" 
+                      : `Faltam ${Math.max(0, metrics.dailyGoal - metrics.activitiesToday)} atividades para o alvo diário.`}
+                 </h3>
+              </div>
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.activitiesToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                 {metrics.activitiesToday >= metrics.dailyGoal ? '💎' : '📞'}
+              </div>
+           </div>
+        </div>
+
+        {/* KPI GRID MENSAIS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
            {/* CARD 1: PRODUÇÃO */}
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative">
@@ -96,7 +146,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               </div>
            </div>
 
-           {/* CARD 2: CONVERSÃO (Igual ao Card 1 conforme imagem) */}
+           {/* CARD 2: CONVERSÃO */}
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative">
               <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                  <span className="text-lg">📅</span> Conversão - Agendamentos
@@ -111,7 +161,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               </div>
            </div>
 
-           {/* CARD 3: EFICIÊNCIA (Ajuste Visual Fino) */}
+           {/* CARD 3: EFICIÊNCIA */}
            <div className="bg-[#0a192f] p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
               <p className="text-[10px] font-black text-[#c5a059] uppercase tracking-widest mb-4 flex items-center gap-2">
                  <span className="text-lg">📊</span> Eficiência Quali-Call

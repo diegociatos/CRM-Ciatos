@@ -1,18 +1,17 @@
 
 import { MiningJob, MiningLead, CompanySize, ProspectCompany } from '../types';
 import { prospectCompanies } from './geminiService';
-import { sreEngine } from './sreService';
 
-// ATUALIZADO PARA V57 PARA COMBINAR COM APP.TSX
-const STORAGE_JOBS_KEY = sreEngine.getStorageKey('ciatos_mining_jobs_v57');
-const STORAGE_LEADS_KEY = sreEngine.getStorageKey('ciatos_mining_leads_v57');
-const MAIN_CRM_KEY = sreEngine.getStorageKey('ciatos_leads_v57');
+// SINCRONIZADO COM APP.TSX v63
+const STORAGE_JOBS_KEY = 'ciatos_mining_jobs_v63';
+const STORAGE_LEADS_KEY = 'ciatos_mining_leads_v63';
+const MAIN_CRM_KEY = 'ciatos_leads_v63';
 
 class MiningEngine {
   private activeIntervals: Record<string, any> = {};
 
   constructor() {
-    setTimeout(() => this.hydrateBackgroundJobs(), 2000);
+    setTimeout(() => this.hydrateBackgroundJobs(), 3000);
   }
 
   public getJobs(): MiningJob[] {
@@ -41,7 +40,7 @@ class MiningEngine {
       id: `job-${Math.random().toString(36).substr(2, 9)}`,
       name: params.segmentName,
       status: 'Running',
-      version: 57,
+      version: 63,
       configPayload: { ...params },
       filters: {
         segment: params.segmentName,
@@ -100,7 +99,7 @@ class MiningEngine {
     if (this.activeIntervals[jobId]) return;
     this.activeIntervals[jobId] = setInterval(async () => {
       await this.processNextPage(jobId);
-    }, 10000); // Aumentado um pouco para evitar rate limit de busca
+    }, 15000); // Intervalo seguro para Google Search
   }
 
   private stopWorker(jobId: string) {
@@ -118,11 +117,6 @@ class MiningEngine {
       return;
     }
 
-    if (job.foundCount >= job.targetCount) {
-      this.finalizeJob(job);
-      return;
-    }
-
     try {
       const data = await prospectCompanies(
         job.filters.segment,
@@ -133,31 +127,28 @@ class MiningEngine {
         job.pagesFetched + 1
       );
 
-      if (!data.companies || data.companies.length === 0) {
-        // Se após 3 tentativas de página não vier nada, finaliza por falta de resultados na região
-        if (job.pagesFetched > 3 && job.foundCount === 0) {
-          this.finalizeJob(job);
-        }
+      if (data.companies && data.companies.length > 0) {
+        const newLeadsCount = this.persistLeads(jobId, data.companies, data.sources);
+        job.foundCount += newLeadsCount;
+        job.pagesFetched += 1;
+      } else if (job.pagesFetched > 3) {
+        this.finalizeJob(job);
         return;
       }
 
-      // Updated to pass data.sources to persistLeads for URI extraction
-      const newLeadsCount = this.persistLeads(jobId, data.companies, data.sources);
-      
-      job.foundCount += newLeadsCount;
-      job.pagesFetched += 1;
       job.updatedAt = new Date().toISOString();
-      
       this.saveJob(job);
+      
+      if (job.foundCount >= job.targetCount) {
+        this.finalizeJob(job);
+      }
     } catch (err) {
-      console.error("Erro no worker de mineração:", err);
       job.errors += 1;
-      if (job.errors > 10) job.status = 'Failed';
+      if (job.errors > 5) job.status = 'Failed';
       this.saveJob(job);
     }
   }
 
-  // Updated persistLeads signature to handle groundingSources for URIs
   private persistLeads(jobId: string, companies: ProspectCompany[], groundingSources: any[]): number {
     const savedLeads = localStorage.getItem(STORAGE_LEADS_KEY);
     let allLeads: MiningLead[] = savedLeads ? JSON.parse(savedLeads) : [];
@@ -166,34 +157,30 @@ class MiningEngine {
     const existingCnpjs = new Set(mainCRMLeads.map((l: any) => l.cnpjRaw));
     const miningCnpjs = new Set(allLeads.map(l => l.cnpjRaw));
     
-    // Always extract website URLs from groundingChunks as required by Gemini rules
     const groundedUris = groundingSources
       .filter(chunk => chunk.web && chunk.web.uri)
       .map(chunk => chunk.web.uri);
 
     let addedCount = 0;
     companies.forEach(c => {
-      // Valida se CNPJ já existe em qualquer base para evitar duplicados
       if (c.cnpjRaw && !existingCnpjs.has(c.cnpjRaw) && !miningCnpjs.has(c.cnpjRaw)) {
         const mLead: MiningLead = {
           ...c,
           id: `mlead-${Math.random().toString(36).substr(2, 9)}`,
           jobId,
-          tradeName: c.name,
+          tradeName: c.tradeName || c.name || 'Empresa Localizada',
           phoneCompany: c.phone || 'Não localizado',
           emailCompany: c.emailCompany || 'Não localizado',
-          partners: c.partners || ["Não localizado"],
-          contactName: c.decisionMakerName || 'Não localizado',
-          contactPhone: c.decisionMakerPhoneFormatted || 'Não localizado',
-          contactEmail: c.email || 'Não localizado',
+          partners: c.partners || ["Pendente"],
+          contactName: c.decisionMakerName || 'Proprietário',
+          contactPhone: c.decisionMakerPhoneFormatted || '—',
+          contactEmail: c.email || '—',
           scoreIa: c.icpScore || 3,
           debtStatus: c.debtStatus || "Regular",
-          debtValueEst: c.estimatedRevenue || "Sob consulta",
-          // Use extracted URIs from grounding metadata chunks
-          sources: groundedUris.length > 0 ? groundedUris : ['google_search', 'receita_qsa'],
+          debtValueEst: c.estimatedRevenue || "—",
+          sources: groundedUris.length > 0 ? groundedUris : ['google_search'],
           isGarimpo: true,
           createdAt: new Date().toISOString(),
-          // Fix for Property 'website' does not exist on type 'ProspectCompany' error
           website: c.website || ''
         };
         allLeads.push(mLead);
