@@ -27,6 +27,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Lead>(lead);
   const [activeScript, setActiveScript] = useState<SalesScript | undefined>(undefined);
+  
+  // Novo estado para nota rápida na timeline
+  const [quickNote, setQuickNote] = useState('');
 
   // Estado para o Novo Agendamento (Modelo Unificado)
   const [quickEvent, setQuickEvent] = useState({
@@ -49,6 +52,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       author: currentUser.name,
       authorId: currentUser.id
     });
+  };
+
+  const handleAddQuickNote = () => {
+    if (!quickNote.trim()) return;
+    onAddInteraction(lead.id, {
+      type: 'NOTE',
+      title: '📌 Nota de Acompanhamento',
+      content: quickNote,
+      author: currentUser.name,
+      authorId: currentUser.id
+    });
+    setQuickNote('');
   };
 
   const handleAddQuickEvent = () => {
@@ -342,8 +357,33 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           )}
 
           {activeTab === 'timeline' && (
-            <div className="p-8 h-full animate-in fade-in">
-              <Timeline360 lead={lead} agendaEvents={agendaEvents} currentUser={currentUser} />
+            <div className="p-8 h-full space-y-6 animate-in fade-in">
+              {/* CAMPO DE NOTA RÁPIDA (Onde você anota as notas agora) */}
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl space-y-4">
+                 <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-[#c5a059] uppercase tracking-widest">Registrar Nova Nota de Acompanhamento</label>
+                    <span className="text-[8px] font-bold text-slate-300 uppercase">Autor: {currentUser.name}</span>
+                 </div>
+                 <textarea 
+                    value={quickNote}
+                    onChange={e => setQuickNote(e.target.value)}
+                    placeholder="Escreva aqui o que acabou de acontecer com este lead (ex: 'Liguei e pediu retorno amanhã', 'Nota sobre a proposta')..." 
+                    className="w-full h-32 bg-slate-50 border-2 border-slate-100 rounded-2xl p-6 text-sm font-medium outline-none focus:border-[#c5a059] shadow-inner resize-none transition-all"
+                 />
+                 <div className="flex justify-end">
+                    <button 
+                       disabled={!quickNote.trim()}
+                       onClick={handleAddQuickNote}
+                       className="px-10 py-3 bg-[#0a192f] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all disabled:opacity-30 disabled:translate-y-0"
+                    >
+                       💾 Registrar Nota na Linha do Tempo
+                    </button>
+                 </div>
+              </div>
+
+              <div className="flex-1">
+                <Timeline360 lead={lead} agendaEvents={agendaEvents} currentUser={currentUser} />
+              </div>
             </div>
           )}
 
