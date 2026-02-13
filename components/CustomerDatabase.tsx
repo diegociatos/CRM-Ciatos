@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType } from '../types';
+import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner } from '../types';
 
 interface CustomerDatabaseProps {
   leads: Lead[];
@@ -87,7 +87,8 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
   };
 
   const labelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5";
-  const miniBadge = "px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter";
+  const displayLabel = "text-[9px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-1 block";
+  const sectionHeader = "text-[11px] font-black text-[#0a192f] uppercase tracking-[0.3em] mb-8 border-b border-slate-50 pb-2";
 
   if (!selectedCustomer) {
     return (
@@ -115,7 +116,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
            <table className="w-full text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                  <tr>
-                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa / Contrato</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa / Contato</th>
                     <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Regime / Porte</th>
                     <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Saúde</th>
                     <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Serviço Ativo</th>
@@ -230,37 +231,98 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
         
         <div className="lg:col-span-2 space-y-8">
            {activeTab === 'perfil' && (
-             <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm animate-in slide-in-from-bottom-4">
-                <h3 className="text-xl font-bold text-[#0a192f] serif-authority mb-10 border-b border-slate-50 pb-4">Raio-X Corporativo</h3>
-                <div className="grid grid-cols-2 gap-y-12 gap-x-10">
-                   <div>
-                      <label className={labelClass}>Razão Social Completa</label>
-                      <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.legalName}</p>
+             <div className="animate-in slide-in-from-bottom-4 space-y-10">
+                {/* Seção 1: Identificação Completa */}
+                <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm">
+                   <h3 className={sectionHeader}>Identificação Corporativa</h3>
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8">
+                      <div className="col-span-2">
+                         <label className={displayLabel}>Razão Social Completa</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.legalName}</p>
+                      </div>
+                      <div className="col-span-2">
+                         <label className={displayLabel}>Nome Fantasia</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.tradeName}</p>
+                      </div>
+                      <div className="col-span-1">
+                         <label className={displayLabel}>Regime Tributário</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.taxRegime}</p>
+                      </div>
+                      <div className="col-span-1">
+                         <label className={displayLabel}>Porte Corporativo</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.size}</p>
+                      </div>
+                      <div className="col-span-1">
+                         <label className={displayLabel}>Telefone Sede</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.companyPhone || 'S/I'}</p>
+                      </div>
+                      <div className="col-span-1">
+                         <label className={displayLabel}>Status Fiscal</label>
+                         <p className={`text-sm font-bold ${selectedCustomer.debtStatus === 'Regular' ? 'text-emerald-500' : 'text-rose-500'}`}>{selectedCustomer.debtStatus}</p>
+                      </div>
+                      <div className="col-span-2">
+                         <label className={displayLabel}>Endereço Completo</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.address || selectedCustomer.location || 'S/I'}</p>
+                      </div>
+                      <div className="col-span-2">
+                         <label className={displayLabel}>Website / Canais</label>
+                         <p className="text-sm font-bold text-indigo-600 truncate">{selectedCustomer.website || 'N/A'}</p>
+                      </div>
                    </div>
-                   <div>
-                      <label className={labelClass}>Regime Tributário</label>
-                      <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.taxRegime}</p>
+                </div>
+
+                {/* Seção 2: Diagnóstico Financeiro */}
+                <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm">
+                   <h3 className={sectionHeader}>Diagnóstico Financeiro (Mapeado)</h3>
+                   <div className="grid grid-cols-3 gap-8">
+                      <div>
+                         <label className={displayLabel}>Folha Mensal (R$)</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.payrollValue || 'Não Informado'}</p>
+                      </div>
+                      <div>
+                         <label className={displayLabel}>Faturamento Mensal (R$)</label>
+                         <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.monthlyRevenue || 'Não Informado'}</p>
+                      </div>
+                      <div>
+                         <label className={displayLabel}>Faturamento Anual (Histórico)</label>
+                         <p className="text-sm font-bold text-indigo-600">{selectedCustomer.annualRevenue}</p>
+                      </div>
                    </div>
-                   <div>
-                      <label className={labelClass}>Porte Estipulado</label>
-                      <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.size}</p>
-                   </div>
-                   <div>
-                      <label className={labelClass}>Faturamento Anual (Histórico)</label>
-                      <p className="text-sm font-bold text-indigo-600">{selectedCustomer.annualRevenue}</p>
-                   </div>
-                   <div className="col-span-2">
-                      <label className={labelClass}>Quadro Societário (QSA)</label>
-                      <div className="grid grid-cols-2 gap-4 mt-2">
-                        {selectedCustomer.detailedPartners?.map((p, i) => (
-                          <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
-                             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[10px] shadow-sm">👤</div>
-                             <div>
-                                <p className="text-[11px] font-black text-[#0a192f]">{p.name}</p>
-                                <p className="text-[9px] text-slate-400 font-bold uppercase">{p.sharePercentage} de Participação</p>
+                </div>
+
+                {/* Seção 3: Quadro Societário (QSA) */}
+                <div className="bg-slate-50 p-12 rounded-[4rem] border border-slate-100 shadow-inner">
+                   <h3 className={sectionHeader}>Quadro Societário (QSA)</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {selectedCustomer.detailedPartners?.map((p, i) => (
+                       <div key={i} className="p-6 bg-white rounded-3xl border border-slate-100 flex items-center gap-4 shadow-sm">
+                          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-sm shadow-inner">👤</div>
+                          <div className="flex-1">
+                             <p className="text-xs font-black text-[#0a192f]">{p.name}</p>
+                             <div className="flex justify-between items-center mt-1">
+                                <span className="text-[9px] text-slate-400 font-mono">{p.cpf || 'CPF NÃO INFORMADO'}</span>
+                                <span className="text-[9px] bg-indigo-50 text-indigo-500 font-black px-2 rounded uppercase">{p.sharePercentage} DE COTAS</span>
                              </div>
                           </div>
-                        ))}
+                       </div>
+                     ))}
+                     {(!selectedCustomer.detailedPartners || selectedCustomer.detailedPartners.length === 0) && (
+                       <p className="col-span-2 text-center py-10 text-[10px] text-slate-300 italic uppercase font-black tracking-widest">Base de Sócios não Migrada</p>
+                     )}
+                   </div>
+                </div>
+
+                {/* Seção 4: Notas Estratégicas */}
+                <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm">
+                   <h3 className={sectionHeader}>Memória Estratégica do Lead</h3>
+                   <div className="grid grid-cols-2 gap-10">
+                      <div>
+                         <label className={displayLabel}>Dores Principais</label>
+                         <p className="text-xs text-slate-500 font-medium leading-relaxed italic">"{selectedCustomer.strategicPains || 'Sem registros de dores na qualificação.'}"</p>
+                      </div>
+                      <div>
+                         <label className={displayLabel}>Expectativas Coletadas</label>
+                         <p className="text-xs text-slate-500 font-medium leading-relaxed italic">"{selectedCustomer.expectations || 'Sem registros de expectativas.'}"</p>
                       </div>
                    </div>
                 </div>
@@ -416,11 +478,11 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
 
               <div className="space-y-6 pt-6 border-t border-slate-50">
                  <div>
-                    <label className={labelClass}>Início de Parceria</label>
+                    <label className="text-[10px] font-black text-[#c5a059] uppercase mb-1">Início de Parceria</label>
                     <p className="text-sm font-bold text-[#0a192f]">{selectedCustomer.contractStart || 'Data não migrada'}</p>
                  </div>
                  <div>
-                    <label className={labelClass}>Valor de Contrato (Anual)</label>
+                    <label className="text-[10px] font-black text-[#c5a059] uppercase mb-1">Valor de Contrato (Anual)</label>
                     <p className="text-sm font-bold text-indigo-600">{selectedCustomer.contractValue || 'Sob consulta'}</p>
                  </div>
               </div>

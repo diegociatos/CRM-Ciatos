@@ -5,14 +5,12 @@ import { Lead, MasterTemplate, ObjectionAnalysis, CompanySize, ProspectCompany }
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Motor de Inteligência Comercial e Copywriting
+ * Motor de Inteligência Comercial
  */
 export const solveObjectionIA = async (objection: string, lead: Lead, baseScriptBody?: string): Promise<ObjectionAnalysis> => {
-  const lastInteractions = lead.interactions.slice(0, 3).map(i => `${i.date}: ${i.title} - ${i.content}`).join(' | ');
-
-  const prompt = `Atue como um Assistente Comercial Sênior da Banca Ciatos.
-    OBJETIVO: Neutralizar a objeção: "${objection}"
-    CONTEXTO DO LEAD: ${lead.tradeName}, ${lead.segment}, ${lead.size}.
+  const prompt = `Atue como Assistente Comercial Sênior da Banca Ciatos.
+    OBJETIVO: Neutralizar: "${objection}"
+    CONTEXTO: Empresa ${lead.tradeName}, Segmento ${lead.segment}, Porte ${lead.size}.
     RETORNE APENAS JSON.`;
 
   try {
@@ -43,17 +41,69 @@ export const solveObjectionIA = async (objection: string, lead: Lead, baseScript
 
     return JSON.parse(response.text || '{}') as ObjectionAnalysis;
   } catch (err) {
-    console.error("Falha no Motor de Objeções IA:", err);
+    console.error("Erro Objeção IA:", err);
     throw err;
   }
 };
 
-export const generateScriptVariationIA = async (body: string, tone: string): Promise<string> => {
-  const prompt = `Reescreva o script para um tom "${tone}": ${body}`;
+/**
+ * Radar Inteligente - Restauração de Busca Real-Time
+ */
+export const prospectCompanies = async (
+  segment: string, city: string, state: string, size?: CompanySize, taxRegime?: string, page: number = 1
+): Promise<{ companies: ProspectCompany[]; sources: any[] }> => {
+  const prompt = `LOCALIZE 15 empresas reais: Segmento "${segment}", Cidade "${city}/${state}".
+    Filtros: Porte ${size || 'Indiferente'}, Regime ${taxRegime || 'Indiferente'}.
+    
+    FORNEÇA OS DADOS NO FORMATO JSON ABAIXO (MANTENHA EXATAMENTE ESTAS CHAVES):
+    {
+      "companies": [
+        {
+          "name": "Razão Social",
+          "cnpj": "00.000.000/0001-00",
+          "cnpjRaw": "00000000000100",
+          "segment": "${segment}",
+          "city": "${city}",
+          "state": "${state}",
+          "phone": "(00) 0000-0000",
+          "emailCompany": "contato@email.com",
+          "website": "www.site.com",
+          "partners": ["Sócio A"],
+          "decisionMakerName": "Nome do Decisor",
+          "decisionMakerPhoneFormatted": "(00) 90000-0000",
+          "icpScore": 5,
+          "debtStatus": "Regular",
+          "estimatedRevenue": "R$ 10M+"
+        }
+      ]
+    }`;
+
   try {
-    const response = await ai.models.generateContent({ model: "gemini-3-flash-preview", contents: prompt });
-    return response.text || body;
-  } catch (err) { return body; }
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: prompt,
+      config: { 
+        tools: [{ googleSearch: {} }]
+        // Sem responseMimeType para evitar erro com googleSearch
+      },
+    });
+
+    const text = response.text || '';
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    
+    // Extrator Robusto: Busca o primeiro bloco que pareça JSON
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const cleanJson = jsonMatch[0].replace(/```json|```/g, '');
+      const parsed = JSON.parse(cleanJson);
+      return { companies: parsed.companies || [], sources };
+    }
+
+    return { companies: [], sources: [] };
+  } catch (error) {
+    console.error("Erro Crítico Radar Gemini:", error);
+    return { companies: [], sources: [] };
+  }
 };
 
 export const personalizeMasterTemplateIA = async (lead: Lead, template: MasterTemplate): Promise<{ subject: string; body: string }> => {
@@ -66,65 +116,4 @@ export const personalizeMasterTemplateIA = async (lead: Lead, template: MasterTe
     });
     return JSON.parse(response.text || '{}');
   } catch (err) { return { subject: '', body: '' }; }
-};
-
-/**
- * Radar Inteligente de Prospecção (Google Search Grounding)
- * ATENÇÃO: Proibido usar responseMimeType: application/json com googleSearch
- */
-export const prospectCompanies = async (
-  segment: string, city: string, state: string, size?: CompanySize, taxRegime?: string, page: number = 1
-): Promise<{ companies: ProspectCompany[]; sources: any[] }> => {
-  const prompt = `ENCONTRE 15 empresas reais do segmento "${segment}" em "${city}/${state}".
-    CRITÉRIOS: Porte ${size || 'Indiferente'}, Regime ${taxRegime || 'Indiferente'}.
-    
-    RETORNE OBRIGATORIAMENTE UM BLOCO JSON COM ESTE FORMATO NO MEIO DO TEXTO:
-    {
-      "companies": [
-        {
-          "name": "Nome da Empresa",
-          "cnpj": "00.000.000/0001-00",
-          "cnpjRaw": "00000000000100",
-          "segment": "Segmento",
-          "city": "Cidade",
-          "state": "UF",
-          "phone": "(00) 0000-0000",
-          "emailCompany": "contato@empresa.com.br",
-          "website": "www.empresa.com.br",
-          "partners": ["Sócio 1", "Sócio 2"],
-          "decisionMakerName": "Nome do Decisor",
-          "decisionMakerPhoneFormatted": "(00) 90000-0000",
-          "icpScore": 5,
-          "debtStatus": "Regular",
-          "estimatedRevenue": "R$ 10M - 20M"
-        }
-      ]
-    }`;
-
-  try {
-    // Usando Gemini 3 Pro para melhor grounding de busca
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: prompt,
-      config: { 
-        tools: [{ googleSearch: {} }] 
-        // responseMimeType REMOVIDO para evitar erro com googleSearch
-      },
-    });
-
-    const text = response.text || '';
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    
-    // Extração manual de JSON do bloco de texto
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return { companies: parsed.companies || [], sources };
-    }
-
-    return { companies: [], sources: [] };
-  } catch (error) {
-    console.error("Erro no Radar Gemini:", error);
-    return { companies: [], sources: [] };
-  }
 };

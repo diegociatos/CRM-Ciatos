@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Lead, SalesScript, User, InteractionType, ScriptUsage } from '../types';
 
 interface TeleprompterProps {
@@ -13,31 +13,40 @@ interface TeleprompterProps {
 const Teleprompter: React.FC<TeleprompterProps> = ({ lead, scripts, onLogUsage, currentUser, onScriptSelect }) => {
   const [selectedScriptId, setSelectedScriptId] = useState<string>('');
   const [outcome, setOutcome] = useState<ScriptUsage['outcome']>('Interessado');
+  const [scrollSpeed, setScrollSpeed] = useState(0); 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const availableScripts = useMemo(() => {
-    // Sugere scripts baseados na fase do lead ou tipo de serviço
-    return scripts.filter(s => s.funnelPhaseId === lead.phaseId || s.serviceType === lead.serviceType || s.isGlobal);
+    return scripts.filter(s => 
+      s.funnelPhaseId === lead.phaseId || s.serviceType === lead.serviceType || s.isGlobal
+    );
   }, [scripts, lead.phaseId, lead.serviceType]);
 
   const activeScript = useMemo(() => scripts.find(s => s.id === selectedScriptId), [scripts, selectedScriptId]);
 
   const parsedBody = useMemo(() => {
     if (!activeScript) return '';
-    const currentVersion = activeScript.versions.find(v => v.id === activeScript.currentVersionId) || activeScript.versions[activeScript.versions.length - 1];
-    return currentVersion.body
-      .replace(/{{nome}}/g, lead.name)
-      .replace(/{{empresa}}/g, lead.tradeName)
-      .replace(/{{segmento}}/g, lead.segment)
-      .replace(/{{dor}}/g, lead.strategicPains || 'redução da carga tributária')
-      .replace(/{{faturamento}}/g, lead.annualRevenue || 'não informado')
-      .replace(/{{regime}}/g, lead.taxRegime);
+    
+    const version = activeScript.versions.find(v => v.id === activeScript.currentVersionId) || activeScript.versions[activeScript.versions.length - 1];
+    if (!version) return 'Texto não localizado.';
+
+    return version.body
+      .replace(/{{nome}}/g, lead.name || 'Decisor')
+      .replace(/{{empresa}}/g, lead.tradeName || lead.company || 'empresa')
+      .replace(/{{segmento}}/g, lead.segment || 'setor')
+      .replace(/{{faturamento}}/g, lead.annualRevenue || 'indicadores')
+      .replace(/{{regime}}/g, lead.taxRegime || 'regime tributário');
   }, [activeScript, lead]);
 
-  const handleScriptChange = (id: string) => {
-    setSelectedScriptId(id);
-    const script = scripts.find(s => s.id === id);
-    if (script && onScriptSelect) onScriptSelect(script);
-  };
+  useEffect(() => {
+    if (scrollSpeed === 0) return;
+    const interval = setInterval(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop += 1;
+      }
+    }, 100 / scrollSpeed);
+    return () => clearInterval(interval);
+  }, [scrollSpeed]);
 
   const handleFinish = () => {
     if (!activeScript) return;
@@ -50,68 +59,73 @@ const Teleprompter: React.FC<TeleprompterProps> = ({ lead, scripts, onLogUsage, 
     }, parsedBody);
   };
 
-  const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-2 block";
-
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-         <label className={labelClass}>Script Recomendado</label>
-         <select 
-          className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-5 py-3 text-sm font-bold outline-none focus:border-[#c5a059]"
-          value={selectedScriptId}
-          onChange={e => handleScriptChange(e.target.value)}
-         >
-            <option value="">Selecione um roteiro de abordagem...</option>
-            {availableScripts.map(s => (
-              <option key={s.id} value={s.id}>{s.title}</option>
-            ))}
-         </select>
+    <div className="flex flex-col h-full space-y-6 animate-in fade-in">
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
+         <div className="flex-1">
+            <label className="text-[10px] font-black text-[#c5a059] uppercase tracking-widest mb-2 block">Script Ativo</label>
+            <select 
+              className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-5 py-3 text-sm font-bold outline-none focus:border-[#c5a059]"
+              value={selectedScriptId}
+              onChange={e => {
+                setSelectedScriptId(e.target.value);
+                const s = scripts.find(i => i.id === e.target.value);
+                if (s && onScriptSelect) onScriptSelect(s);
+              }}
+            >
+                <option value="">Selecione um roteiro...</option>
+                {availableScripts.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+         </div>
+         {activeScript && (
+           <div className="ml-10 flex gap-2">
+              {[0, 1, 2, 3].map(speed => (
+                <button 
+                  key={speed}
+                  onClick={() => setScrollSpeed(speed)}
+                  className={`w-10 h-10 rounded-xl font-black text-[10px] border-2 ${scrollSpeed === speed ? 'bg-[#c5a059] border-[#c5a059] text-[#0a192f]' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+                >
+                  {speed === 0 ? '⏸' : `${speed}x`}
+                </button>
+              ))}
+           </div>
+         )}
       </div>
 
       {activeScript ? (
         <div className="flex-1 flex flex-col space-y-6 overflow-hidden">
-           <div className="flex-1 bg-slate-900 rounded-[3rem] p-10 text-white relative shadow-2xl overflow-y-auto custom-scrollbar border-l-8 border-[#c5a059]">
-              <div className="absolute top-8 right-8 flex gap-2">
-                 <span className="px-3 py-1 bg-white/10 rounded-lg text-[8px] font-black uppercase text-[#c5a059] tracking-widest">{activeScript.tone}</span>
-                 <span className="px-3 py-1 bg-white/10 rounded-lg text-[8px] font-black uppercase text-slate-400 tracking-widest">{activeScript.estimatedDuration} min</span>
-              </div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8">Teleprompter em Tempo Real</p>
-              <div className="text-lg font-medium leading-relaxed whitespace-pre-wrap serif-authority text-slate-100">
+           <div 
+             ref={scrollContainerRef}
+             className="flex-1 bg-[#0a192f] rounded-[3rem] p-12 text-white shadow-2xl overflow-y-auto custom-scrollbar border-l-[12px] border-[#c5a059] scroll-smooth"
+           >
+              <div className="text-3xl font-medium leading-relaxed whitespace-pre-wrap serif-authority text-slate-100 pb-64">
                  {parsedBody}
               </div>
            </div>
 
-           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl space-y-6">
-              <div className="grid grid-cols-2 gap-8">
-                 <div>
-                    <label className={labelClass}>Desfecho da Tentativa</label>
-                    <select 
-                      className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-5 py-3 text-xs font-bold outline-none"
-                      value={outcome}
-                      onChange={e => setOutcome(e.target.value as any)}
-                    >
-                       <option value="Interessado">👍 Interessado (Avançar)</option>
-                       <option value="Objeção resolvida">⚖️ Objeção resolvida</option>
-                       <option value="Precisa de proposta">📄 Precisa de proposta</option>
-                       <option value="Não interessado">👎 Não interessado</option>
-                    </select>
-                 </div>
-                 <div className="flex items-end">
-                    <button 
-                      onClick={handleFinish}
-                      className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-black uppercase text-[9px] tracking-widest shadow-xl border-b-4 border-emerald-800 active:translate-y-1 transition-all flex items-center justify-center gap-2"
-                    >
-                      💾 Registrar e Encerrar
-                    </button>
-                 </div>
-              </div>
+           <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex gap-6">
+              <select 
+                className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-5 py-3 text-xs font-bold"
+                value={outcome}
+                onChange={e => setOutcome(e.target.value as any)}
+              >
+                 <option value="Interessado">👍 Interessado</option>
+                 <option value="Objeção resolvida">⚖️ Objeção resolvida</option>
+                 <option value="Não interessado">👎 Não interessado</option>
+                 <option value="Sem contato">🚫 Caixa Postal</option>
+              </select>
+              <button 
+                onClick={handleFinish}
+                className="px-10 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase text-[10px] shadow-xl border-b-4 border-emerald-800 active:translate-y-1 transition-all"
+              >
+                Registrar e Concluir
+              </button>
            </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-center opacity-30 italic py-20 border-2 border-dashed border-slate-100 rounded-[3rem] bg-slate-50/30">
-           <div className="text-7xl mb-6">🎤</div>
-           <p className="serif-authority text-2xl text-[#0a192f]">Aguardando Seleção de Roteiro</p>
-           <p className="text-[10px] font-black uppercase tracking-widest mt-2">Os placeholders serão preenchidos automaticamente com os dados do lead.</p>
+        <div className="flex-1 flex flex-col items-center justify-center opacity-30 italic py-20 border-4 border-dashed border-slate-100 rounded-[4rem]">
+           <p className="serif-authority text-2xl font-bold">Modo Teleprompter</p>
+           <p className="text-[10px] font-black uppercase tracking-widest mt-2">Escolha um roteiro acima.</p>
         </div>
       )}
     </div>

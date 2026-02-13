@@ -66,7 +66,26 @@ export const INITIAL_LEADS: Lead[] = [
     createdAt: new Date().toISOString(),
     debtStatus: 'Dívida Ativa',
     inQueue: true,
-    interactions: [],
+    interactions: [
+      {
+        id: 'int-init-1',
+        type: 'CALL',
+        title: '📞 Cold Call de Prospecção',
+        content: 'Conversado com Arnaldo. Ele confirmou que a empresa está em fase de revisão fiscal. Decisor aberto a diagnóstico.',
+        date: new Date(Date.now() - 86400000).toISOString(),
+        author: 'SDR Operacional',
+        authorId: 'user-sdr'
+      },
+      {
+        id: 'int-init-2',
+        type: 'NOTE',
+        title: '📌 Insight de Qualificação',
+        content: 'Empresa possui alto volume de créditos de PIS/COFINS represados devido ao regime de Lucro Real.',
+        date: new Date(Date.now() - 43200000).toISOString(),
+        author: 'SDR Operacional',
+        authorId: 'user-sdr'
+      }
+    ],
     tasks: [],
     city: 'São José dos Campos',
     state: 'SP',
@@ -78,7 +97,22 @@ export const INITIAL_LEADS: Lead[] = [
        currentStepId: 'STEP_01',
        status: 'RUNNING',
        lastActionAt: new Date().toISOString(),
-       history: [],
+       history: [
+         {
+           id: 'h-init-1',
+           step: 'PRESENTATION',
+           action: 'EMAIL_SENT',
+           timestamp: new Date(Date.now() - 7200000).toISOString(),
+           details: 'E-mail de apresentação de teses enviado automaticamente.'
+         },
+         {
+           id: 'h-init-2',
+           step: 'PRESENTATION',
+           action: 'EMAIL_OPENED',
+           timestamp: new Date(Date.now() - 3600000).toISOString(),
+           details: 'Lead abriu o e-mail de apresentação (IP: 187.xx.xx.xx).'
+         }
+       ],
        isAutomatic: true
     }
   },
