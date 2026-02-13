@@ -61,11 +61,12 @@ export interface MessagingConfig {
     senderName: string;
     senderEmail: string;
     provider: EmailProvider;
-    apiKey: string; // Salva criptografada
+    apiKey: string;
     smtpHost?: string;
     smtpPort?: number;
     smtpUser?: string;
     webhookSecret: string;
+    emailSignature: string; // Adicionado: Assinatura fixa
   };
   whatsapp: {
     apiKey: string;
@@ -84,7 +85,6 @@ export interface User {
   managerTypeId?: string;
 }
 
-// Added to fix marketingService.ts and Timeline360.tsx errors
 export interface MarketingHistory {
   id: string;
   step: string;
@@ -93,7 +93,6 @@ export interface MarketingHistory {
   details: string;
 }
 
-// Updated history type to MarketingHistory[]
 export interface MarketingAutomation { 
   currentStepId: string; 
   status: string; 
@@ -103,7 +102,6 @@ export interface MarketingAutomation {
   aiContent?: string; 
 }
 
-// Added to fix OperationalDashboard.tsx errors
 export interface OnboardingComment {
   id: string;
   authorId: string;
@@ -112,7 +110,6 @@ export interface OnboardingComment {
   date: string;
 }
 
-// Added to fix OperationalDashboard.tsx errors
 export interface OnboardingAttachment {
   id: string;
   name: string;
@@ -121,7 +118,6 @@ export interface OnboardingAttachment {
   uploadedBy: string;
 }
 
-// Updated status, comments and attachments types
 export interface OnboardingItem { 
   id: string; 
   title: string; 
@@ -157,8 +153,8 @@ export interface Lead {
   size: CompanySize;
   taxRegime: string;
   annualRevenue: string;
-  payrollValue?: string; // Added to fix dataGeneratorService.ts error
-  monthlyRevenue?: string; // Added to fix NewLeadForm.tsx usage
+  payrollValue?: string;
+  monthlyRevenue?: string;
   status: LeadStatus;
   phaseId: string;
   ownerId: string;
@@ -171,9 +167,9 @@ export interface Lead {
   city: string;
   state: string;
   address?: string;
-  location?: string; // Added to fix MarketingHub.tsx and LeadsManager.tsx error
-  enriched?: boolean; // Added to fix LeadsManager.tsx usage
-  qualifiedById?: string; // Added to fix KanbanBoard.tsx usage
+  location?: string;
+  enriched?: boolean;
+  qualifiedById?: string;
   detailedPartners: LeadPartner[];
   closeProbability: number;
   engagementScore?: number;
@@ -218,7 +214,6 @@ export interface LeadPartner { name: string; sharePercentage: string; cpf?: stri
 
 export interface NavigationState { view: 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management'; }
 
-// Added to fix ScriptsLibrary.tsx error
 export interface ScriptVersion {
   id: string;
   body: string;
@@ -227,7 +222,6 @@ export interface ScriptVersion {
   createdBy: string;
 }
 
-// Updated versions type
 export interface SalesScript { 
   id: string; 
   title: string; 
@@ -248,7 +242,6 @@ export interface SalesScript {
 export interface ScriptUsage { id: string; scriptId: string; versionId: string; leadId: string; userId: string; outcome: string; date: string; }
 export interface MasterTemplate { id: string; name: string; category: string; subject: string; content: string; lastUpdated: string; }
 
-// Added for better typing of onboarding templates
 export interface OnboardingTemplatePhase {
   id: string;
   name: string;
@@ -258,7 +251,6 @@ export interface OnboardingTemplatePhase {
   mandatory: boolean;
 }
 
-// Updated phases type
 export interface OnboardingTemplate { 
   id: string; 
   serviceType: string; 
@@ -291,7 +283,6 @@ export interface ProspectCompany {
 
 export interface Notification { id: string; title: string; message: string; timestamp: string; type: 'success' | 'warning' | 'info'; read: boolean; }
 
-// Added to fix LeadsManager.tsx and MarketingHub.tsx errors
 export interface LeadFilters {
   status: LeadStatus[];
   size: CompanySize[];
@@ -300,7 +291,6 @@ export interface LeadFilters {
   hasInteractions: 'any' | 'none' | 'recent' | 'old';
 }
 
-// Added to fix MarketingHub.tsx errors
 export interface SmartListFilters extends LeadFilters {
   operator: 'AND' | 'OR';
   state: string;
@@ -320,12 +310,10 @@ export interface UserGoal { id: string; userId: string; month: number; year: num
 export interface AgendaEvent { id: string; title: string; start: string; end: string; assignedToId: string; leadId?: string; typeId?: string; type: string; description?: string; status: string; participants: { userId: string; status: string }[]; department: string; creatorId: string; }
 export interface ObjectionAnalysis { quick_lines: string[]; long_scripts: string[]; whatsapp_msg: string; follow_up: string; tags: string[]; confidence: { percentual: number; razão: string; }; }
 
-// Added to fix LeadsManager.tsx error
 export interface CalendarConfig {
   isIntegrated: boolean;
 }
 
-// Added to fix Prospector.tsx and miningService.ts errors
 export interface MiningJob {
   id: string;
   name: string;
@@ -351,7 +339,6 @@ export interface MiningJob {
   lastNotificationMilestone: number;
 }
 
-// Added to fix Prospector.tsx and miningService.ts errors
 export interface MiningLead extends ProspectCompany {
   id: string;
   jobId: string;
@@ -372,7 +359,6 @@ export interface MiningLead extends ProspectCompany {
   website: string;
 }
 
-// Added to fix EmailMarketing.tsx and MarketingHub.tsx errors
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -380,7 +366,6 @@ export interface EmailTemplate {
   content: string;
 }
 
-// Added to fix App.tsx, SdrDashboard.tsx, etc errors
 export interface SdrQualification {
   id: string;
   sdrId: string;
@@ -392,10 +377,8 @@ export interface SdrQualification {
   bonusValue: number;
 }
 
-// Added to fix AutomationManager.tsx errors
 export type AutomationTrigger = 'LEAD_QUALIFIED' | 'PHASE_CHANGED' | 'PROPOSAL_SENT_SERVICE' | 'LINK_CLICKED';
 
-// Added to fix AutomationManager.tsx errors
 export interface AutomationStep {
   id: string;
   type: 'SEND_MESSAGE' | 'WAIT' | 'CHANGE_STATUS' | 'NOTIFY_USER' | 'CREATE_TASK';
@@ -406,7 +389,6 @@ export interface AutomationStep {
   content?: string;
 }
 
-// Added to fix AutomationManager.tsx, MarketingHub.tsx, etc errors
 export interface AutomationFlow {
   id: string;
   name: string;
@@ -425,7 +407,6 @@ export interface AutomationFlow {
   createdAt: string;
 }
 
-// Added to fix MarketingHub.tsx errors
 export interface CampaignComment {
   id: string;
   userId: string;
@@ -434,7 +415,6 @@ export interface CampaignComment {
   timestamp: string;
 }
 
-// Added to fix MarketingHub.tsx and ReportsDashboard.tsx errors
 export interface Campaign {
   id: string;
   name: string;
@@ -455,14 +435,12 @@ export interface Campaign {
   };
 }
 
-// Added to fix ChatModule.tsx errors
 export interface ChatThread {
   id: string;
   title: string;
   leadId?: string;
 }
 
-// Added to fix ChatModule.tsx errors
 export interface ChatMessage {
   id: string;
   threadId: string;
@@ -474,20 +452,17 @@ export interface ChatMessage {
   fileName?: string;
 }
 
-// Added to fix Agenda.tsx error
 export interface Participant {
   userId: string;
   status: string;
 }
 
-// Added to fix UserManagement.tsx error
 export interface ManagerType {
   id: string;
   name: string;
   color: string;
 }
 
-// Added to fix sreService.ts error
 export interface AuditLog {
   id: string;
   action: string;

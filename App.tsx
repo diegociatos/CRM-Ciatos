@@ -27,14 +27,13 @@ import {
 import { INITIAL_LEADS, DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
 
-// Versão v63 para restaurar visual fiel aos prints
-const CONFIG_KEY = 'ciatos_config_v63';
-const LEADS_KEY = 'ciatos_leads_v63';
-const SCRIPTS_KEY = 'ciatos_scripts_v63';
-const USERS_KEY = 'ciatos_users_v63';
-const TEMPLATES_KEY = 'ciatos_templates_v63';
-const GOALS_KEY = 'ciatos_goals_v63';
-const AUTH_KEY = 'ciatos_auth_v63';
+const CONFIG_KEY = 'ciatos_config_v64';
+const LEADS_KEY = 'ciatos_leads_v64';
+const SCRIPTS_KEY = 'ciatos_scripts_v64';
+const USERS_KEY = 'ciatos_users_v64';
+const TEMPLATES_KEY = 'ciatos_templates_v64';
+const GOALS_KEY = 'ciatos_goals_v64';
+const AUTH_KEY = 'ciatos_auth_v64';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
@@ -57,12 +56,13 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   serviceTypes: ['PLANEJAMENTO TRIBUTÁRIO', 'HOLDING FAMILIAR', 'CONSULTORIA EMPRESARIAL', 'AUDITORIA FISCAL'],
   messaging: { 
     email: {
-      senderName: 'Diego Garcia | Banca Ciatos',
-      senderEmail: 'diego.garcia@grupociatos.com.br',
+      senderName: 'Equipe Banca Ciatos',
+      senderEmail: 'contato@grupociatos.com.br',
       provider: EmailProvider.SENDGRID,
       apiKey: '',
       smtpHost: 'smtp.ciatos.com.br',
-      webhookSecret: 'ciatos_secret_777'
+      webhookSecret: 'ciatos_secret_777',
+      emailSignature: '--\nAtenciosamente,\nEquipe Banca Ciatos\nwww.grupociatos.com.br'
     },
     whatsapp: { apiKey: '' } 
   },
@@ -92,7 +92,6 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
-  // Inicialização Centralizada de Dados
   useEffect(() => {
     const savedLeads = localStorage.getItem(LEADS_KEY);
     const savedConfig = localStorage.getItem(CONFIG_KEY);
@@ -135,7 +134,6 @@ const App: React.FC = () => {
     if (savedScripts) setScripts(JSON.parse(savedScripts));
   }, []);
 
-  // Persistência Automática
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
     localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
@@ -163,7 +161,7 @@ const App: React.FC = () => {
   };
 
   const handleResetToDefaults = () => {
-    if (confirm("Reset estrutural v63: Restaurar padrões de fábrica?")) {
+    if (confirm("Deseja restaurar os padrões de fábrica do sistema?")) {
       localStorage.clear();
       window.location.reload();
     }

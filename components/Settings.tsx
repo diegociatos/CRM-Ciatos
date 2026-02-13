@@ -135,7 +135,6 @@ const Settings: React.FC<SettingsProps> = ({
     onSaveGoals(nextGoals);
   };
 
-  // Added missing handlers for Onboarding Templates to fix compiler errors
   const handleOpenNewTemplate = () => {
     setEditingTpl({
       id: `tpl-${Date.now()}`,
@@ -189,14 +188,13 @@ const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in pb-20">
-      {/* HEADER GERAL */}
       <div className="flex justify-between items-end border-b border-slate-200 pb-10">
         <div>
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Configurações Gerais</h1>
-          <p className="text-slate-500 text-lg font-medium">Customização de Pipeline, Bônus e Parâmetros.</p>
+          <p className="text-slate-500 text-lg font-medium">Customização de Pipeline, Bônus e Canais.</p>
         </div>
         <div className="flex bg-slate-100 p-1.5 rounded-[2.2rem] border border-slate-200 shadow-inner overflow-x-auto no-scrollbar">
-           {([['pipeline', '📝 PIPELINE'], ['comercial', '💸 METAS & BÔNUS'], ['parametros', '⚙️ PARÂMETROS'], ['journeys', '🏁 JORNADAS'], ['data', '💾 SISTEMA']] as const).map(([id, label]) => (
+           {([['pipeline', '📝 PIPELINE & CANAIS'], ['comercial', '💸 METAS & BÔNUS'], ['parametros', '⚙️ PARÂMETROS'], ['journeys', '🏁 JORNADAS'], ['data', '💾 SISTEMA']] as const).map(([id, label]) => (
              <button 
                key={id}
                onClick={() => setActiveTab(id)}
@@ -208,9 +206,36 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       </div>
 
-      {/* 1. TAB PIPELINE */}
       {activeTab === 'pipeline' && (
         <section className="animate-in slide-in-from-bottom-4 space-y-12">
+          {/* ASSINATURA DE E-MAIL (NOVO LOCAL) */}
+          <div className={cardClass}>
+             <h3 className={sectionTitleClass}>
+                <span className="w-1 h-6 bg-indigo-500 rounded-full"></span>
+                Assinatura de E-mail Corporativa
+             </h3>
+             <div className="space-y-6">
+                <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
+                  Esta assinatura será fixada automaticamente em todos os e-mails enviados pelo CRM, utilizando a fonte **Book Antiqua**.
+                </p>
+                <div>
+                   <label className={labelHeader}>Conteúdo da Assinatura (Texto ou HTML)</label>
+                   <textarea 
+                     className="w-full bg-slate-50 border-2 border-slate-100 rounded-[2rem] p-8 text-sm font-medium h-48 resize-none outline-none focus:border-[#c5a059] shadow-inner"
+                     style={{ fontFamily: "'Book Antiqua', serif", fontSize: '12pt' }}
+                     value={config.messaging.email.emailSignature}
+                     onChange={e => handleUpdateConfig({ 
+                       messaging: { 
+                         ...config.messaging, 
+                         email: { ...config.messaging.email, emailSignature: e.target.value } 
+                       } 
+                     })}
+                     placeholder="Atenciosamente,&#10;Seu Nome&#10;Grupo Ciatos"
+                   />
+                </div>
+             </div>
+          </div>
+
           <div className={cardClass}>
              <div className="flex justify-between items-center mb-8">
                <h3 className={sectionTitleClass}>
@@ -295,10 +320,8 @@ const Settings: React.FC<SettingsProps> = ({
         </section>
       )}
 
-      {/* 2. TAB COMERCIAL (RESTAURADA COM BÔNUS) */}
       {activeTab === 'comercial' && (
         <section className="animate-in slide-in-from-bottom-4 space-y-12">
-           {/* MATRIZ DE PREMIAÇÃO (NOVO) */}
            <div className={cardClass}>
               <h3 className={sectionTitleClass}>
                 <span className="w-1 h-6 bg-emerald-500 rounded-full"></span>
@@ -329,7 +352,6 @@ const Settings: React.FC<SettingsProps> = ({
               <p className="mt-8 text-[10px] text-slate-400 font-bold uppercase italic">* Os valores acima são aplicados por ocorrência para cálculo de dashboard individual.</p>
            </div>
 
-           {/* MATRIZ DE METAS */}
            <div className={cardClass}>
               <div className="flex justify-between items-center mb-10">
                  <div>
@@ -375,11 +397,9 @@ const Settings: React.FC<SettingsProps> = ({
         </section>
       )}
 
-      {/* 3. TAB PARÂMETROS */}
       {activeTab === 'parametros' && (
         <section className="animate-in slide-in-from-bottom-4 space-y-12">
            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-              {/* REGIMES */}
               <div className={cardClass}>
                  <h4 className="text-sm font-bold text-[#0a192f] flex items-center gap-3 mb-8">Regimes de Tributação</h4>
                  <div className="flex gap-2 mb-6">
@@ -401,7 +421,6 @@ const Settings: React.FC<SettingsProps> = ({
                  </div>
               </div>
 
-              {/* SERVIÇOS */}
               <div className={cardClass}>
                  <h4 className="text-sm font-bold text-[#0a192f] flex items-center gap-3 mb-8">Tipos de Serviços</h4>
                  <div className="flex gap-2 mb-6">
@@ -423,7 +442,6 @@ const Settings: React.FC<SettingsProps> = ({
                  </div>
               </div>
 
-              {/* PORTES */}
               <div className={cardClass}>
                  <h4 className="text-sm font-bold text-[#0a192f] flex items-center gap-3 mb-8">Portes Corporativos</h4>
                  <div className="flex gap-2 mb-6">
@@ -490,7 +508,6 @@ const Settings: React.FC<SettingsProps> = ({
         </section>
       )}
 
-      {/* MODAL DO EDITOR DE TEMPLATE (MANTIDO POR SEGURANÇA) */}
       {isTplModalOpen && editingTpl && (
         <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-[#0a192f]/90 backdrop-blur-md">
            <div className="bg-white w-full max-w-5xl h-[90vh] rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
@@ -501,7 +518,6 @@ const Settings: React.FC<SettingsProps> = ({
                  </div>
                  <button onClick={() => setIsTplModalOpen(false)} className="text-3xl text-slate-300 hover:text-[#0a192f]">✕</button>
               </div>
-              {/* Implemented missing editor content to fix component layout */}
               <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
                  <div className="grid grid-cols-2 gap-8 mb-10">
                     <div>

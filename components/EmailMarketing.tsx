@@ -1,17 +1,18 @@
 
 import React, { useState, useMemo } from 'react';
-import { Lead, EmailTemplate, SmartList } from '../types';
+import { Lead, EmailTemplate, SmartList, SystemConfig } from '../types';
 
 interface EmailMarketingProps {
   leads: Lead[];
   templates: EmailTemplate[];
   smartLists: SmartList[];
+  config: SystemConfig; // Adicionado config
   onSaveTemplate: (tpl: EmailTemplate) => void;
   onDeleteTemplate: (id: string) => void;
   onLogEmailSend: (leadId: string, subject: string, content: string) => void;
 }
 
-const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smartLists, onSaveTemplate, onDeleteTemplate, onLogEmailSend }) => {
+const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smartLists, config, onSaveTemplate, onDeleteTemplate, onLogEmailSend }) => {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
@@ -19,6 +20,8 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
   const [queueStatus, setQueueStatus] = useState<{ current: number, total: number, lastSent?: string } | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [newTplName, setNewTplName] = useState('');
+
+  const signature = config.messaging.email.emailSignature || '';
 
   const applySmartList = (list: SmartList) => {
     const filteredIds = leads.filter(lead => {
@@ -50,7 +53,7 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
   const parseVariables = (text: string, lead: Lead) => {
     return text
       .replace(/{{nome_contato}}/g, lead.name)
-      .replace(/{{nome_empresa}}/g, lead.company);
+      .replace(/{{nome_empresa}}/g, lead.tradeName || lead.company);
   };
 
   const toggleSelectAll = () => {
@@ -73,7 +76,9 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
       const lead = leadsToSend[i];
       await new Promise(resolve => setTimeout(resolve, 800)); 
       
-      const parsedContent = parseVariables(content, lead);
+      // Concatena assinatura e formata conteúdo final
+      const bodyWithSignature = `${content}\n\n${signature}`;
+      const parsedContent = parseVariables(bodyWithSignature, lead);
       const parsedSubject = parseVariables(subject, lead);
       
       onLogEmailSend(lead.id, parsedSubject, parsedContent);
@@ -96,7 +101,7 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">E-mail Marketing</h1>
-          <p className="text-slate-500">Campanhas direcionadas com segmentação avançada.</p>
+          <p className="text-slate-500">Campanhas direcionadas com tipografia Book Antiqua.</p>
         </div>
         <button onClick={() => setShowTemplateModal(true)} className="bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-sm font-medium">
           Salvar Template
@@ -105,7 +110,6 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="space-y-6 lg:col-span-1">
-          {/* Smart Lists Picker */}
           {smartLists.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col p-4">
               <h3 className="font-semibold text-slate-800 text-xs uppercase mb-3 text-slate-400">Listas Inteligentes</h3>
@@ -164,8 +168,20 @@ const EmailMarketing: React.FC<EmailMarketingProps> = ({ leads, templates, smart
               <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full border border-slate-200 rounded-lg px-4 py-3 outline-none" placeholder="Assunto..." />
             </div>
             <div className="flex-1 flex flex-col">
-              <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Mensagem</label>
-              <textarea value={content} onChange={(e) => setContent(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-4 py-4 outline-none resize-none bg-slate-50/30" placeholder="Corpo do e-mail..." />
+              <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Mensagem (Book Antiqua 12pt)</label>
+              <div className="flex-1 flex flex-col bg-slate-50/30 rounded-lg border border-slate-200 overflow-hidden shadow-inner">
+                <textarea 
+                  value={content} 
+                  onChange={(e) => setContent(e.target.value)} 
+                  className="flex-1 p-8 outline-none resize-none bg-transparent" 
+                  style={{ fontFamily: "'Book Antiqua', serif", fontSize: '12pt' }}
+                  placeholder="Corpo do e-mail..." 
+                />
+                <div className="p-8 border-t border-slate-100 bg-white/50 opacity-60">
+                   <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Sua assinatura fixa:</p>
+                   <pre style={{ fontFamily: "'Book Antiqua', serif", fontSize: '12pt' }} className="whitespace-pre-wrap">{signature}</pre>
+                </div>
+              </div>
             </div>
           </div>
           <div className="mt-6 flex justify-end">
