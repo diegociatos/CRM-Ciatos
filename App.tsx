@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
+import ExecutiveDashboard from './components/ExecutiveDashboard'; // Novo
 import KanbanBoard from './components/KanbanBoard';
 import Prospector from './components/Prospector';
 import QualificationQueue from './components/QualificationQueue';
@@ -149,7 +150,11 @@ const App: React.FC = () => {
     setIsAuthLoading(true);
     setTimeout(() => {
       const found = users.find(u => u.email === email && u.password === pass);
-      if (found) setCurrentUser(found);
+      if (found) {
+        setCurrentUser(found);
+        // Redireciona Admin direto para o BI Executivo se logar
+        if (found.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
+      }
       else alert("E-mail ou senha incorretos.");
       setIsAuthLoading(false);
     }, 1200);
@@ -207,6 +212,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (nav.view) {
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
+      case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={s => setScripts(prev => prev.find(item => item.id === s.id) ? prev.map(item => item.id === s.id ? s : item) : [...prev, s])} onDeleteScript={id => setScripts(prev => prev.filter(s => s.id !== id))} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
@@ -227,11 +233,11 @@ const App: React.FC = () => {
   const selectedLead = leads.find(l => l.id === selectedLeadId);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-serif text-slate-900">
+    <div className={`min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex font-serif text-slate-900`}>
       <Sidebar role={currentUser.role} currentView={nav.view} setView={(v) => setNav({ view: v })} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 flex flex-col min-h-screen">
         <Header notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} onSwitchRole={(r) => setCurrentUser(users.find(u => u.role === r) || currentUser)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
-        <main className="flex-1 ml-64 pt-28 p-12 max-w-[1800px]">{renderView()}</main>
+        <main className={`flex-1 ml-64 pt-28 p-12 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>{renderView()}</main>
       </div>
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && <UserProfileModal user={currentUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}

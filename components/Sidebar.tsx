@@ -12,6 +12,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, role, onOpenNewLead, canCreate }) => {
   const menuItems = [
+    { id: 'executive_bi', label: 'Estratégico (Admin)', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: [UserRole.ADMIN] },
     { id: 'dashboard', label: 'Painel Geral', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', roles: [UserRole.ADMIN, UserRole.MANAGER] },
     { id: 'closer_dashboard', label: 'Performance Consultor', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', roles: [UserRole.ADMIN, UserRole.CLOSER, UserRole.MANAGER] },
     { id: 'sdr_dashboard', label: 'Minha Produção SDR', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', roles: [UserRole.ADMIN, UserRole.SDR] },
@@ -29,7 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, role, onOpenNew
   ];
 
   return (
-    <div className="w-64 bg-[#0a192f] text-white min-h-screen flex flex-col fixed left-0 top-0 h-full z-50 border-r border-white/5 shadow-2xl">
+    <div className={`w-64 ${currentView === 'executive_bi' ? 'bg-[#050a15] border-white/5' : 'bg-[#0a192f] border-white/5'} text-white min-h-screen flex flex-col fixed left-0 top-0 h-full z-50 border-r shadow-2xl`}>
       <div className="p-8 border-b border-white/5">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 bg-[#c5a059] rounded-lg flex items-center justify-center shadow-lg shadow-[#c5a059]/10 text-white font-black serif-authority">CI</div>
