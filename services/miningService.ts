@@ -1,28 +1,33 @@
 
 import { MiningJob, MiningLead, CompanySize, ProspectCompany } from '../types';
 import { prospectCompanies } from './geminiService';
-
-// SINCRONIZADO COM APP.TSX v63
-const STORAGE_JOBS_KEY = 'ciatos_mining_jobs_v63';
-const STORAGE_LEADS_KEY = 'ciatos_mining_leads_v63';
-const MAIN_CRM_KEY = 'ciatos_leads_v63';
+import { miningApi } from './api';
 
 class MiningEngine {
   private activeIntervals: Record<string, any> = {};
+  private jobsCache: MiningJob[] = [];
+  private leadsCache: MiningLead[] = [];
 
   constructor() {
-    setTimeout(() => this.hydrateBackgroundJobs(), 3000);
+    setTimeout(() => this.hydrate(), 2000);
+  }
+
+  private async hydrate() {
+    try {
+      this.jobsCache = await miningApi.getJobs();
+      this.leadsCache = await miningApi.getLeads();
+      this.jobsCache.filter(j => j.status === 'Running').forEach(j => this.startWorker(j.id));
+    } catch (e) { console.error('[Mining] hydrate error', e); }
   }
 
   public getJobs(): MiningJob[] {
-    const saved = localStorage.getItem(STORAGE_JOBS_KEY);
-    return saved ? JSON.parse(saved) : [];
+    // refresh async in background
+    miningApi.getJobs().then(j => this.jobsCache = j).catch(() => {});
+    return this.jobsCache;
   }
 
   public getLeadsByJob(jobId: string): MiningLead[] {
-    const saved = localStorage.getItem(STORAGE_LEADS_KEY);
-    const leads: MiningLead[] = saved ? JSON.parse(saved) : [];
-    return leads.filter(l => l.jobId === jobId && !l.isImported);
+    return this.leadsCache.filter(l => l.jobId === jobId && !l.isImported);
   }
 
   public async createJob(params: {
@@ -61,14 +66,14 @@ class MiningEngine {
       lastNotificationMilestone: 0
     };
 
-    this.saveJob(job);
+    try { await miningApi.createJob(job); } catch (e) { console.error('[Mining] createJob API error', e); }
+    this.jobsCache.push(job);
     this.startWorker(job.id);
     return job;
   }
 
-  public controlJob(jobId: string, action: 'pause' | 'resume' | 'cancel') {
-    const jobs = this.getJobs();
-    const job = jobs.find(j => j.id === jobId);
+  public async controlJob(jobId: string, action: 'pause' | 'resume' | 'cancel') {
+    const job = this.jobsCache.find(j => j.id === jobId);
     if (!job) return;
 
     if (action === 'pause') {
@@ -83,15 +88,15 @@ class MiningEngine {
     }
 
     job.updatedAt = new Date().toISOString();
-    this.saveJob(job);
+    try { await miningApi.updateJob(jobId, { status: job.status, updatedAt: job.updatedAt }); } catch (e) { /* silent */ }
+    window.dispatchEvent(new CustomEvent('ciatos-mining-update'));
   }
 
-  public markAsImported(cnpjRaw: string) {
-    const savedLeads = localStorage.getItem(STORAGE_LEADS_KEY);
-    if (!savedLeads) return;
-    let leads: MiningLead[] = JSON.parse(savedLeads);
-    leads = leads.map(l => l.cnpjRaw === cnpjRaw ? { ...l, isImported: true } : l);
-    localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(leads));
+  public async markAsImported(cnpjRaw: string) {
+    const lead = this.leadsCache.find(l => l.cnpjRaw === cnpjRaw);
+    if (!lead) return;
+    lead.isImported = true;
+    try { await miningApi.updateLead(lead.id, { isImported: true }); } catch (e) { /* silent */ }
     window.dispatchEvent(new CustomEvent('ciatos-mining-update'));
   }
 
@@ -99,7 +104,7 @@ class MiningEngine {
     if (this.activeIntervals[jobId]) return;
     this.activeIntervals[jobId] = setInterval(async () => {
       await this.processNextPage(jobId);
-    }, 15000); // Intervalo seguro para Google Search
+    }, 15000);
   }
 
   private stopWorker(jobId: string) {
@@ -110,8 +115,7 @@ class MiningEngine {
   }
 
   private async processNextPage(jobId: string) {
-    const jobs = this.getJobs();
-    const job = jobs.find(j => j.id === jobId);
+    const job = this.jobsCache.find(j => j.id === jobId);
     if (!job || job.status !== 'Running') {
       this.stopWorker(jobId);
       return;
@@ -128,42 +132,39 @@ class MiningEngine {
       );
 
       if (data.companies && data.companies.length > 0) {
-        const newLeadsCount = this.persistLeads(jobId, data.companies, data.sources);
+        const newLeadsCount = await this.persistLeads(jobId, data.companies, data.sources);
         job.foundCount += newLeadsCount;
         job.pagesFetched += 1;
       } else if (job.pagesFetched > 3) {
-        this.finalizeJob(job);
+        await this.finalizeJob(job);
         return;
       }
 
       job.updatedAt = new Date().toISOString();
-      this.saveJob(job);
-      
+      try {
+        await miningApi.updateJob(jobId, { foundCount: job.foundCount, pagesFetched: job.pagesFetched, updatedAt: job.updatedAt });
+      } catch (e) { /* silent */ }
+
       if (job.foundCount >= job.targetCount) {
-        this.finalizeJob(job);
+        await this.finalizeJob(job);
       }
     } catch (err) {
       job.errors += 1;
       if (job.errors > 5) job.status = 'Failed';
-      this.saveJob(job);
+      try { await miningApi.updateJob(jobId, { errors: job.errors, status: job.status }); } catch (e) { /* silent */ }
     }
   }
 
-  private persistLeads(jobId: string, companies: ProspectCompany[], groundingSources: any[]): number {
-    const savedLeads = localStorage.getItem(STORAGE_LEADS_KEY);
-    let allLeads: MiningLead[] = savedLeads ? JSON.parse(savedLeads) : [];
-    
-    const mainCRMLeads = JSON.parse(localStorage.getItem(MAIN_CRM_KEY) || '[]');
-    const existingCnpjs = new Set(mainCRMLeads.map((l: any) => l.cnpjRaw));
-    const miningCnpjs = new Set(allLeads.map(l => l.cnpjRaw));
-    
+  private async persistLeads(jobId: string, companies: ProspectCompany[], groundingSources: any[]): Promise<number> {
+    const existingCnpjs = new Set(this.leadsCache.map(l => l.cnpjRaw));
+
     const groundedUris = groundingSources
       .filter(chunk => chunk.web && chunk.web.uri)
       .map(chunk => chunk.web.uri);
 
-    let addedCount = 0;
+    const newLeads: MiningLead[] = [];
     companies.forEach(c => {
-      if (c.cnpjRaw && !existingCnpjs.has(c.cnpjRaw) && !miningCnpjs.has(c.cnpjRaw)) {
+      if (c.cnpjRaw && !existingCnpjs.has(c.cnpjRaw)) {
         const mLead: MiningLead = {
           ...c,
           id: `mlead-${Math.random().toString(36).substr(2, 9)}`,
@@ -183,34 +184,24 @@ class MiningEngine {
           createdAt: new Date().toISOString(),
           website: c.website || ''
         };
-        allLeads.push(mLead);
-        addedCount++;
+        newLeads.push(mLead);
+        this.leadsCache.push(mLead);
+        existingCnpjs.add(c.cnpjRaw);
       }
     });
 
-    localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(allLeads));
-    return addedCount;
+    if (newLeads.length > 0) {
+      try { await miningApi.bulkImportLeads(newLeads); } catch (e) { console.error('[Mining] bulkImport error', e); }
+    }
+    return newLeads.length;
   }
 
-  private finalizeJob(job: MiningJob) {
+  private async finalizeJob(job: MiningJob) {
     job.status = 'Completed';
     job.updatedAt = new Date().toISOString();
-    this.saveJob(job);
     this.stopWorker(job.id);
-  }
-
-  private saveJob(job: MiningJob) {
-    const jobs = this.getJobs();
-    const index = jobs.findIndex(j => j.id === job.id);
-    if (index >= 0) jobs[index] = job;
-    else jobs.push(job);
-    localStorage.setItem(STORAGE_JOBS_KEY, JSON.stringify(jobs));
+    try { await miningApi.updateJob(job.id, { status: 'Completed', updatedAt: job.updatedAt }); } catch (e) { /* silent */ }
     window.dispatchEvent(new CustomEvent('ciatos-mining-update'));
-  }
-
-  private hydrateBackgroundJobs() {
-    const jobs = this.getJobs();
-    jobs.filter(j => j.status === 'Running').forEach(j => this.startWorker(j.id));
   }
 }
 

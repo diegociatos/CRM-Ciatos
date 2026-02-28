@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Lead, EmailTemplate, SmartList, SmartListFilters, LeadStatus, 
   InteractionType, Campaign, AutomationFlow, 
@@ -8,6 +8,7 @@ import {
 } from '../types';
 import { generateCampaignContent, CampaignTheme, GeneratedCampaign } from '../services/campaignAiService';
 import { sendDirectMessage } from '../services/messagingService';
+import { campaignsApi } from '../services/api';
 
 interface MarketingHubProps {
   leads: Lead[];
@@ -65,14 +66,17 @@ const MarketingHub: React.FC<MarketingHubProps> = ({
     hasInteractions: 'any'
   });
 
-  const [smartLists, setSmartLists] = useState<SmartList[]>(() => {
-    const saved = localStorage.getItem('ciatos_smart_lists_v3');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [smartLists, setSmartLists] = useState<SmartList[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('ciatos_smart_lists_v3', JSON.stringify(smartLists));
-  }, [smartLists]);
+    campaignsApi.getSmartLists().then((lists: SmartList[]) => setSmartLists(lists || [])).catch(() => {});
+  }, []);
+
+  const persistSmartLists = useCallback((lists: SmartList[]) => {
+    setSmartLists(lists);
+    // Sync each list to backend (fire-and-forget)
+    // The caller should use specific API calls (create/update/delete) instead
+  }, []);
 
   const applyFilters = (lead: Lead, filters: SmartListFilters): boolean => {
     const checks: boolean[] = [];
@@ -550,7 +554,8 @@ const MarketingHub: React.FC<MarketingHubProps> = ({
                     disabled={!builderName || filteredLeadsPreview.length === 0}
                     onClick={() => { 
                       const newList: SmartList = { id: `lst-${Math.random().toString(36).substr(2, 5)}`, name: builderName, filters: {...builderFilters}, leadsCount: filteredLeadsPreview.length, createdAt: new Date().toISOString() };
-                      setSmartLists(prev => [newList, ...prev]); 
+                      setSmartLists(prev => [newList, ...prev]);
+                      campaignsApi.createSmartList(newList).catch(() => {});
                       setShowListModal(false); 
                     }} 
                     className="w-full py-6 bg-[#0a192f] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all disabled:opacity-30"
@@ -598,7 +603,7 @@ const MarketingHub: React.FC<MarketingHubProps> = ({
               <div>
                 <div className="flex justify-between items-start mb-6">
                   <h3 className="text-2xl font-bold text-[#0a192f] serif-authority leading-tight">{list.name}</h3>
-                  <button onClick={() => setSmartLists(prev => prev.filter(l => l.id !== list.id))} className="text-slate-300 hover:text-red-500 transition-colors">✕</button>
+                  <button onClick={() => { setSmartLists(prev => prev.filter(l => l.id !== list.id)); campaignsApi.deleteSmartList(list.id).catch(() => {}); }} className="text-slate-300 hover:text-red-500 transition-colors">✕</button>
                 </div>
                 <div className="flex gap-3 mb-8">
                   <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-xl uppercase tracking-widest border border-indigo-100">{list.leadsCount} Contatos</span>

@@ -131,6 +131,8 @@ export const miningApi = {
   },
   createLead: (lead: any) =>
     request<any>('/mining/leads', { method: 'POST', body: JSON.stringify(lead) }),
+  updateLead: (id: string, data: any) =>
+    request<any>(`/mining/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   bulkImportLeads: (leads: any[]) =>
     request<any>('/mining/leads/bulk', { method: 'POST', body: JSON.stringify({ leads }) }),
 };

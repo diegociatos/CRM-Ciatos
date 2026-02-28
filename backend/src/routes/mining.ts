@@ -148,6 +148,40 @@ router.post('/leads', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/mining/leads/:id
+router.put('/leads/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const fieldMap: Record<string, string> = {
+      jobId: 'job_id', name: 'name', tradeName: 'trade_name',
+      cnpj: 'cnpj', cnpjRaw: 'cnpj_raw', segment: 'segment',
+      city: 'city', state: 'state', phone: 'phone', email: 'email',
+      emailCompany: 'email_company', phoneCompany: 'phone_company', website: 'website',
+      contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
+      scoreIa: 'score_ia', debtStatus: 'debt_status', debtValueEst: 'debt_value_est',
+      isGarimpo: 'is_garimpo', isImported: 'is_imported',
+    };
+    const jsonMap: Record<string, string> = { partners: 'partners', sources: 'sources' };
+    const updates: string[] = [];
+    const values: any[] = [];
+    for (const [js, db] of Object.entries(fieldMap)) {
+      if (data[js] !== undefined) { updates.push(`${db} = ?`); values.push(data[js]); }
+    }
+    for (const [js, db] of Object.entries(jsonMap)) {
+      if (data[js] !== undefined) { updates.push(`${db} = ?`); values.push(JSON.stringify(data[js])); }
+    }
+    if (updates.length > 0) {
+      values.push(id);
+      await pool.query(`UPDATE mining_leads SET ${updates.join(', ')} WHERE id = ?`, values);
+    }
+    res.json({ message: 'Lead atualizado' });
+  } catch (error: any) {
+    console.error('Update mining lead error:', error);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/mining/leads/bulk
 router.post('/leads/bulk', async (req: Request, res: Response) => {
   try {

@@ -1,5 +1,6 @@
 
 import { Lead, MarketingHistory } from "../types";
+import { auditApi } from './api';
 
 export interface IntegrationLog {
   timestamp: string;
@@ -19,19 +20,20 @@ export const validateEmail = (email: string): boolean => {
 };
 
 /**
- * Registra logs de integração no localStorage para auditoria técnica.
+ * Registra logs de integração no backend para auditoria técnica.
  */
 export const logIntegrationEvent = (event: Omit<IntegrationLog, 'timestamp'>) => {
-  const logs: IntegrationLog[] = JSON.parse(localStorage.getItem('ciatos_integration_logs') || '[]');
-  const newLog = { ...event, timestamp: new Date().toISOString() };
-  localStorage.setItem('ciatos_integration_logs', JSON.stringify([newLog, ...logs].slice(0, 100)));
-  
+  const newLog: IntegrationLog = { ...event, timestamp: new Date().toISOString() };
+
+  // Fire-and-forget — persiste no banco via API
+  auditApi.createIntegration(newLog).catch((e: any) => console.error('[MKT] integration log error', e));
+
   // Simula o disparo de um Webhook Externo
   console.log(`[WEBHOOK] Outbound Event: ${event.event} for Lead ${event.leadName} - Status: ${event.status}`);
 };
 
-export const getIntegrationLogs = (): IntegrationLog[] => {
-  return JSON.parse(localStorage.getItem('ciatos_integration_logs') || '[]');
+export const getIntegrationLogs = async (): Promise<IntegrationLog[]> => {
+  try { return await auditApi.getIntegrations(); } catch (e) { return []; }
 };
 
 /**

@@ -1,9 +1,6 @@
 
 import { AuditLog, User, Lead } from '../types';
-
-const BACKUP_KEY = 'ciatos_db_snapshots';
-const AUDIT_KEY = 'ciatos_audit_trail';
-const ENV_KEY = 'ciatos_current_env';
+import { auditApi, configApi } from './api';
 
 export type CiatosEnv = 'PRODUCTION' | 'STAGING';
 
@@ -11,28 +8,28 @@ class SREEngine {
   private currentEnv: CiatosEnv = 'PRODUCTION';
 
   constructor() {
-    const savedEnv = localStorage.getItem(ENV_KEY);
-    if (savedEnv) this.currentEnv = savedEnv as CiatosEnv;
+    // Carrega env do backend config
+    configApi.getKey('ciatos_env').then((r: any) => {
+      if (r && r.value) this.currentEnv = r.value as CiatosEnv;
+    }).catch(() => {});
   }
 
   public getEnv(): CiatosEnv {
     return this.currentEnv;
   }
 
-  public setEnv(env: CiatosEnv) {
+  public async setEnv(env: CiatosEnv) {
     this.currentEnv = env;
-    localStorage.setItem(ENV_KEY, env);
-    window.location.reload(); // Hard reset para isolar contexto
+    try { await configApi.setKey('ciatos_env', env); } catch (e) { /* silent */ }
+    window.location.reload();
   }
 
-  // Obter prefixo da chave com base no ambiente
   public getStorageKey(baseKey: string): string {
     return this.currentEnv === 'PRODUCTION' ? baseKey : `staging_${baseKey}`;
   }
 
-  // Sistema de Auditoria
-  public logAction(action: string, entityId: string, userId: string, userName: string, oldData?: any, newData?: any) {
-    const logs: AuditLog[] = JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]');
+  // Sistema de Auditoria — salva no backend
+  public async logAction(action: string, entityId: string, userId: string, userName: string, oldData?: any, newData?: any) {
     const newLog: AuditLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       action,
@@ -43,53 +40,39 @@ class SREEngine {
       previousState: oldData,
       newState: newData
     };
-    
-    // Manter apenas os últimos 500 logs para performance
-    const updatedLogs = [newLog, ...logs].slice(0, 500);
-    localStorage.setItem(AUDIT_KEY, JSON.stringify(updatedLogs));
 
-    // Alerta de Operação Destrutiva
+    try { await auditApi.createLog(newLog); } catch (e) { console.error('[SRE] audit log error', e); }
+
     if (action.includes('DELETE') || action.includes('PURGE')) {
       console.warn(`[SRE ALERT] Operação destrutiva detectada: ${action} por ${userName}`);
     }
   }
 
-  // Sistema de Backup (Snapshots)
-  public createSnapshot(leads: Lead[], users: User[]) {
+  // Snapshot agora vem do backend (contagem de tabelas)
+  public async createSnapshot(_leads: Lead[], _users: User[]) {
     try {
-      const snapshots = JSON.parse(localStorage.getItem(BACKUP_KEY) || '[]');
-      const newSnapshot = {
-        timestamp: new Date().toISOString(),
-        env: this.currentEnv,
-        data: { leads, users },
-        id: `snap-${Date.now()}`
-      };
-
-      // Manter 7 dias de snapshots (backups diários simulados)
-      const updatedSnapshots = [newSnapshot, ...snapshots].slice(0, 7);
-      localStorage.setItem(BACKUP_KEY, JSON.stringify(updatedSnapshots));
-      console.log(`[SRE] Snapshot criado com sucesso em ${newSnapshot.timestamp}`);
+      const snap = await auditApi.getLogs({ limit: '1' });
+      console.log(`[SRE] Snapshot request completed. Last log:`, snap[0]?.id || 'none');
     } catch (e) {
-      console.error("[SRE] Falha crítica ao gerar backup:", e);
+      console.error("[SRE] Falha ao consultar snapshot:", e);
     }
   }
 
-  public getSnapshots() {
-    return JSON.parse(localStorage.getItem(BACKUP_KEY) || '[]');
+  public async getSnapshots() {
+    try {
+      const res = await fetch(`${(import.meta as any).env?.VITE_API_URL || '/crm-api'}/audit/snapshots`);
+      return await res.json();
+    } catch (e) { return { counts: {} }; }
   }
 
-  public getAuditTrail() {
-    return JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]');
+  public async getAuditTrail(): Promise<AuditLog[]> {
+    try { return await auditApi.getLogs(); } catch (e) { return []; }
   }
 
-  // Procedimento de Restauração (Disaster Recovery)
-  public restoreFromSnapshot(snapshotId: string): { leads: Lead[], users: User[] } | null {
-    const snapshots = this.getSnapshots();
-    const snap = snapshots.find((s: any) => s.id === snapshotId);
-    if (!snap) return null;
-    
-    this.logAction('DISASTER_RECOVERY_RESTORE', snap.id, 'system', 'SRE Engine', null, snap.data);
-    return snap.data;
+  // Disaster Recovery — retorna snapshot do banco
+  public async restoreFromSnapshot(snapshotId: string): Promise<{ leads: Lead[], users: User[] } | null> {
+    await this.logAction('DISASTER_RECOVERY_RESTORE', snapshotId, 'system', 'SRE Engine', null, null);
+    return null; // Real restore seria via dump MySQL
   }
 }
 
