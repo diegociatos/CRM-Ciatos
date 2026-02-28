@@ -27,13 +27,8 @@ import {
 } from './types';
 import { INITIAL_LEADS, DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
+import { authApi, leadsApi, configApi, scriptsApi, templatesApi, goalsApi, agendaApi } from './services/api';
 
-const CONFIG_KEY = 'ciatos_config_v64';
-const LEADS_KEY = 'ciatos_leads_v64';
-const SCRIPTS_KEY = 'ciatos_scripts_v64';
-const USERS_KEY = 'ciatos_users_v64';
-const TEMPLATES_KEY = 'ciatos_templates_v64';
-const GOALS_KEY = 'ciatos_goals_v64';
 const AUTH_KEY = 'ciatos_auth_v64';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
@@ -94,70 +89,59 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   useEffect(() => {
-    const savedLeads = localStorage.getItem(LEADS_KEY);
-    const savedConfig = localStorage.getItem(CONFIG_KEY);
-    const savedScripts = localStorage.getItem(SCRIPTS_KEY);
-    const savedUsers = localStorage.getItem(USERS_KEY);
-    const savedTemplates = localStorage.getItem(TEMPLATES_KEY);
-    const savedGoals = localStorage.getItem(GOALS_KEY);
     const savedAuth = localStorage.getItem(AUTH_KEY);
+    if (savedAuth) setCurrentUser(JSON.parse(savedAuth));
 
-    if (savedConfig) setConfig(JSON.parse(savedConfig));
-    if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
-    else setTemplates(DEFAULT_ONBOARDING_TEMPLATES);
-
-    if (savedGoals) setUserGoals(JSON.parse(savedGoals));
-
-    let currentUsers: User[] = [];
-    if (savedUsers) {
-      currentUsers = JSON.parse(savedUsers);
-      setUsers(currentUsers);
-    } else {
-      currentUsers = [
-        { id: 'user-diego', name: 'Diego Garcia', email: 'diego.garcia@grupociatos.com.br', password: '250500', role: UserRole.ADMIN, department: 'Comercial', avatar: `https://ui-avatars.com/api/?name=Diego+Garcia&background=0a192f&color=c5a059` },
-        { id: 'user-sdr', name: 'SDR Operacional', email: 'sdr@ciatos.com.br', password: '123', role: UserRole.SDR, department: 'Comercial', avatar: '' },
-        { id: 'user-closer', name: 'Consultor Closer', email: 'closer@ciatos.com.br', password: '123', role: UserRole.CLOSER, department: 'Comercial', avatar: '' }
-      ];
-      setUsers(currentUsers);
-      
-      const initialGoals: UserGoal[] = [
-        { id: 'g1', userId: 'user-sdr', month: new Date().getMonth(), year: 2025, qualsGoal: 40, callsGoal: 10, proposalsGoal: 0, contractsGoal: 0 },
-        { id: 'g2', userId: 'user-closer', month: new Date().getMonth(), year: 2025, qualsGoal: 0, callsGoal: 0, proposalsGoal: 15, contractsGoal: 5 }
-      ];
-      setUserGoals(initialGoals);
-    }
-
-    if (savedAuth) {
-      setCurrentUser(JSON.parse(savedAuth));
-    }
-
-    if (savedLeads) setLeads(JSON.parse(savedLeads)); else setLeads(INITIAL_LEADS);
-    if (savedScripts) setScripts(JSON.parse(savedScripts));
+    // Load all data from API
+    const loadData = async () => {
+      try {
+        const [apiLeads, apiConfig, apiScripts, apiUsers, apiTemplates, apiGoals, apiEvents] = await Promise.allSettled([
+          leadsApi.getAll(),
+          configApi.getAll(),
+          scriptsApi.getAll(),
+          authApi.getUsers(),
+          templatesApi.getAll(),
+          goalsApi.getAll(),
+          agendaApi.getAll(),
+        ]);
+        if (apiLeads.status === 'fulfilled' && apiLeads.value.length > 0) setLeads(apiLeads.value);
+        if (apiConfig.status === 'fulfilled' && Object.keys(apiConfig.value).length > 0) {
+          // Merge API config (key-value) into SystemConfig shape
+          const merged = { ...DEFAULT_SYSTEM_CONFIG };
+          for (const [k, v] of Object.entries(apiConfig.value)) {
+            (merged as any)[k] = v;
+          }
+          setConfig(merged);
+        }
+        if (apiScripts.status === 'fulfilled') setScripts(apiScripts.value);
+        if (apiUsers.status === 'fulfilled' && apiUsers.value.length > 0) setUsers(apiUsers.value);
+        if (apiTemplates.status === 'fulfilled' && apiTemplates.value.length > 0) setTemplates(apiTemplates.value);
+        if (apiGoals.status === 'fulfilled') setUserGoals(apiGoals.value);
+        if (apiEvents.status === 'fulfilled') setEvents(apiEvents.value);
+      } catch (err) {
+        console.warn('API load failed, using defaults:', err);
+      }
+    };
+    loadData();
   }, []);
 
+  // Persist auth session only
   useEffect(() => {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
-    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
-    localStorage.setItem(GOALS_KEY, JSON.stringify(userGoals));
     if (currentUser) localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
     else localStorage.removeItem(AUTH_KEY);
-  }, [leads, config, scripts, users, templates, userGoals, currentUser]);
+  }, [currentUser]);
 
-  const handleLogin = (email: string, pass: string) => {
+  const handleLogin = async (email: string, pass: string) => {
     setIsAuthLoading(true);
-    setTimeout(() => {
-      const found = users.find(u => u.email === email && u.password === pass);
-      if (found) {
-        setCurrentUser(found);
-        // Redireciona Admin direto para o BI Executivo se logar
-        if (found.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
-      }
-      else alert("E-mail ou senha incorretos.");
+    try {
+      const user = await authApi.login(email, pass);
+      setCurrentUser(user);
+      if (user.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
+    } catch (err: any) {
+      alert(err.message || "E-mail ou senha incorretos.");
+    } finally {
       setIsAuthLoading(false);
-    }, 1200);
+    }
   };
 
   const handleLogout = () => {
@@ -180,16 +164,28 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateLead = (updatedLead: Lead) => {
+  const handleUpdateLead = async (updatedLead: Lead) => {
     setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+    try { await leadsApi.update(updatedLead.id, updatedLead); } catch (e) { console.error('Update lead API error:', e); }
   };
 
-  const handleAddUser = (user: User) => setUsers(prev => [...prev, user]);
-  const handleUpdateUser = (updatedUser: User) => {
+  const handleAddUser = async (user: User) => {
+    try {
+      const created = await authApi.createUser(user);
+      setUsers(prev => [...prev, { ...user, id: created.id || user.id }]);
+    } catch (e: any) {
+      alert(e.message || 'Erro ao criar usuário');
+    }
+  };
+  const handleUpdateUser = async (updatedUser: User) => {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     if (currentUser?.id === updatedUser.id) setCurrentUser(updatedUser);
+    try { await authApi.updateUser(updatedUser.id, updatedUser); } catch (e) { console.error('Update user API error:', e); }
   };
-  const handleDeleteUser = (id: string) => setUsers(prev => prev.filter(u => u.id !== id));
+  const handleDeleteUser = async (id: string) => {
+    setUsers(prev => prev.filter(u => u.id !== id));
+    try { await authApi.deleteUser(id); } catch (e) { console.error('Delete user API error:', e); }
+  };
 
   const handleAddLead = async (leadData: any) => {
     const newLead: Lead = {
@@ -204,28 +200,92 @@ const App: React.FC = () => {
       inQueue: leadData.inQueue ?? true
     };
     setLeads(prev => [newLead, ...prev]);
+    try { await leadsApi.create(newLead); } catch (e) { console.error('Create lead API error:', e); }
     return { success: true, message: 'Lead gerado.' };
   };
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} isLoading={isAuthLoading} />;
+
+  // ---- API-synced handlers for inline mutations ----
+  const handleSaveScript = async (s: SalesScript) => {
+    setScripts(prev => prev.find(item => item.id === s.id) ? prev.map(item => item.id === s.id ? s : item) : [...prev, s]);
+    try {
+      const exists = scripts.find(item => item.id === s.id);
+      if (exists) await scriptsApi.update(s.id, s);
+      else await scriptsApi.create(s);
+    } catch (e) { console.error('Save script API error:', e); }
+  };
+  const handleDeleteScript = async (id: string) => {
+    setScripts(prev => prev.filter(s => s.id !== id));
+    try { await scriptsApi.delete(id); } catch (e) { console.error('Delete script API error:', e); }
+  };
+  const handleApproveQual = async (id: string) => {
+    const updated = leads.find(l => l.id === id);
+    if (updated) {
+      const newLead = { ...updated, inQueue: false, qualifiedById: currentUser.id };
+      setLeads(leads.map(l => l.id === id ? newLead : l));
+      try { await leadsApi.update(id, { inQueue: false, qualifiedById: currentUser.id }); } catch (e) { console.error(e); }
+    }
+  };
+  const handleMoveLead = async (id: string, ph: string) => {
+    const ownerId = currentUser.role === UserRole.CLOSER ? currentUser.id : leads.find(l => l.id === id)?.ownerId;
+    setLeads(leads.map(l => l.id === id ? { ...l, phaseId: ph, ownerId: ownerId || l.ownerId } : l));
+    try { await leadsApi.update(id, { phaseId: ph, ownerId }); } catch (e) { console.error(e); }
+  };
+  const handleSaveEvent = async (e: AgendaEvent) => {
+    setEvents(prev => [...prev, e]);
+    try { await agendaApi.create(e); } catch (err) { console.error('Save event API error:', err); }
+  };
+  const handleDeleteEvent = async (id: string) => {
+    setEvents(prev => prev.filter(e => e.id !== id));
+    try { await agendaApi.delete(id); } catch (e) { console.error('Delete event API error:', e); }
+  };
+  const handleSaveConfig = async (newConfig: SystemConfig) => {
+    setConfig(newConfig);
+    try { await configApi.update(newConfig); } catch (e) { console.error('Save config API error:', e); }
+  };
+  const handleSaveGoals = async (newGoals: UserGoal[]) => {
+    setUserGoals(newGoals);
+    try { await goalsApi.bulkSave(newGoals); } catch (e) { console.error('Save goals API error:', e); }
+  };
+  const handleSaveTemplates = async (newTemplates: OnboardingTemplate[]) => {
+    setTemplates(newTemplates);
+    // Sync each template
+    for (const t of newTemplates) {
+      try {
+        const exists = templates.find(x => x.id === t.id);
+        if (exists) await templatesApi.update(t.id, t);
+        else await templatesApi.create(t);
+      } catch (e) { console.error(e); }
+    }
+  };
+  const handleDeleteLead = async (id: string) => {
+    setLeads(leads.filter(l => l.id !== id));
+    try { await leadsApi.delete(id); } catch (e) { console.error('Delete lead API error:', e); }
+  };
+  const handleAddInteraction = async (id: string, inter: any) => {
+    const newInter = { ...inter, id: `int-${Date.now()}`, date: new Date().toISOString() };
+    setLeads(leads.map(l => l.id === id ? { ...l, interactions: [newInter, ...l.interactions] } : l));
+    try { await leadsApi.addInteraction(id, newInter); } catch (e) { console.error('Add interaction API error:', e); }
+  };
 
   const renderView = () => {
     switch (nav.view) {
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
-      case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={s => setScripts(prev => prev.find(item => item.id === s.id) ? prev.map(item => item.id === s.id ? s : item) : [...prev, s])} onDeleteScript={id => setScripts(prev => prev.filter(s => s.id !== id))} />;
+      case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
       case 'prospecting': return <Prospector onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
-      case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => setLeads(leads.map(l => l.id === id ? {...l, inQueue: false, qualifiedById: currentUser.id} : l))} onUpdateLead={handleUpdateLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
+      case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={handleApproveQual} onUpdateLead={handleUpdateLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
-      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => setLeads(leads.map(l => l.id === id ? {...l, phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId} : l))} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
-      case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={(e) => setEvents(prev => [...prev, e])} onDeleteEvent={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onSelectLead={setSelectedLeadId} />;
+      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={handleMoveLead} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
+      case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
       case 'operational_dashboard': return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={templates} />;
       case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} />;
       case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} />;
-      case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={setUserGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={setTemplates} onSyncTemplate={()=>{}} />;
+      case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={handleSaveConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={handleSaveGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={handleSaveTemplates} onSyncTemplate={()=>{}} />;
       default: return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;
     }
   };
@@ -241,7 +301,7 @@ const App: React.FC = () => {
       </div>
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && <UserProfileModal user={currentUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
-      {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={(id) => setLeads(leads.filter(l => l.id !== id))} onAddInteraction={(id, inter) => setLeads(leads.map(l => l.id === id ? {...l, interactions: [{...inter, id: `int-${Date.now()}`, date: new Date().toISOString()}, ...l.interactions]} : l))} onAddAgendaEvent={(e) => setEvents([...events, e])} onDeleteAgendaEvent={(id) => setEvents(events.filter(e => e.id !== id))} currentUser={currentUser} allUsers={users} scripts={scripts} />}
+      {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} />}
     </div>
   );
 };
