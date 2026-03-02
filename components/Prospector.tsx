@@ -16,7 +16,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   const [jobLeads, setJobLeads] = useState<MiningLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasKey, setHasKey] = useState(false);
+  const hasKey = true; // Key is on server now
   
   const [newJob, setNewJob] = useState({
     segmentName: '',
@@ -31,12 +31,6 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   });
 
   useEffect(() => {
-    const checkKey = async () => {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasKey(selected);
-    };
-    checkKey();
-
     const load = () => {
       setActiveJobs(miningEngine.getJobs().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     };
@@ -55,14 +49,8 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     }
   }, [inspectingJob, activeJobs, existingLeads]);
 
-  const handleSelectKey = async () => {
-    await window.aistudio.openSelectKey();
-    setHasKey(true);
-  };
-
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasKey) return alert("Selecione sua chave de API para habilitar a busca em tempo real.");
     if (!newJob.segmentName) return alert("Preencha o nome do segmento.");
     
     await miningEngine.createJob(newJob as any);

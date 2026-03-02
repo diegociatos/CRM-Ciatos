@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../database';
 import { RowDataPacket } from 'mysql2';
+import { GoogleGenAI } from '@google/genai';
 
 const router = Router();
 
@@ -213,3 +214,60 @@ router.post('/leads/bulk', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// ========== PROSPECT (Gemini AI) ==========
+router.post('/prospect', async (req: Request, res: Response) => {
+  try {
+    const { segment, city, state, size, taxRegime, page } = req.body;
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      return res.status(400).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const prompt = `LOCALIZE 15 empresas reais: Segmento "${segment}", Cidade "${city}/${state}".
+    Filtros: Porte ${size || 'Indiferente'}, Regime ${taxRegime || 'Indiferente'}. Página ${page || 1}.
+    
+    FORNEÇA OS DADOS NO FORMATO JSON ABAIXO (MANTENHA EXATAMENTE ESTAS CHAVES):
+    {
+      "companies": [
+        {
+          "name": "Razão Social",
+          "cnpj": "00.000.000/0001-00",
+          "cnpjRaw": "00000000000100",
+          "segment": "${segment}",
+          "city": "${city}",
+          "state": "${state}",
+          "phone": "(00) 0000-0000",
+          "emailCompany": "contato@email.com",
+          "website": "www.site.com",
+          "partners": ["Sócio A"],
+          "decisionMakerName": "Nome do Decisor",
+          "decisionMakerPhoneFormatted": "(00) 90000-0000",
+          "icpScore": 5,
+          "debtStatus": "Regular",
+          "estimatedRevenue": "R$ 10M+"
+        }
+      ]
+    }`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+      config: { tools: [{ googleSearch: {} }] }
+    });
+
+    const text = response.text || '';
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const cleanJson = jsonMatch[0].replace(/```json|```/g, '');
+      const parsed = JSON.parse(cleanJson);
+      return res.json({ companies: parsed.companies || [], sources });
+    }
+    res.json({ companies: [], sources: [] });
+  } catch (error: any) {
+    console.error('Prospect Gemini error:', error?.message || error);
+    res.status(500).json({ error: 'Erro ao prospectar: ' + (error?.message || 'Erro desconhecido') });
+  }
+});

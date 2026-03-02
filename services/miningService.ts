@@ -1,7 +1,23 @@
 
 import { MiningJob, MiningLead, CompanySize, ProspectCompany } from '../types';
-import { prospectCompanies } from './geminiService';
 import { miningApi } from './api';
+
+// Prospect via backend API (server-side Gemini)
+async function prospectCompaniesViaApi(
+  segment: string, city: string, state: string, size?: CompanySize, taxRegime?: string, page: number = 1
+): Promise<{ companies: ProspectCompany[]; sources: any[] }> {
+  const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/crm-api';
+  const res = await fetch(`${BASE_URL}/mining/prospect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ segment, city, state, size, taxRegime, page })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
 
 class MiningEngine {
   private activeIntervals: Record<string, any> = {};
@@ -122,7 +138,7 @@ class MiningEngine {
     }
 
     try {
-      const data = await prospectCompanies(
+      const data = await prospectCompaniesViaApi(
         job.filters.segment,
         job.filters.city,
         job.filters.state,
