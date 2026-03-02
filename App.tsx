@@ -31,6 +31,26 @@ import { authApi, leadsApi, configApi, scriptsApi, templatesApi, goalsApi, agend
 
 const AUTH_KEY = 'ciatos_auth_v64';
 
+// Maps DB role strings to frontend UserRole enum values
+const ROLE_MAP: Record<string, UserRole> = {
+  'ADMIN': UserRole.ADMIN,
+  'Admin': UserRole.ADMIN,
+  'SDR': UserRole.SDR,
+  'SDR / Prospecção': UserRole.SDR,
+  'CLOSER': UserRole.CLOSER,
+  'Closer / Consultor': UserRole.CLOSER,
+  'MANAGER': UserRole.MANAGER,
+  'Gerente': UserRole.MANAGER,
+  'OPERATIONAL': UserRole.OPERATIONAL,
+  'Operacional': UserRole.OPERATIONAL,
+  'CS': UserRole.CS,
+  'Pós-Venda': UserRole.CS,
+  'MARKETING': UserRole.MARKETING,
+  'Marketing': UserRole.MARKETING,
+};
+const normalizeRole = (role: string): UserRole => ROLE_MAP[role] || UserRole.SDR;
+const normalizeUser = (u: any): User => ({ ...u, role: normalizeRole(u.role) });
+
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
     { id: 'ph-qualificado', name: 'Lead Qualificado', order: 0, color: '#94a3b8', authorizedUserIds: [] },
@@ -91,7 +111,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const savedAuth = localStorage.getItem(AUTH_KEY);
     if (savedAuth) {
-      const restored = JSON.parse(savedAuth);
+      const restored = normalizeUser(JSON.parse(savedAuth));
       setCurrentUser(restored);
       if (restored.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
     }
@@ -118,7 +138,7 @@ const App: React.FC = () => {
           setConfig(merged);
         }
         if (apiScripts.status === 'fulfilled') setScripts(apiScripts.value);
-        if (apiUsers.status === 'fulfilled' && apiUsers.value.length > 0) setUsers(apiUsers.value);
+        if (apiUsers.status === 'fulfilled' && apiUsers.value.length > 0) setUsers(apiUsers.value.map(normalizeUser));
         if (apiTemplates.status === 'fulfilled' && apiTemplates.value.length > 0) setTemplates(apiTemplates.value);
         if (apiGoals.status === 'fulfilled') setUserGoals(apiGoals.value);
         if (apiEvents.status === 'fulfilled') setEvents(apiEvents.value);
@@ -138,7 +158,8 @@ const App: React.FC = () => {
   const handleLogin = async (email: string, pass: string) => {
     setIsAuthLoading(true);
     try {
-      const user = await authApi.login(email, pass);
+      const raw = await authApi.login(email, pass);
+      const user = normalizeUser(raw);
       setCurrentUser(user);
       if (user.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
     } catch (err: any) {
