@@ -5,6 +5,14 @@ import { RowDataPacket } from 'mysql2';
 
 const router = Router();
 
+// Convert ISO 8601 dates (with Z or timezone) to MySQL datetime format
+function toMySQLDate(d: string | null | undefined): string | null {
+  if (!d) return null;
+  try {
+    return new Date(d).toISOString().slice(0, 19).replace('T', ' ');
+  } catch { return d; }
+}
+
 // Helper: build lead object from DB row
 function rowToLead(r: any) {
   return {
@@ -218,7 +226,7 @@ router.post('/', async (req: Request, res: Response) => {
           `INSERT INTO interactions (id, lead_id, type, title, content, date, author, author_id,
             delivery_status, error_message, latency, score_impact, script_version_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [i.id || uuidv4(), id, i.type, i.title, i.content, i.date, i.author, i.authorId,
+          [i.id || uuidv4(), id, i.type, i.title, i.content, toMySQLDate(i.date), i.author, i.authorId,
            i.deliveryStatus, i.errorMessage, i.latency, i.scoreImpact, i.scriptVersionId]
         );
       }
@@ -230,7 +238,7 @@ router.post('/', async (req: Request, res: Response) => {
         await pool.query(
           `INSERT INTO tasks (id, lead_id, title, description, due_date, priority, completed)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [t.id || uuidv4(), id, t.title, t.description, t.dueDate, t.priority, t.completed || false]
+          [t.id || uuidv4(), id, t.title, t.description, toMySQLDate(t.dueDate), t.priority, t.completed || false]
         );
       }
     }
@@ -303,7 +311,7 @@ router.put('/:id', async (req: Request, res: Response) => {
           `INSERT INTO interactions (id, lead_id, type, title, content, date, author, author_id,
             delivery_status, error_message, latency, score_impact, script_version_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [i.id || uuidv4(), id, i.type, i.title, i.content, i.date, i.author, i.authorId,
+          [i.id || uuidv4(), id, i.type, i.title, i.content, toMySQLDate(i.date), i.author, i.authorId,
            i.deliveryStatus, i.errorMessage, i.latency, i.scoreImpact, i.scriptVersionId]
         );
       }
@@ -316,7 +324,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         await pool.query(
           `INSERT INTO tasks (id, lead_id, title, description, due_date, priority, completed)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [t.id || uuidv4(), id, t.title, t.description, t.dueDate, t.priority, t.completed || false]
+          [t.id || uuidv4(), id, t.title, t.description, toMySQLDate(t.dueDate), t.priority, t.completed || false]
         );
       }
     }
@@ -351,7 +359,7 @@ router.post('/:id/interactions', async (req: Request, res: Response) => {
       `INSERT INTO interactions (id, lead_id, type, title, content, date, author, author_id,
         delivery_status, error_message, latency, score_impact, script_version_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [intId, id, data.type, data.title, data.content, data.date || new Date().toISOString(),
+      [intId, id, data.type, data.title, data.content, toMySQLDate(data.date || new Date().toISOString()),
        data.author, data.authorId, data.deliveryStatus, data.errorMessage,
        data.latency, data.scoreImpact, data.scriptVersionId]
     );
@@ -373,7 +381,7 @@ router.post('/:id/tasks', async (req: Request, res: Response) => {
     await pool.query(
       `INSERT INTO tasks (id, lead_id, title, description, due_date, priority, completed)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [taskId, id, data.title, data.description, data.dueDate, data.priority || 'Média', data.completed || false]
+      [taskId, id, data.title, data.description, toMySQLDate(data.dueDate), data.priority || 'Média', data.completed || false]
     );
 
     res.status(201).json({ id: taskId, ...data });
