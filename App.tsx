@@ -90,7 +90,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedAuth = localStorage.getItem(AUTH_KEY);
-    if (savedAuth) setCurrentUser(JSON.parse(savedAuth));
+    if (savedAuth) {
+      const restored = JSON.parse(savedAuth);
+      setCurrentUser(restored);
+      if (restored.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
+    }
 
     // Load all data from API
     const loadData = async () => {
