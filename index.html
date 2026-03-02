@@ -58,17 +58,12 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07);
         }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0"
-  }
-}
-</script>
+    <script>
+      window.aistudio = {
+        hasSelectedApiKey: function(){ return Promise.resolve(true); },
+        openSelectKey: function(){ return Promise.resolve(); }
+      };
+    </script>
 </head>
 <body>
     <div id="root"></div>
