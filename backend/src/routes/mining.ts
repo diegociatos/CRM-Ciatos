@@ -225,45 +225,80 @@ router.post('/prospect', async (req: Request, res: Response) => {
     }
 
     const ai = new GoogleGenAI({ apiKey: key });
-    const prompt = `LOCALIZE 15 empresas reais: Segmento "${segment}", Cidade "${city}/${state}".
-    Filtros: Porte ${size || 'Indiferente'}, Regime ${taxRegime || 'Indiferente'}. Página ${page || 1}.
+
+    // === ETAPA 1: Buscar empresas REAIS via Google Search ===
+    const searchPrompt = `Use o Google Search para encontrar empresas REAIS do segmento "${segment}" localizadas em ${city}/${state}.
     
-    FORNEÇA OS DADOS NO FORMATO JSON ABAIXO (MANTENHA EXATAMENTE ESTAS CHAVES):
+INSTRUÇÕES OBRIGATÓRIAS:
+- Busque em sites como Google Maps, LinkedIn, Reclame Aqui, CNPJ.info, casadosdados.com.br, empresascnpj.com, consultasocio.com, portaldacontabilidade.com.br
+- Busque: "${segment} em ${city} ${state}" e "${segment} ${city} CNPJ"
+- Cada empresa DEVE ser uma empresa REAL encontrada na internet
+- NÃO INVENTE nenhum dado. Se não encontrar um campo, escreva "Não encontrado"
+- Porte desejado: ${size || 'Qualquer'}
+- Regime tributário: ${taxRegime || 'Qualquer'}
+- Página: ${page || 1} (se página > 1, busque empresas DIFERENTES das mais conhecidas)
+
+Para CADA empresa encontrada, busque TAMBÉM:
+- O CNPJ real (busque "[nome da empresa] CNPJ" no Google)
+- Telefone de contato real
+- Website oficial
+- Nome dos sócios (busque no QSA/Receita Federal)
+- Email de contato
+
+RETORNE EXATAMENTE neste formato JSON (sem texto adicional, apenas o JSON):
+{
+  "companies": [
     {
-      "companies": [
-        {
-          "name": "Razão Social",
-          "cnpj": "00.000.000/0001-00",
-          "cnpjRaw": "00000000000100",
-          "segment": "${segment}",
-          "city": "${city}",
-          "state": "${state}",
-          "phone": "(00) 0000-0000",
-          "emailCompany": "contato@email.com",
-          "website": "www.site.com",
-          "partners": ["Sócio A"],
-          "decisionMakerName": "Nome do Decisor",
-          "decisionMakerPhoneFormatted": "(00) 90000-0000",
-          "icpScore": 5,
-          "debtStatus": "Regular",
-          "estimatedRevenue": "R$ 10M+"
-        }
-      ]
-    }`;
+      "name": "Razão Social REAL da empresa",
+      "cnpj": "00.000.000/0001-00",
+      "cnpjRaw": "00000000000100",
+      "segment": "${segment}",
+      "city": "${city}",
+      "state": "${state}",
+      "phone": "(31) 0000-0000",
+      "emailCompany": "contato@empresa.com",
+      "website": "https://www.empresa.com.br",
+      "partners": ["Nome Real do Sócio"],
+      "decisionMakerName": "Nome do Decisor/Sócio Principal",
+      "decisionMakerPhoneFormatted": "(31) 90000-0000",
+      "icpScore": null,
+      "debtStatus": "Não encontrado",
+      "estimatedRevenue": "Não encontrado"
+    }
+  ]
+}
+
+Encontre no mínimo 10 empresas REAIS e VERIFICÁVEIS.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { tools: [{ googleSearch: {} }] }
+      model: 'gemini-2.5-pro',
+      contents: searchPrompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      }
     });
 
     const text = response.text || '';
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+    // Extrator Robusto: Busca o primeiro bloco JSON válido
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const cleanJson = jsonMatch[0].replace(/```json|```/g, '');
-      const parsed = JSON.parse(cleanJson);
-      return res.json({ companies: parsed.companies || [], sources });
+      try {
+        const parsed = JSON.parse(cleanJson);
+        const companies = (parsed.companies || []).map((c: any) => ({
+          ...c,
+          // Limpar campos que o modelo não conseguiu encontrar
+          cnpj: (c.cnpj && c.cnpj !== '00.000.000/0001-00') ? c.cnpj : 'Não encontrado',
+          phone: (c.phone && c.phone !== '(00) 0000-0000') ? c.phone : 'Não encontrado',
+          emailCompany: (c.emailCompany && c.emailCompany !== 'contato@email.com') ? c.emailCompany : 'Não encontrado',
+        }));
+        return res.json({ companies, sources });
+      } catch (parseErr) {
+        console.error('JSON parse error:', parseErr, 'Raw text:', text.substring(0, 500));
+        return res.json({ companies: [], sources: [], error: 'Erro ao interpretar resposta da IA' });
+      }
     }
     res.json({ companies: [], sources: [] });
   } catch (error: any) {
