@@ -226,52 +226,70 @@ router.post('/prospect', async (req: Request, res: Response) => {
 
     const ai = new GoogleGenAI({ apiKey: key });
 
-    // === ETAPA 1: Buscar empresas REAIS via Google Search ===
-    const searchPrompt = `Use o Google Search para encontrar empresas REAIS do segmento "${segment}" localizadas em ${city}/${state}.
+    // Build size filter instruction
+    const sizeMap: Record<string, string> = {
+      'Microempresa (ME)': 'MICROEMPRESA (ME) - faturamento até R$ 360 mil/ano',
+      'Pequeno Porte (EPP)': 'EMPRESA DE PEQUENO PORTE (EPP) - faturamento de R$ 360 mil a R$ 4,8 milhões/ano',
+      'Média Empresa': 'MÉDIA EMPRESA - faturamento de R$ 4,8 milhões a R$ 300 milhões/ano',
+      'Grande Empresa': 'GRANDE EMPRESA - faturamento acima de R$ 300 milhões/ano',
+    };
+    const sizeInstruction = size && size !== 'all' && sizeMap[size]
+      ? `\n\nFILTRO DE PORTE OBRIGATÓRIO: Busque APENAS empresas classificadas como ${sizeMap[size]}. NÃO inclua empresas de outro porte. Verifique o porte consultando o CNPJ no site da Receita Federal ou em sites como casadosdados.com.br, empresascnpj.com, cnpj.info.`
+      : '';
     
-INSTRUÇÕES OBRIGATÓRIAS:
-- Busque em sites como Google Maps, LinkedIn, Reclame Aqui, CNPJ.info, casadosdados.com.br, empresascnpj.com, consultasocio.com, portaldacontabilidade.com.br
-- Busque: "${segment} em ${city} ${state}" e "${segment} ${city} CNPJ"
-- Cada empresa DEVE ser uma empresa REAL encontrada na internet
-- NÃO INVENTE nenhum dado. Se não encontrar um campo, escreva "Não encontrado"
-- Porte desejado: ${size || 'Qualquer'}
-- Regime tributário: ${taxRegime || 'Qualquer'}
-- Página: ${page || 1} (se página > 1, busque empresas DIFERENTES das mais conhecidas)
+    const taxInstruction = taxRegime && taxRegime !== 'Indiferente'
+      ? `\nFILTRO DE REGIME TRIBUTÁRIO: Priorize empresas optantes pelo ${taxRegime}.`
+      : '';
 
-Para CADA empresa encontrada, busque TAMBÉM:
-- O CNPJ real (busque "[nome da empresa] CNPJ" no Google)
-- Telefone de contato real
-- Website oficial
-- Nome dos sócios (busque no QSA/Receita Federal)
-- Email de contato
+    const pageInstruction = (page && page > 1)
+      ? `\nPÁGINA ${page}: Busque empresas DIFERENTES das já retornadas. Explore resultados menos conhecidos do Google.`
+      : '';
 
-RETORNE EXATAMENTE neste formato JSON (sem texto adicional, apenas o JSON):
+    const searchPrompt = `Você é um assistente de prospecção comercial. Use o Google Search para encontrar empresas REAIS e EXISTENTES.
+
+TAREFA: Encontrar 15 empresas do segmento "${segment}" na cidade de ${city}/${state}.
+${sizeInstruction}${taxInstruction}${pageInstruction}
+
+REGRAS ABSOLUTAS:
+1. TODAS as empresas devem ser REAIS - encontradas via Google Search em fontes públicas
+2. NUNCA invente, fabrique ou suponha dados. Se não encontrar um campo, escreva "Não encontrado"
+3. Para cada empresa, busque o CNPJ real em sites como cnpj.info, casadosdados.com.br, empresascnpj.com
+4. Busque telefones reais em Google Maps, websites oficiais, LinkedIn
+5. Busque sócios/QSA em consultas de CNPJ públicas
+
+FONTES DE BUSCA OBRIGATÓRIAS:
+- Google Maps: "${segment} ${city} ${state}"
+- Google: "${segment} ${city} CNPJ"
+- casadosdados.com.br, cnpj.info, empresascnpj.com para dados cadastrais
+- LinkedIn para contatos de decisores
+- Websites oficiais das empresas
+
+RETORNE APENAS o JSON abaixo, sem markdown, sem explicações:
 {
   "companies": [
     {
-      "name": "Razão Social REAL da empresa",
+      "name": "RAZÃO SOCIAL COMPLETA DA EMPRESA",
       "cnpj": "00.000.000/0001-00",
       "cnpjRaw": "00000000000100",
       "segment": "${segment}",
       "city": "${city}",
       "state": "${state}",
-      "phone": "(31) 0000-0000",
-      "emailCompany": "contato@empresa.com",
+      "size": "${size || 'Não classificado'}",
+      "phone": "(00) 0000-0000",
+      "emailCompany": "email@empresa.com",
       "website": "https://www.empresa.com.br",
-      "partners": ["Nome Real do Sócio"],
-      "decisionMakerName": "Nome do Decisor/Sócio Principal",
-      "decisionMakerPhoneFormatted": "(31) 90000-0000",
+      "partners": ["Nome Completo do Sócio"],
+      "decisionMakerName": "Nome do Sócio Administrador",
+      "decisionMakerPhoneFormatted": "(00) 90000-0000",
       "icpScore": null,
       "debtStatus": "Não encontrado",
       "estimatedRevenue": "Não encontrado"
     }
   ]
-}
-
-Encontre no mínimo 10 empresas REAIS e VERIFICÁVEIS.`;
+}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       contents: searchPrompt,
       config: {
         tools: [{ googleSearch: {} }],

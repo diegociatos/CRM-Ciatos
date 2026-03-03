@@ -138,7 +138,12 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                    ) : job.status === 'Paused' ? (
                      <button onClick={() => miningEngine.controlJob(job.id, 'resume')} className="p-2 bg-slate-50 rounded-lg text-xs">▶️</button>
                    ) : null}
-                   <button onClick={() => miningEngine.controlJob(job.id, 'cancel')} className="p-2 bg-slate-50 rounded-lg text-xs">🗑️</button>
+                   <button onClick={() => {
+                     if (confirm('Tem certeza que deseja EXCLUIR este radar e todos os leads encontrados?')) {
+                       miningEngine.deleteJob(job.id);
+                       if (inspectingJob?.id === job.id) setInspectingJob(null);
+                     }
+                   }} className="p-2 bg-red-50 hover:bg-red-100 rounded-lg text-xs transition-colors" title="Excluir Radar">🗑️</button>
                 </div>
               </div>
               <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-1">{job.name}</h3>

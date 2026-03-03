@@ -108,6 +108,14 @@ class MiningEngine {
     window.dispatchEvent(new CustomEvent('ciatos-mining-update'));
   }
 
+  public async deleteJob(jobId: string) {
+    this.stopWorker(jobId);
+    this.jobsCache = this.jobsCache.filter(j => j.id !== jobId);
+    this.leadsCache = this.leadsCache.filter(l => l.jobId !== jobId);
+    try { await miningApi.deleteJob(jobId); } catch (e) { console.error('[Mining] deleteJob error', e); }
+    window.dispatchEvent(new CustomEvent('ciatos-mining-update'));
+  }
+
   public async markAsImported(cnpjRaw: string) {
     const lead = this.leadsCache.find(l => l.cnpjRaw === cnpjRaw);
     if (!lead) return;
