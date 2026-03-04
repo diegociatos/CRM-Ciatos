@@ -1,20 +1,27 @@
 
 import React, { useState, useMemo } from 'react';
-import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner } from '../types';
+import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner, SystemConfig } from '../types';
 
 interface CustomerDatabaseProps {
   leads: Lead[];
   currentUser: User;
   onUpdateCustomer: (customer: Lead) => void;
+  onAddCustomer: (data: any) => Promise<any>;
+  config: SystemConfig;
 }
 
-const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer }) => {
+const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer, onAddCustomer, config }) => {
   const customers = useMemo(() => leads.filter(l => l.status === LeadStatus.WON), [leads]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'perfil' | 'timeline' | 'feedback' | 'onboarding'>('perfil');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackType, setFeedbackType] = useState<'POSITIVE' | 'NEGATIVE'>('POSITIVE');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    tradeName: '', cnpj: '', contactName: '', contactPhone: '', contactEmail: '',
+    taxRegime: '', size: '', serviceType: '', contractValue: '', notes: ''
+  });
 
   const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
 
@@ -89,6 +96,33 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
   const labelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5";
   const displayLabel = "text-[9px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-1 block";
   const sectionHeader = "text-[11px] font-black text-[#0a192f] uppercase tracking-[0.3em] mb-8 border-b border-slate-50 pb-2";
+  const formInputClass = "w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-[#c5a059]";
+  const formLabelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5";
+
+  const handleCreateCustomer = async () => {
+    if (!newCustomer.tradeName.trim()) return alert('Preencha o nome da empresa.');
+    await onAddCustomer({
+      tradeName: newCustomer.tradeName,
+      cnpj: newCustomer.cnpj || 'Não informado',
+      cnpjRaw: newCustomer.cnpj.replace(/\D/g, ''),
+      contactName: newCustomer.contactName,
+      phone: newCustomer.contactPhone,
+      email: newCustomer.contactEmail,
+      taxRegime: newCustomer.taxRegime,
+      size: newCustomer.size,
+      serviceType: newCustomer.serviceType,
+      contractValue: parseFloat(newCustomer.contractValue.replace(',', '.')) || 0,
+      notes: newCustomer.notes,
+      status: LeadStatus.WON,
+      phaseId: 'ph-fech',
+      contractNumber: `CT-${Date.now()}`,
+      contractStart: new Date().toISOString().split('T')[0],
+      healthScore: 100,
+      inQueue: false
+    });
+    setShowNewCustomerForm(false);
+    setNewCustomer({ tradeName: '', cnpj: '', contactName: '', contactPhone: '', contactEmail: '', taxRegime: '', size: '', serviceType: '', contractValue: '', notes: '' });
+  };
 
   if (!selectedCustomer) {
     return (
@@ -98,19 +132,91 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
             <h1 className="text-5xl font-black text-[#0a192f] mb-2 serif-authority tracking-tighter italic">Base de Clientes Ativos</h1>
             <p className="text-slate-500 text-lg font-medium">Gestão de Relacionamento e Consultoria de Sucesso.</p>
           </div>
-          <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
-             <input 
-               type="text" 
-               placeholder="Pesquisar por Nome ou CNPJ..." 
-               className="w-80 px-4 py-2 text-sm outline-none font-bold"
-               value={searchTerm}
-               onChange={e => setSearchTerm(e.target.value)}
-             />
-             <div className="bg-[#0a192f] text-[#c5a059] px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-               {customers.length} Empresas
+          <div className="flex items-center gap-4">
+             <button 
+               onClick={() => setShowNewCustomerForm(true)}
+               className="px-6 py-3 bg-[#c5a059] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#b08d3e] transition-all shadow-lg"
+             >
+               + Cadastrar Cliente
+             </button>
+             <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+               <input 
+                 type="text" 
+                 placeholder="Pesquisar por Nome ou CNPJ..." 
+                 className="w-80 px-4 py-2 text-sm outline-none font-bold"
+                 value={searchTerm}
+                 onChange={e => setSearchTerm(e.target.value)}
+               />
+               <div className="bg-[#0a192f] text-[#c5a059] px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                 {customers.length} Empresas
+               </div>
              </div>
           </div>
         </div>
+
+        {/* MODAL CADASTRAR CLIENTE */}
+        {showNewCustomerForm && (
+          <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNewCustomerForm(false)}>
+            <div className="bg-white rounded-[3rem] p-10 w-full max-w-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+              <h2 className="text-2xl font-black text-[#0a192f] serif-authority mb-8">Cadastrar Novo Cliente Ativo</h2>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="col-span-2">
+                  <label className={formLabelClass}>Nome da Empresa *</label>
+                  <input className={formInputClass} value={newCustomer.tradeName} onChange={e => setNewCustomer({...newCustomer, tradeName: e.target.value})} placeholder="Razão Social ou Nome Fantasia" />
+                </div>
+                <div>
+                  <label className={formLabelClass}>CNPJ</label>
+                  <input className={formInputClass} value={newCustomer.cnpj} onChange={e => setNewCustomer({...newCustomer, cnpj: e.target.value})} placeholder="00.000.000/0001-00" />
+                </div>
+                <div>
+                  <label className={formLabelClass}>Nome do Contato</label>
+                  <input className={formInputClass} value={newCustomer.contactName} onChange={e => setNewCustomer({...newCustomer, contactName: e.target.value})} placeholder="Responsável" />
+                </div>
+                <div>
+                  <label className={formLabelClass}>Telefone</label>
+                  <input className={formInputClass} value={newCustomer.contactPhone} onChange={e => setNewCustomer({...newCustomer, contactPhone: e.target.value})} placeholder="(00) 00000-0000" />
+                </div>
+                <div>
+                  <label className={formLabelClass}>E-mail</label>
+                  <input className={formInputClass} value={newCustomer.contactEmail} onChange={e => setNewCustomer({...newCustomer, contactEmail: e.target.value})} placeholder="email@empresa.com" />
+                </div>
+                <div>
+                  <label className={formLabelClass}>Regime Tributário</label>
+                  <select className={formInputClass} value={newCustomer.taxRegime} onChange={e => setNewCustomer({...newCustomer, taxRegime: e.target.value})}>
+                    <option value="">Selecione...</option>
+                    {(config.taxRegimes || []).map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={formLabelClass}>Porte</label>
+                  <select className={formInputClass} value={newCustomer.size} onChange={e => setNewCustomer({...newCustomer, size: e.target.value})}>
+                    <option value="">Selecione...</option>
+                    {(config.companySizes || []).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={formLabelClass}>Serviço Contratado</label>
+                  <select className={formInputClass} value={newCustomer.serviceType} onChange={e => setNewCustomer({...newCustomer, serviceType: e.target.value})}>
+                    <option value="">Selecione...</option>
+                    {(config.serviceTypes || []).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={formLabelClass}>Valor do Contrato (R$)</label>
+                  <input className={formInputClass} type="number" step="0.01" min="0" value={newCustomer.contractValue} onChange={e => setNewCustomer({...newCustomer, contractValue: e.target.value})} placeholder="0,00" />
+                </div>
+                <div className="col-span-2">
+                  <label className={formLabelClass}>Observações</label>
+                  <textarea className={formInputClass + ' h-20 resize-none'} value={newCustomer.notes} onChange={e => setNewCustomer({...newCustomer, notes: e.target.value})} placeholder="Observações sobre o cliente..." />
+                </div>
+              </div>
+              <div className="flex justify-end gap-4 mt-8">
+                <button onClick={() => setShowNewCustomerForm(false)} className="px-8 py-3 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200">Cancelar</button>
+                <button onClick={handleCreateCustomer} className="px-8 py-3 bg-[#0a192f] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#0a192f]/90 shadow-lg border-b-4 border-[#c5a059]">Cadastrar Cliente</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
            <table className="w-full text-left">

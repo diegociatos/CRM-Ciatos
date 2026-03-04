@@ -213,8 +213,6 @@ router.post('/leads/bulk', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
-
 // ========== PROSPECT (Gemini AI) ==========
 router.post('/prospect', async (req: Request, res: Response) => {
   try {
@@ -324,3 +322,5 @@ RETORNE APENAS o JSON abaixo, sem markdown, sem explicações:
     res.status(500).json({ error: 'Erro ao prospectar: ' + (error?.message || 'Erro desconhecido') });
   }
 });
+
+export default router;

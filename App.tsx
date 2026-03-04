@@ -254,8 +254,16 @@ const App: React.FC = () => {
   };
   const handleMoveLead = async (id: string, ph: string) => {
     const ownerId = currentUser.role === UserRole.CLOSER ? currentUser.id : leads.find(l => l.id === id)?.ownerId;
-    setLeads(leads.map(l => l.id === id ? { ...l, phaseId: ph, ownerId: ownerId || l.ownerId } : l));
-    try { await leadsApi.update(id, { phaseId: ph, ownerId }); } catch (e) { console.error(e); }
+    // When moving to "Contrato Assinado", also set status=WON + contract data
+    const isContract = ph === 'ph-fech';
+    const contractFields = isContract ? {
+      status: LeadStatus.WON,
+      contractNumber: `CT-${Date.now()}`,
+      contractStart: new Date().toISOString().split('T')[0],
+      healthScore: 100
+    } : {};
+    setLeads(leads.map(l => l.id === id ? { ...l, phaseId: ph, ownerId: ownerId || l.ownerId, ...contractFields } : l));
+    try { await leadsApi.update(id, { phaseId: ph, ownerId, ...contractFields }); } catch (e) { console.error(e); }
   };
   const handleSaveEvent = async (e: AgendaEvent) => {
     setEvents(prev => [...prev, e]);
@@ -308,7 +316,7 @@ const App: React.FC = () => {
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={handleMoveLead} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
       case 'operational_dashboard': return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={templates} />;
-      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} />;
+      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onAddCustomer={handleAddLead} config={config} />;
       case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} />;
       case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={handleSaveConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={handleSaveGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={handleSaveTemplates} onSyncTemplate={()=>{}} />;
       default: return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;

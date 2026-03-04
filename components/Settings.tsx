@@ -330,23 +330,23 @@ const Settings: React.FC<SettingsProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8">
                  <div>
                     <label className={labelHeader}>Qualificação Simples (R$)</label>
-                    <input className={inputStyled} type="text" value={config.bonus.simpleQualification} onChange={e => handleUpdateBonus('simpleQualification', e.target.value)} />
+                    <input className={inputStyled} type="number" step="0.01" min="0" value={config.bonus.simpleQualification} onChange={e => handleUpdateBonus('simpleQualification', e.target.value)} />
                  </div>
                  <div>
                     <label className={labelHeader}>Quali c/ Decisor (R$)</label>
-                    <input className={inputStyled} type="text" value={config.bonus.withDecisionMaker} onChange={e => handleUpdateBonus('withDecisionMaker', e.target.value)} />
+                    <input className={inputStyled} type="number" step="0.01" min="0" value={config.bonus.withDecisionMaker} onChange={e => handleUpdateBonus('withDecisionMaker', e.target.value)} />
                  </div>
                  <div>
                     <label className={labelHeader}>Reunião Agendada (R$)</label>
-                    <input className={inputStyled} type="text" value={config.bonus.meetingScheduled} onChange={e => handleUpdateBonus('meetingScheduled', e.target.value)} />
+                    <input className={inputStyled} type="number" step="0.01" min="0" value={config.bonus.meetingScheduled} onChange={e => handleUpdateBonus('meetingScheduled', e.target.value)} />
                  </div>
                  <div>
                     <label className={labelHeader}>Proposta Enviada (R$)</label>
-                    <input className={inputStyled} type="text" value={config.bonus.proposalBonus} onChange={e => handleUpdateBonus('proposalBonus', e.target.value)} />
+                    <input className={inputStyled} type="number" step="0.01" min="0" value={config.bonus.proposalBonus} onChange={e => handleUpdateBonus('proposalBonus', e.target.value)} />
                  </div>
                  <div>
                     <label className={labelHeader}>Contrato Ganho (R$)</label>
-                    <input className={inputStyled} type="text" value={config.bonus.contractBonus} onChange={e => handleUpdateBonus('contractBonus', e.target.value)} />
+                    <input className={inputStyled} type="number" step="0.01" min="0" value={config.bonus.contractBonus} onChange={e => handleUpdateBonus('contractBonus', e.target.value)} />
                  </div>
               </div>
               <p className="mt-8 text-[10px] text-slate-400 font-bold uppercase italic">* Os valores acima são aplicados por ocorrência para cálculo de dashboard individual.</p>

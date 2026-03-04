@@ -20,7 +20,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   
   const [newJob, setNewJob] = useState({
     segmentName: '',
-    uf: 'MG',
+    state: 'MG',
     city: '',
     size: 'all' as CompanySize | 'all',
     taxRegime: 'Simples Nacional',
@@ -56,7 +56,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     await miningEngine.createJob(newJob as any);
     setShowNewJobModal(false);
     setNewJob({
-      segmentName: '', uf: 'MG', city: '', size: 'all', 
+      segmentName: '', state: 'MG', city: '', size: 'all', 
       taxRegime: 'Simples Nacional',
       fiscalFilter: 'Indiferente', targetCount: 100,
       autoCreateSegment: true, enrich: true
@@ -190,7 +190,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className={labelClass}>UF Target</label>
-                        <input className={inputClass} value={newJob.uf} onChange={e => setNewJob({...newJob, uf: e.target.value})} />
+                        <input className={inputClass} value={newJob.state} onChange={e => setNewJob({...newJob, state: e.target.value})} />
                       </div>
                       <div>
                         <label className={labelClass}>Cidade Target</label>
