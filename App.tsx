@@ -252,18 +252,41 @@ const App: React.FC = () => {
       try { await leadsApi.update(id, { inQueue: false, qualifiedById: currentUser.id }); } catch (e) { console.error(e); }
     }
   };
+  // Contract modal state
+  const [contractModal, setContractModal] = useState<{ leadId: string; leadName: string } | null>(null);
+  const [contractForm, setContractForm] = useState({ serviceType: '', contractValue: '' });
+
   const handleMoveLead = async (id: string, ph: string) => {
     const ownerId = currentUser.role === UserRole.CLOSER ? currentUser.id : leads.find(l => l.id === id)?.ownerId;
-    // When moving to "Contrato Assinado", also set status=WON + contract data
-    const isContract = ph === 'ph-fech';
-    const contractFields = isContract ? {
+    // When moving to "Contrato Assinado", show contract form first
+    if (ph === 'ph-fech') {
+      const lead = leads.find(l => l.id === id);
+      setContractForm({ serviceType: lead?.serviceType || '', contractValue: '' });
+      setContractModal({ leadId: id, leadName: lead?.tradeName || 'Lead' });
+      return;
+    }
+    setLeads(leads.map(l => l.id === id ? { ...l, phaseId: ph, ownerId: ownerId || l.ownerId } : l));
+    try { await leadsApi.update(id, { phaseId: ph, ownerId }); } catch (e) { console.error(e); }
+  };
+
+  const handleConfirmContract = async () => {
+    if (!contractModal) return;
+    if (!contractForm.serviceType.trim()) return alert('Selecione o serviço contratado.');
+    const { leadId } = contractModal;
+    const ownerId = currentUser.role === UserRole.CLOSER ? currentUser.id : leads.find(l => l.id === leadId)?.ownerId;
+    const contractFields = {
+      phaseId: 'ph-fech',
       status: LeadStatus.WON,
+      serviceType: contractForm.serviceType,
+      contractValue: contractForm.contractValue ? parseFloat(contractForm.contractValue.replace(',', '.')) : 0,
       contractNumber: `CT-${Date.now()}`,
       contractStart: new Date().toISOString().split('T')[0],
-      healthScore: 100
-    } : {};
-    setLeads(leads.map(l => l.id === id ? { ...l, phaseId: ph, ownerId: ownerId || l.ownerId, ...contractFields } : l));
-    try { await leadsApi.update(id, { phaseId: ph, ownerId, ...contractFields }); } catch (e) { console.error(e); }
+      healthScore: 100,
+      ownerId: ownerId || undefined
+    };
+    setLeads(leads.map(l => l.id === leadId ? { ...l, ...contractFields } : l));
+    setContractModal(null);
+    try { await leadsApi.update(leadId, contractFields); } catch (e) { console.error(e); }
   };
   const handleSaveEvent = async (e: AgendaEvent) => {
     setEvents(prev => [...prev, e]);
@@ -282,14 +305,26 @@ const App: React.FC = () => {
     try { await goalsApi.bulkSave(newGoals); } catch (e) { console.error('Save goals API error:', e); }
   };
   const handleSaveTemplates = async (newTemplates: OnboardingTemplate[]) => {
+    const prevTemplates = templates;
     setTemplates(newTemplates);
-    // Sync each template
-    for (const t of newTemplates) {
-      try {
-        const exists = templates.find(x => x.id === t.id);
+    try {
+      // Detect and delete removed templates
+      const newIds = new Set(newTemplates.map(t => t.id));
+      for (const old of prevTemplates) {
+        if (!newIds.has(old.id)) {
+          await templatesApi.delete(old.id);
+        }
+      }
+      // Create or update remaining
+      for (const t of newTemplates) {
+        const exists = prevTemplates.find(x => x.id === t.id);
         if (exists) await templatesApi.update(t.id, t);
         else await templatesApi.create(t);
-      } catch (e) { console.error(e); }
+      }
+    } catch (e: any) {
+      console.error('Save templates error:', e);
+      alert('Erro ao salvar jornadas: ' + (e?.message || 'Erro desconhecido. Tente novamente.'));
+      setTemplates(prevTemplates); // rollback
     }
   };
   const handleDeleteLead = async (id: string) => {
@@ -335,6 +370,48 @@ const App: React.FC = () => {
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && <UserProfileModal user={currentUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
       {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} />}
+      
+      {/* CONTRACT FORM MODAL */}
+      {contractModal && (
+        <div className="fixed inset-0 z-[4000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setContractModal(null)}>
+          <div className="bg-white rounded-[3rem] p-10 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-xl">🎉</div>
+              <div>
+                <h2 className="text-xl font-black text-[#0a192f] serif-authority">Fechar Contrato</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{contractModal.leadName}</p>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Serviço Contratado *</label>
+                <select 
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#c5a059]"
+                  value={contractForm.serviceType}
+                  onChange={e => setContractForm({...contractForm, serviceType: e.target.value})}
+                >
+                  <option value="">Selecione o serviço...</option>
+                  {(config.serviceTypes || []).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Valor do Contrato (R$)</label>
+                <input 
+                  type="number" step="0.01" min="0"
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#c5a059]"
+                  value={contractForm.contractValue}
+                  onChange={e => setContractForm({...contractForm, contractValue: e.target.value})}
+                  placeholder="Ex: 5000.00"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-4 mt-8">
+              <button onClick={() => setContractModal(null)} className="px-8 py-3 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
+              <button onClick={handleConfirmContract} className="px-8 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg">Confirmar Contrato</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
