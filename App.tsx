@@ -107,6 +107,9 @@ const App: React.FC = () => {
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  // Contract modal state (must be at top level — React Hooks rules)
+  const [contractModal, setContractModal] = useState<{ leadId: string; leadName: string } | null>(null);
+  const [contractForm, setContractForm] = useState({ serviceType: '', contractValue: '' });
 
   useEffect(() => {
     const savedAuth = localStorage.getItem(AUTH_KEY);
@@ -252,10 +255,6 @@ const App: React.FC = () => {
       try { await leadsApi.update(id, { inQueue: false, qualifiedById: currentUser.id }); } catch (e) { console.error(e); }
     }
   };
-  // Contract modal state
-  const [contractModal, setContractModal] = useState<{ leadId: string; leadName: string } | null>(null);
-  const [contractForm, setContractForm] = useState({ serviceType: '', contractValue: '' });
-
   const handleMoveLead = async (id: string, ph: string) => {
     const ownerId = currentUser.role === UserRole.CLOSER ? currentUser.id : leads.find(l => l.id === id)?.ownerId;
     // When moving to "Contrato Assinado", show contract form first

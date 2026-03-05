@@ -10,7 +10,16 @@ router.get('/', async (req: Request, res: Response) => {
     const [rows] = await pool.query<RowDataPacket[]>('SELECT config_key, config_value FROM system_config');
     const config: Record<string, any> = {};
     for (const r of rows) {
-      config[r.config_key] = typeof r.config_value === 'string' ? JSON.parse(r.config_value) : r.config_value;
+      if (typeof r.config_value === 'string') {
+        try {
+          config[r.config_key] = JSON.parse(r.config_value);
+        } catch {
+          // Value is a plain string, not JSON-encoded
+          config[r.config_key] = r.config_value;
+        }
+      } else {
+        config[r.config_key] = r.config_value;
+      }
     }
     res.json(config);
   } catch (error: any) {
