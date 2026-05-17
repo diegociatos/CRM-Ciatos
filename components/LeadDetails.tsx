@@ -133,13 +133,25 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                 </div>
               </div>
             </div>
-            <div className="flex gap-4 items-center">
+            <div className="flex gap-4">
               {isEditing ? (
                   <button onClick={handleSaveDossie} className="px-8 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl border-b-4 border-emerald-800 transition-all active:translate-y-1">💾 Salvar Alterações</button>
               ) : (
-                  <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-white/10 text-white border border-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all">✏️ Editar Dossiê</button>
+                  <>
+                    <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-white/10 text-white border border-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all">✏️ Editar Dossiê</button>
+                    <button 
+                      onClick={() => {
+                        if(confirm("Deseja realmente excluir este lead permanentemente?")) {
+                          onDeleteLead(lead.id);
+                          onClose();
+                        }
+                      }} 
+                      className="px-6 py-3 bg-red-900/40 text-red-200 border border-red-800/50 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-800 hover:text-white transition-all"
+                    >
+                      🗑️ Excluir
+                    </button>
+                  </>
               )}
-              <button onClick={() => { if(confirm('Excluir este lead permanentemente?')) { onDeleteLead(lead.id); onClose(); } }} className="px-4 py-3 bg-red-600/20 text-red-400 border border-red-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600/40 transition-all" title="Excluir Lead">🗑️</button>
               <button onClick={onClose} className="p-2 text-slate-400 hover:text-white text-2xl">✕</button>
             </div>
           </div>

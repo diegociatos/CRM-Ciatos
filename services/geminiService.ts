@@ -2,18 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Lead, MasterTemplate, ObjectionAnalysis, CompanySize, ProspectCompany } from "../types";
 
-let _ai: InstanceType<typeof GoogleGenAI> | null = null;
-
-function getAI(): InstanceType<typeof GoogleGenAI> {
-  if (!_ai) {
-    const key = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-    if (!key) {
-      throw new Error('Chave da API Gemini não configurada. Configure a variável GEMINI_API_KEY.');
-    }
-    _ai = new GoogleGenAI({ apiKey: key });
-  }
-  return _ai;
-}
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Motor de Inteligência Comercial
@@ -25,7 +14,7 @@ export const solveObjectionIA = async (objection: string, lead: Lead, baseScript
     RETORNE APENAS JSON.`;
 
   try {
-    const response = await getAI().models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { 
@@ -90,12 +79,11 @@ export const prospectCompanies = async (
     }`;
 
   try {
-    const response = await getAI().models.generateContent({
-      model: "gemini-3-pro-preview",
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: { 
         tools: [{ googleSearch: {} }]
-        // Sem responseMimeType para evitar erro com googleSearch
       },
     });
 
@@ -120,7 +108,7 @@ export const prospectCompanies = async (
 export const personalizeMasterTemplateIA = async (lead: Lead, template: MasterTemplate): Promise<{ subject: string; body: string }> => {
   const prompt = `Personalize este template para o lead ${lead.tradeName}. Retorne JSON {subject, body}.`;
   try {
-    const response = await getAI().models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json" }

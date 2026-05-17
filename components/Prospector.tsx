@@ -16,7 +16,7 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   const [jobLeads, setJobLeads] = useState<MiningLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
-  const hasKey = true; // Key is on server now
+  const [hasKey, setHasKey] = useState(false);
   
   const [newJob, setNewJob] = useState({
     segmentName: '',
@@ -31,6 +31,12 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
   });
 
   useEffect(() => {
+    const checkKey = async () => {
+      const selected = await window.aistudio.hasSelectedApiKey();
+      setHasKey(selected);
+    };
+    checkKey();
+
     const load = () => {
       setActiveJobs(miningEngine.getJobs().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     };
@@ -49,8 +55,14 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     }
   }, [inspectingJob, activeJobs, existingLeads]);
 
+  const handleSelectKey = async () => {
+    await window.aistudio.openSelectKey();
+    setHasKey(true);
+  };
+
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasKey) return alert("Selecione sua chave de API para habilitar a busca em tempo real.");
     if (!newJob.segmentName) return alert("Preencha o nome do segmento.");
     
     await miningEngine.createJob(newJob as any);
@@ -90,6 +102,37 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     } else {
       setSelectedLeads(new Set(jobLeads.map(l => l.id)));
     }
+  };
+
+  const handleExportCSV = () => {
+    if (jobLeads.length === 0) return;
+    
+    const headers = ["Nome Fantasia", "CNPJ", "Telefone", "Email", "Socios", "Decisor", "Telefone Decisor", "Porte", "Regime"];
+    const rows = jobLeads.map(l => [
+      l.tradeName,
+      l.cnpj,
+      l.phoneCompany,
+      l.emailCompany,
+      l.partners.join("; "),
+      l.contactName,
+      l.contactPhone,
+      l.size,
+      l.taxRegime
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `radar_export_${inspectingJob?.name || 'leads'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const inputClass = "w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#c5a059]";
@@ -139,11 +182,10 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                      <button onClick={() => miningEngine.controlJob(job.id, 'resume')} className="p-2 bg-slate-50 rounded-lg text-xs">▶️</button>
                    ) : null}
                    <button onClick={() => {
-                     if (confirm('Tem certeza que deseja EXCLUIR este radar e todos os leads encontrados?')) {
+                     if(confirm("Deseja excluir este radar e todos os seus resultados?")) {
                        miningEngine.deleteJob(job.id);
-                       if (inspectingJob?.id === job.id) setInspectingJob(null);
                      }
-                   }} className="p-2 bg-red-50 hover:bg-red-100 rounded-lg text-xs transition-colors" title="Excluir Radar">🗑️</button>
+                   }} className="p-2 bg-red-50 text-red-600 rounded-lg text-xs hover:bg-red-100 transition-colors" title="Excluir Radar">🗑️</button>
                 </div>
               </div>
               <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-1">{job.name}</h3>
@@ -245,6 +287,12 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualizando novos leads localizados.</p>
                 </div>
                 <div className="flex gap-4">
+                    <button 
+                      onClick={handleExportCSV}
+                      className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+                    >
+                      <span>📊</span> EXPORTAR CSV
+                    </button>
                    {selectedLeads.size > 0 && (
                     <button 
                       disabled={isProcessing}
