@@ -3,6 +3,8 @@ import React from 'react';
 import { NavigationState, UserRole } from '../types';
 
 interface SidebarProps {
+  mobileOpen: boolean;
+  onClose: () => void;
   currentView: NavigationState['view'];
   setView: (view: NavigationState['view']) => void;
   role: UserRole;
@@ -10,7 +12,7 @@ interface SidebarProps {
   canCreate: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, role, onOpenNewLead, canCreate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
   const menuItems = [
     { id: 'ai_center', label: 'Central da IA', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', roles: Object.values(UserRole) },
     { id: 'executive_bi', label: 'Estratégico (Admin)', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: [UserRole.ADMIN] },
@@ -31,7 +33,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, role, onOpenNew
   ];
 
   return (
-    <div className={`w-64 ${currentView === 'executive_bi' ? 'bg-[#050a15] border-white/5' : 'bg-[#0a192f] border-white/5'} text-white min-h-screen flex flex-col fixed left-0 top-0 h-full z-50 border-r shadow-2xl`}>
+    <div className={`${mobileOpen ? "flex" : "hidden"} md:flex w-64 ${currentView === 'executive_bi' ? 'bg-[#050a15] border-white/5' : 'bg-[#0a192f] border-white/5'} text-white min-h-screen flex-col fixed left-0 top-0 h-full z-50 border-r shadow-2xl`}>
+      <button aria-label="Fechar menu" onClick={onClose} className="md:hidden absolute top-2 right-3 p-2">✕</button>
       <div className="p-8 border-b border-white/5">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 bg-[#c5a059] rounded-lg flex items-center justify-center shadow-lg shadow-[#c5a059]/10 text-white font-black serif-authority">CI</div>

@@ -1,3 +1,4 @@
+import { aiCenterQueries } from '../lib/aiCenterQueries.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -61,6 +62,9 @@ test('migrations, tenant isolation, durable scheduler, fencing, suppression and 
       insert into crm.leads(id,organization_id,nome,email) values('${user}','${org}','Ana','ana@example.test'),('${other}','${other}','B','b@example.test');
       set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);
     assert.equal((await db.query('select * from crm.leads')).rows.length, 1);
+    for (const [table, order] of aiCenterQueries) {
+      await db.query(`select * from crm.${table} where organization_id='${org}' ${order ? `order by ${order} desc` : ''} limit 200`);
+    }
     await assert.rejects(db.exec(`select crm.claim_outreach()`));
     await assert.rejects(db.exec(`update crm.outreach_policy set live_enabled=true`));
     const sid = (await db.query<{ id: string }>(`select crm.create_cadence('${org}','Teste','Olá {{name}}','Mensagem') as id`)).rows[0].id;

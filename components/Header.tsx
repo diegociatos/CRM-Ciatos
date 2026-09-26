@@ -1,8 +1,11 @@
 
 import React, { useState } from 'react';
-import { Notification, User, UserRole } from '../types';
+import { Lead, Notification, User, UserRole } from '../types';
 
 interface HeaderProps {
+  leads: Lead[];
+  onSelectLead: (id: string) => void;
+  onToggleMenu: () => void;
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onClearAll: () => void;
@@ -17,8 +20,11 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({
-  notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canSwitchRole, canCreate, onOpenUserProfile, onLogout
+  leads, onSelectLead, onToggleMenu, notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canSwitchRole, canCreate, onOpenUserProfile, onLogout
 }) => {
+  const [search, setSearch] = useState('');
+  const normalized = search.trim().toLocaleLowerCase('pt-BR');
+  const results = normalized ? leads.filter(l => [l.name, l.company, l.email, l.cnpj].some(v => v?.toLocaleLowerCase('pt-BR').includes(normalized))).slice(0, 10) : [];
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
@@ -29,20 +35,27 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-20 border-b border-slate-200 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 fixed top-0 right-0 left-64 z-[40]">
-      <div className="flex items-center gap-4">
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-3 group focus-within:border-[#c5a059] transition-all">
+    <header className="h-20 border-b border-slate-200 bg-white/80 backdrop-blur-md flex items-center justify-between px-3 md:px-8 fixed top-0 right-0 left-0 md:left-64 z-[40]">
+      <div className="flex items-center gap-2 min-w-0">
+        <button aria-label="Abrir menu" onClick={onToggleMenu} className="md:hidden p-2">☰</button>
+        <div className="relative min-w-0 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-3 group focus-within:border-[#c5a059] transition-all">
           <svg className="w-4 h-4 text-slate-400 group-focus-within:text-[#c5a059]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <input type="text" placeholder="Pesquisa global de leads..." className="bg-transparent text-sm outline-none w-64 text-slate-600 font-medium" />
+          <input type="search" aria-label="Pesquisa global de leads" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if(e.key === 'Escape') setSearch(''); }} placeholder="Pesquisa global de leads..." className="bg-transparent text-sm outline-none w-full md:w-64 text-slate-600 font-medium" />
+          {normalized && <div className="absolute top-full left-0 mt-2 w-72 max-w-[80vw] bg-white border rounded-xl shadow-xl p-2 max-h-80 overflow-y-auto" aria-label="Resultados da pesquisa">
+            {!results.length && <p role="status" className="p-3 text-sm">Nenhum lead encontrado.</p>}
+            {results.map(l => <button key={l.id} className="block w-full text-left p-3 hover:bg-slate-100 rounded-lg" onClick={() => { onSelectLead(l.id); setSearch(''); }}><strong>{l.company || l.name}</strong><span className="block text-xs text-slate-500">{l.name} · {l.email}</span></button>)}
+            <p className="text-xs text-slate-500 p-2">Até 10 resultados entre os leads disponíveis para sua conta.</p>
+          </div>}
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-2 md:gap-6">
         {/* Notificações */}
         <div className="relative">
           <button 
+            aria-label="Notificações"
             onClick={() => setShowDropdown(!showDropdown)}
             className="p-3 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition relative group shadow-sm"
           >
@@ -72,7 +85,7 @@ const Header: React.FC<HeaderProps> = ({
                     <div className="p-12 text-center text-slate-400 italic text-sm">Nenhum evento pendente.</div>
                   ) : (
                     notifications.map(note => (
-                      <div key={note.id} className="p-5 hover:bg-slate-50 transition cursor-pointer flex gap-4">
+                      <div key={note.id} onClick={() => onMarkRead(note.id)} className="p-5 hover:bg-slate-50 transition cursor-pointer flex gap-4">
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-800 leading-snug">{note.title}</p>
                           <p className="text-xs text-slate-500 mt-1">{note.message}</p>

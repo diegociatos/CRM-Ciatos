@@ -35,7 +35,7 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
     if (!activeContract) return { npsAvg: '0', health: 0 };
     const surveys = activeContract.npsSurveys?.filter(n => n.status === 'Concluido' && n.score !== undefined) || [];
     const avg = surveys.length > 0 ? (surveys.reduce((acc, n) => acc + (n.score || 0), 0) / surveys.length) : 0;
-    return { npsAvg: avg.toFixed(1), health: activeContract.healthScore || 85 };
+    return { npsAvg: avg.toFixed(1), health: activeContract.healthScore ?? 0 };
   }, [activeContract]);
 
   const handleUpdateWelcome = (updates: Partial<WelcomeData>) => {
@@ -129,7 +129,7 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
       ...activeContract, 
       npsSurveys: nextSurveys, 
       successTasks: nextTasks,
-      healthScore: Math.min(100, Math.max(0, (activeContract.healthScore || 85) + healthChange))
+      healthScore: Math.min(100, Math.max(0, (activeContract.healthScore ?? 0) + healthChange))
     });
 
     setShowNpsRegisterModal(null);
@@ -385,7 +385,7 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
                   <label className={labelClass}>Status da Parceria</label>
                   <div className="p-5 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-center gap-4">
                      <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
-                     <span className="text-[11px] font-black text-emerald-800 uppercase tracking-widest">Ativo & Saudável</span>
+                     <span className="text-[11px] font-black text-emerald-800 uppercase tracking-widest">{!activeContract ? 'Nenhum contrato selecionado' : activeContract.healthScore == null ? 'Saúde não avaliada' : activeContract.healthScore < 60 ? 'Requer atenção' : 'Saudável'}</span>
                   </div>
                </section>
 
@@ -416,8 +416,8 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
             </div>
 
             <div className="p-8 border-t border-slate-50">
-               <button className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
-                 Gerar QBR (Relatório de Valor)
+               <button disabled title="Relatório QBR ainda não disponível" className="disabled:opacity-50 w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
+                 Relatório QBR indisponível
                </button>
             </div>
          </div>

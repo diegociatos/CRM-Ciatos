@@ -119,13 +119,13 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
               <div>
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status da Meta Diária</p>
                  <h3 className="text-2xl font-bold text-[#0a192f] serif-authority leading-tight">
-                    {metrics.callsToday >= metrics.dailyGoal 
+                    {metrics.dailyGoal <= 0 ? "Meta diária não configurada." : metrics.callsToday >= metrics.dailyGoal
                       ? "Objetivo Diário Alcançado! 🎯" 
                       : `Faltam ${Math.max(0, metrics.dailyGoal - metrics.callsToday)} ligações para a meta.`}
                  </h3>
               </div>
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.callsToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
-                 {metrics.callsToday >= metrics.dailyGoal ? '✅' : '🔥'}
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.dailyGoal > 0 && metrics.callsToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                 {metrics.dailyGoal > 0 && metrics.callsToday >= metrics.dailyGoal ? '✅' : '🔥'}
               </div>
            </div>
         </div>
@@ -254,8 +254,8 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
             </div>
 
             <div className="p-8 border-t border-slate-50">
-               <button className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
-                 Exportar Relatório Mensal
+               <button disabled title="Exportação mensal ainda não disponível" className="disabled:opacity-50 w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
+                 Exportação mensal indisponível
                </button>
             </div>
          </div>

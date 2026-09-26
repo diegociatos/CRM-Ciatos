@@ -118,13 +118,13 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               <div>
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status da Produção Diária</p>
                  <h3 className="text-2xl font-bold text-[#0a192f] serif-authority leading-tight">
-                    {metrics.activitiesToday >= metrics.dailyGoal 
+                    {metrics.dailyGoal <= 0 ? "Meta diária não configurada." : metrics.activitiesToday >= metrics.dailyGoal
                       ? "Meta de Atividades Batida! 🚀" 
                       : `Faltam ${Math.max(0, metrics.dailyGoal - metrics.activitiesToday)} atividades para o alvo diário.`}
                  </h3>
               </div>
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.activitiesToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
-                 {metrics.activitiesToday >= metrics.dailyGoal ? '💎' : '📞'}
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl transition-transform group-hover:rotate-12 ${metrics.dailyGoal > 0 && metrics.activitiesToday >= metrics.dailyGoal ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                 {metrics.dailyGoal > 0 && metrics.activitiesToday >= metrics.dailyGoal ? '💎' : '📞'}
               </div>
            </div>
         </div>
@@ -172,7 +172,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               </div>
               <div className="mt-10">
                  <p className="text-[10px] text-slate-400 leading-relaxed font-bold tracking-tight">
-                   SUA TAXA DE AGENDAMENTO ESTÁ <span className="text-emerald-400 font-black">ACIMA DA MÉDIA</span> DA BANCA (12%).
+                   {metrics.qualsCount > 0 ? "Agendamentos em relação às qualificações do período." : "Sem qualificações no período para calcular a conversão."}
                  </p>
               </div>
            </div>
@@ -255,8 +255,8 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
             </div>
 
             <div className="p-8 border-t border-slate-50">
-               <button className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
-                 Exportar Relatório Mensal
+               <button disabled title="Exportação mensal ainda não disponível" className="disabled:opacity-50 w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
+                 Exportação mensal indisponível
                </button>
             </div>
          </div>

@@ -76,15 +76,18 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
     });
 
     if (stalledLeads.length > 0) alerts.push(`⚠️ ${stalledLeads.length} Leads parados há mais de ${stalledDaysLimit} dias.`);
-    if (goalReach < 50 && new Date().getDate() > 15) alerts.push(`📉 Alerta de Performance: Abaixo de 50% da meta após o dia 15.`);
+    if (totalGoal > 0 && goalReach < 50 && new Date().getDate() > 15) alerts.push(`📉 Alerta de Performance: Abaixo de 50% da meta após o dia 15.`);
     
-    const riskClients = wonLeads.filter(c => (c.healthScore || 100) < 60);
+    const riskClients = wonLeads.filter(c => (c.healthScore ?? 100) < 60);
     if (riskClients.length > 0) alerts.push(`🔥 CRÍTICO: ${riskClients.length} Clientes ativos com Health Score em risco (<60%).`);
 
     return { 
       totalPipelineValue, monthlyRevenue, goalReach, avgTicket, 
       funnel, sdrRanking, closerRanking, alerts,
-      npsAvg: 9.2, // Mock ou vindo de dados reais se integrados
+      npsAvg: (() => {
+        const scores = wonLeads.flatMap(l => l.npsSurveys || []).filter(n => n.status === 'Concluido' && Number.isFinite(n.score) && n.score! >= 0 && n.score! <= 10).map(n => n.score!);
+        return scores.length ? Math.round(100 * (scores.filter(s => s >= 9).length - scores.filter(s => s <= 6).length) / scores.length) : 'Sem respostas';
+      })(),
       healthAvg: leads.filter(l => l.status === LeadStatus.WON).reduce((acc, l) => acc + (l.healthScore || 0), 0) / Math.max(1, wonLeads.length)
     };
   }, [leads, users, userGoals, currentMonth, currentYear]);
@@ -102,7 +105,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
         <div>
            <div className="flex items-center gap-3 mb-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]"></div>
-              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Sincronização Live: Ativa</span>
+              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Dados da sessão atual</span>
            </div>
            <h1 className="text-5xl font-black text-white serif-authority tracking-tighter">BI Executivo <span className={goldText}>Ciatos</span></h1>
            <p className="text-slate-500 font-medium text-lg">Visão macro estratégica de performance e governança.</p>
@@ -148,7 +151,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
                <p className="text-4xl font-black text-indigo-400 serif-authority">{biData.npsAvg}</p>
                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{biData.healthAvg.toFixed(0)}% Health</span>
             </div>
-            <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase">Média de satisfação base</p>
+            <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase">NPS: promotores menos detratores (%)</p>
          </div>
       </div>
 
@@ -204,7 +207,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
                   <div className="py-20 text-center opacity-20 italic">Nenhum alerta crítico pendente.</div>
                )}
             </div>
-            <button className="mt-8 w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">Ver Auditoria Completa</button>
+            <button disabled title="Relatório de auditoria ainda não disponível" className="disabled:opacity-50 mt-8 w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">Auditoria detalhada indisponível</button>
          </div>
       </div>
 
@@ -266,8 +269,8 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
       <div className="pt-10 border-t border-white/5 flex justify-between items-center opacity-40">
          <p className="text-[9px] font-black uppercase tracking-[0.5em]">Intel Engine: v6.4 Executive</p>
          <div className="flex gap-6">
-            <span className="text-[9px] font-bold uppercase tracking-widest">GDPR Compliance: Safe</span>
-            <span className="text-[9px] font-bold uppercase tracking-widest">Data Encryption: AES-256</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest">Privacidade: controles na Central da IA</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest">Acesso sujeito às permissões da conta</span>
          </div>
       </div>
     </div>

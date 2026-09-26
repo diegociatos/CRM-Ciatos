@@ -17,6 +17,7 @@ test('Central works with mocked data: safe enrollment, intervention, tenant swit
       if(name==='resolve_handoff') data.human_handoffs[0].status=body.resolution;
       await route.fulfill({json:name==='tenant_member'?true:null,headers});return;
     }
+    if(name==='message_events') expect(url.searchParams.get('order')).toBe('occurred_at.desc');
     const org=url.searchParams.get('organization_id')?.replace('eq.','');
     await route.fulfill({json:(data[name] || []).filter(r=>!org || r.organization_id===org),headers});
   });
@@ -29,7 +30,7 @@ test('Central works with mocked data: safe enrollment, intervention, tenant swit
   await page.getByLabel('Cadência',{exact:true}).selectOption('seq-a');
   await page.getByLabel('Lead',{exact:true}).selectOption('lead-a');
   await page.getByRole('button',{name:'Inscrever em simulação'}).click();
-  await expect(page.getByRole('status')).toHaveText('Alteração registrada.');
+  await expect(page.getByRole('status').filter({hasText:'Alteração registrada.'})).toHaveText('Alteração registrada.');
   expect(calls.find(c=>c.name==='enroll_lead')?.body).toEqual({sid:'seq-a',lid:'lead-a',simulate:true});
   await page.getByLabel('Empresa',{exact:true}).selectOption('org-b');
   await expect(page.getByText('Cadência de teste',{exact:true})).toHaveCount(0);
@@ -38,4 +39,9 @@ test('Central works with mocked data: safe enrollment, intervention, tenant swit
   await page.route('**/rest/v1/outreach_sequences?**',route=>route.fulfill({status:400,json:{message:'unavailable'},headers:{'Access-Control-Allow-Origin':'*'}}));
   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível carregar');
+  await expect(page.getByText('Nenhuma intervenção pendente nesta empresa.')).toHaveCount(0);
+  await page.unroute('**/rest/v1/outreach_sequences?**');
+  await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByText('Nenhuma intervenção pendente nesta empresa.')).toBeVisible();
 });

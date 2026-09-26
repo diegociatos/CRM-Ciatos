@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { aiCenterQueries } from '../lib/aiCenterQueries';
 
 const labels: Record<string, string> = { ACTIVE: 'Ativa', DRAFT: 'Rascunho', PAUSED: 'Pausada', ARCHIVED: 'Arquivada', OPEN: 'Aguardando', ACKNOWLEDGED: 'Em atendimento', PENDING: 'Na fila', RUNNING: 'Executando', DONE: 'Concluída', FAILED: 'Falhou', CANCELLED: 'Cancelada', STOPPED: 'Interrompida', COMPLETED: 'Concluída', RESOLVED: 'Resolvido', DISMISSED: 'Dispensado' };
 const button = 'rounded-lg px-3 py-2 bg-slate-100 text-slate-800 hover:bg-slate-200 disabled:opacity-50';
@@ -11,6 +12,8 @@ export default function AiCenter() {
   const [org, setOrg] = useState('');
   const [rows, setRows] = useState<Record<string, Row[]>>({});
   const [tab, setTab] = useState('attention');
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -27,22 +30,24 @@ export default function AiCenter() {
     let active = true;
     supabase.from('organizations').select('id,nome,branding').order('nome').then(({ data, error }) => {
       if (!active) return;
-      if (error) setError('Central indisponível. Confira se as migrations e permissões foram instaladas.');
-      else { setOrganizations(data || []); setOrg(data?.[0]?.id || ''); }
+      if (error) { setError('Central indisponível. Confira se as migrations e permissões foram instaladas.'); setLoading(false); setLoadFailed(true); }
+      else { setOrganizations(data || []); setOrg(data?.[0]?.id || ''); if (!data?.length) setLoading(false); }
     });
     return () => { active = false; };
   }, []);
   const refresh = useCallback(async () => {
     if (!org) return;
     const version = ++generation.current;
-    const tables = ['human_handoffs', 'outreach_sequences', 'automation_jobs', 'sequence_enrollments', 'message_events', 'ai_runs', 'suppression_list', 'leads', 'outreach_policy', 'enrichment_requests'];
-    const results = await Promise.all(tables.map(name => {
+    setLoading(true); setLoadFailed(false); setError('');
+    const tables = aiCenterQueries.map(([name]) => name);
+    const results = await Promise.all(aiCenterQueries.map(([name, order]) => {
       const query = supabase.from(name).select('*').eq('organization_id', org).limit(200);
-      return name === 'outreach_policy' ? query : query.order('created_at', { ascending: false });
+      return order ? query.order(order, { ascending: false }) : query;
     }));
     const permission = await supabase.rpc('tenant_member', { org, admin_only: true });
     if (version !== generation.current) return;
-    if (results.some(r => r.error) || permission.error) { setError('Não foi possível carregar a Central. Verifique a conexão e a instalação das migrations.'); return; }
+    setLoading(false);
+    if (results.some(r => r.error) || permission.error) { setLoadFailed(true); setRows({}); setAdmin(false); setError('Não foi possível carregar a Central. Verifique a conexão e a instalação das migrations.'); return; }
     setRows(Object.fromEntries(tables.map((name, i) => [name, results[i].data || []]))); setAdmin(permission.data === true);
   }, [org]);
   useEffect(() => { setRows({}); setLead(''); setSequence(''); setAdmin(false); setNotice(''); setError(''); void refresh(); return () => { generation.current++; }; }, [refresh]);
@@ -78,7 +83,9 @@ export default function AiCenter() {
     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl"><strong>{policy?.live_enabled ? 'Envio autorizado na política da empresa' : 'Modo seguro: envio real desativado'}</strong><p className="text-sm mt-1">As inscrições desta tela são simulações: não enviam e-mail nem consultam IA. Ativação real exige configuração no servidor. Resolver um alerta não reinicia a cadência.</p></div>
     {error && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{error}</p>}
     {notice && <p role="status" className="p-3 bg-green-50 text-green-800 rounded-lg">{notice}</p>}
-    {!org && !error && <p>Nenhuma empresa vinculada. Solicite ao administrador a associação do seu usuário.</p>}
+    {loading && <p role="status">Carregando Central…</p>}
+    {!loading && !org && !error && <p>Nenhuma empresa vinculada. Solicite ao administrador a associação do seu usuário.</p>}
+    {!loading && !loadFailed && org && <>
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">{[
       ['Precisa de você', handoffs.length], ['Execuções pendentes', jobs.filter(j => j.status === 'PENDING').length],
       ['Simulações concluídas', jobs.filter(j => j.result?.outcome === 'simulated').length], ['Falhas para revisar', jobs.filter(j => j.status === 'FAILED').length]
@@ -93,5 +100,6 @@ export default function AiCenter() {
     </div>}
     {tab === 'activity' && <div className="bg-white border rounded-xl p-5 space-y-4"><h2 className="font-bold">Histórico de execução</h2><p className="text-sm text-slate-500">Até 200 registros por categoria. Eventos de entrega: {rows.message_events?.length || 0} · Decisões de IA: {rows.ai_runs?.length || 0}</p>{!jobs.length && <p>A fila está vazia. Ative uma cadência e inscreva um lead para simular.</p>}{jobs.map(j=><div className="border-b py-3 flex justify-between gap-4" key={j.id}><div><strong>{leadName(j.lead_id)}</strong><p className="text-sm">{j.job_type} · {new Date(j.created_at).toLocaleString('pt-BR')}</p></div><div className="text-right">{labels[j.status]}<p className="text-sm text-slate-500">{j.result?.outcome === 'simulated' ? 'Simulação — nenhum envio' : j.last_error}</p></div></div>)}</div>}
     {tab === 'privacy' && <div className="bg-white border rounded-xl p-5 space-y-4"><h2 className="font-bold">Contatos e privacidade</h2><p className="text-sm text-slate-500">Supressões registradas: {rows.suppression_list?.length || 0}. Registrar resposta ou reunião interrompe as cadências do contato.</p>{rows.leads?.map(l=><div key={l.id} className="border-b py-3"><strong>{l.empresa || l.nome}</strong><p className="text-sm">{l.email} · {l.opt_out ? 'Não contatar' : l.email_verified_at ? 'E-mail verificado' : 'Verificação pendente'}</p><div className="flex flex-wrap gap-2 mt-2">{[['reply','Recebemos resposta'],['meeting','Reunião marcada'],['opt_out','Não contatar']].map(([action,label])=><button disabled={busy || l.opt_out} key={action} className={button} onClick={()=>void run('contact_action',{lid:l.id,action})}>{label}</button>)}{admin && <button className={button} disabled={busy} onClick={async()=>{setError(''); const {data,error}=await supabase.rpc('lead_privacy_export',{lid:l.id}); if(error){setError('Exportação não concluída.');return;} const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const a=document.createElement('a');a.href=url;a.download='dados-do-contato.json';a.click();URL.revokeObjectURL(url);}}>Exportar dados</button>}</div></div>)}</div>}
+    </>}
   </section>;
 }
