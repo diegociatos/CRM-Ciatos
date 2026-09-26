@@ -53,5 +53,24 @@ test('company registration, shared users and complete operational isolation',asy
  await db.exec(`select set_config('request.jwt.claim.sub','${admin}',false)`);
  await assert.rejects(db.exec(`select crm.set_company_member('${a}','admin@example.test','SDR',false)`));
  assert.equal((await db.query<any>(`select live_enabled from crm.outreach_policy where organization_id='${a}'`)).rows[0].live_enabled,false);
+
+ // Platform ownership and customer master access must remain separate.
+ await db.exec(`select crm.assign_company_master('${a}','equipe@example.test');select set_config('request.jwt.claim.sub','${member}',false);`);
+ assert.equal((await db.query<any>(`select crm.platform_admin() allowed`)).rows[0].allowed,false);
+ assert.equal((await db.query<any>(`select crm.can_manage_company('${a}') allowed`)).rows[0].allowed,true);
+ assert.equal((await db.query<any>(`select crm.can_manage_company('${b}') allowed`)).rows[0].allowed,false);
+ await db.exec(`select crm.save_company('${a}','Empresa editada','{}');select crm.set_company_member('${a}','outro@example.test','ADMIN');`);
+ await assert.rejects(db.exec(`select * from crm.platform_clients()`));
+ await assert.rejects(db.exec(`select crm.save_company(null,'Cliente indevido','{}')`));
+ await assert.rejects(db.exec(`select crm.save_company('${b}','Empresa invadida','{}')`));
+ await assert.rejects(db.exec(`select crm.assign_company_master('${b}','equipe@example.test')`));
+ await assert.rejects(db.exec(`insert into crm.platform_admins(user_id) values('${member}')`));
+ await assert.rejects(db.exec(`update crm.organization_members set is_master=true where user_id='${member}'`));
+ await assert.rejects(db.exec(`select crm.set_company_member('${a}','equipe@example.test','SDR',false)`));
+ await db.exec(`select set_config('request.jwt.claim.sub','${outsider}',false)`);
+ assert.equal((await db.query<any>(`select crm.can_manage_company('${a}') allowed`)).rows[0].allowed,false,'ordinary company ADMIN cannot become master');
+ await db.exec(`select set_config('request.jwt.claim.sub','${admin}',false)`);
+ const clients=(await db.query<any>(`select * from crm.platform_clients()`)).rows;
+ assert.equal(clients.find(c=>c.id===a).master_email,'equipe@example.test');
  }finally{await db.close();}
 });

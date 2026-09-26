@@ -1,5 +1,5 @@
 // Edge Function: crm-admin-users
-// Convida e desativa usuários do CRM (service role). Só ADMIN do CRM chama.
+// Gerencia usuários por empresa: dono da plataforma ou master explicitamente vinculado.
 //
 // ATENÇÃO: o auth.users é COMPARTILHADO com o Chekly. Se o e-mail já tem conta
 // (ex.: usuário do Chekly), NÃO recriamos nem trocamos a senha dele — só
@@ -79,13 +79,12 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, service, { db: { schema: 'crm' } });
   const { data: caller } = await admin.from('profiles').select('papel, ativo').eq('id', me.user.id).maybeSingle();
-  if (!caller?.ativo || caller.papel !== 'ADMIN') return json({ error: 'Somente administradores do CRM gerenciam usuários' }, 403);
+  if (!caller?.ativo) return json({ error: 'Somente administradores do CRM gerenciam usuários' }, 403);
   let p: any;
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
   const org=String(p.organization_id||'');
-  const {data:groupAdmin,error:groupError}=await asCaller.schema('crm').rpc('group_admin');
-  const {data:membership,error:membershipError}=await admin.from('organization_members').select('papel').eq('organization_id',org).eq('user_id',me.user.id).eq('ativo',true).maybeSingle();
-  if(groupError||!groupAdmin||membershipError||membership?.papel!=='ADMIN')return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
+  const {data:allowed,error:accessError}=await asCaller.schema('crm').rpc('can_manage_company',{org});
+  if(accessError||!allowed)return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
 
   try {
     if (p.action === 'create') {

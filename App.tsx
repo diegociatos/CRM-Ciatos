@@ -23,7 +23,6 @@ const ScriptsLibrary = lazy(() => import('./components/ScriptsLibrary'));
 const UserManagementView = lazy(() => import('./components/UserManagementView'));
 import UserProfileModal from './components/UserProfileModal';
 import LoginPage from './components/LoginPage';
-import DefinirSenha from './components/DefinirSenha';
 import {
   NavigationState, Lead, LeadStatus, UserRole, User,
   SystemConfig, OnboardingTemplate, UserGoal, AgendaEvent, SalesScript, EmailProvider, Interaction
@@ -32,6 +31,7 @@ import { DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
 import { supabase } from './lib/supabase';
 import {createWorkspaceDb,roleDePapel} from './services/db';
+import {PlatformAdmin} from './components/PlatformAdmin';
 import {CompanyShell,CompanyManager,WorkspaceProps} from './components/CompanyWorkspace';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
@@ -79,6 +79,7 @@ type EstadoAuth = 'carregando' | 'deslogado' | 'sem_acesso' | 'ok';
 const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onCompaniesRefresh}) => {
   const db=useMemo(()=>createWorkspaceDb(company?.id||""),[company?.id]);
   const [manageCompanies,setManageCompanies]=useState(false);
+  const [platformOpen,setPlatformOpen]=useState(false);
   const [nav, setNav] = useState<NavigationState>({ view: 'dashboard' });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
@@ -99,7 +100,6 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const [estadoAuth, setEstadoAuth] = useState<EstadoAuth>('carregando');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [carregandoDados, setCarregandoDados] = useState(false);
-  const [definindoSenha, setDefinindoSenha] = useState(() => /type=(recovery|invite)/.test(window.location.hash));
 
   const currentUser: User | null = realUser
     ? (simulatedRole && realUser.role === UserRole.ADMIN ? { ...realUser, role: simulatedRole } : realUser)
@@ -163,7 +163,6 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     };
     supabase.auth.getSession().then(({ data }) => aplicarSessao(data.session?.user.id ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((evento, session) => {
-      if (evento === 'PASSWORD_RECOVERY') setDefinindoSenha(true);
       if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT' || evento === 'USER_UPDATED') {
         // Evita deadlock do supabase-js: não aguardar chamadas dentro do callback.
         setTimeout(() => aplicarSessao(session?.user.id ?? null), 0);
@@ -338,9 +337,6 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   };
 
   // --- Telas de estado ------------------------------------------------------------
-  if (definindoSenha) {
-    return <DefinirSenha onConcluido={() => { setDefinindoSenha(false); window.history.replaceState(null, '', window.location.pathname); }} />;
-  }
   if (estadoAuth === 'carregando') {
     return <div className="min-h-screen bg-[#050a15] flex items-center justify-center text-[#c5a059] font-black uppercase tracking-widest text-xs">Carregando…</div>;
   }
@@ -390,12 +386,13 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
         <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
-          {company&&<section className="company-switcher" aria-label="Empresa em operação"><label><span>Empresa atual</span><select aria-label="Trocar empresa" value={company.id} onChange={e=>onCompanyChange?.(e.target.value)}>{companies.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select></label><p>Clientes e operação de <strong>{company.nome}</strong></p>{company.can_manage&&<button className="ux-secondary" onClick={()=>setManageCompanies(true)}>Gerenciar empresas</button>}</section>}
+          {company&&<section className="company-switcher" aria-label="Empresa em operação"><label><span>Empresa atual</span><select aria-label="Trocar empresa" value={company.id} onChange={e=>onCompanyChange?.(e.target.value)}>{companies.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select></label><p>Clientes e operação de <strong>{company.nome}</strong></p>{company.can_manage&&<button className="ux-secondary" onClick={()=>setManageCompanies(true)}>Gerenciar empresas</button>}{company.can_platform&&<button className="btn-navy" onClick={()=>setPlatformOpen(true)}>Administração da plataforma</button>}</section>}
           {appNotice && <div className="app-notice" role="status"><span>{appNotice}</span><button aria-label="Fechar mensagem" onClick={()=>setAppNotice('')}>✕</button></div>}
           {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}
           <Suspense fallback={<div className="view-loading" role="status">Carregando seu espaço…</div>}>{renderView()}</Suspense>
         </main>
       </div>
+      {platformOpen&&company?.can_platform&&<PlatformAdmin onClose={()=>setPlatformOpen(false)}/>}
       {manageCompanies&&company&&onCompaniesRefresh&&<CompanyManager company={company} onClose={()=>setManageCompanies(false)} onRefresh={onCompaniesRefresh}/>}
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && realUser && <UserProfileModal user={realUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}

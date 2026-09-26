@@ -10,7 +10,13 @@ O seletor **Empresa atual**, acima de todas as telas, define a operação aberta
 4. Em **Quem pode trabalhar nesta empresa**, informa o e-mail de um usuário já cadastrado e seu perfil local. Para um novo usuário, primeiro usa **Gestão de Usuários**. Convites continuam sujeitos à flag global de envio desligada; nenhum convite é enviado pela criação da empresa ou pelo vínculo de usuário existente.
 5. O usuário pode ser SDR na Contabilidade e consultor no Jurídico. Remover seu vínculo em uma empresa preserva os outros e não desativa sua identidade compartilhada com outros sistemas.
 
-A administração do grupo é o perfil global ADMIN com vínculo administrativo ativo no workspace original. Administradores locais cuidam da operação; cadastro de empresas e distribuição de acessos ficam centralizados no grupo. Não se concede administração global por um convite de administrador local. Alterar o próprio vínculo é bloqueado; um administrador ativo deve permanecer.
+A administração da plataforma é uma autorização explícita em `crm.platform_admins`, separada do papel operacional ADMIN. A atualização preserva somente os administradores globais previamente confiáveis do workspace original. Novas concessões exigem operação administrativa no servidor; e-mail, convite e edição de perfil não promovem um usuário.
+
+O dono acessa **Administração da plataforma** para consultar empresas clientes, CNPJ, responsáveis master e quantidade de acessos. O painel é de cadastro administrativo; não concede acesso automático aos leads e atividades das empresas. Criar empresas continua disponível em **Gerenciar empresas** somente para o dono.
+
+O **master** é um vínculo `is_master` explícito por empresa. Pode editar seus dados cadastrais e administrar usuários comuns daquele workspace, inclusive novos usuários em **Gestão de Usuários**. Não cria empresas da plataforma, não promove outros masters, não altera um vínculo master e não acessa o painel do dono. `assign_company_master(org, master_email)` é exclusivo do dono e exige identidade ativa já cadastrada. O papel ADMIN comum não equivale a master. A mesma identidade pode ser master em várias empresas.
+
+Os novos cadastros de identidade usam a API oficial de autenticação administrativa. Contas existentes conservam senha e identidade compartilhada. Criar um usuário não autoriza enviar e-mail: os envios continuam desligados. Um link individual de definição de senha pode ser entregue privadamente; nunca deve entrar no repositório, logs ou PR.
 
 ## Separação dos dados
 
@@ -20,9 +26,9 @@ RLS exige vínculo ativo na empresa. IDs de empresa são imutáveis, vínculos d
 
 ## Implantação
 
-1. Fazer backup de schema e dados **crm**. Não alterar `public` nem a autenticação compartilhada.
+1. Fazer backup de schema e dados **crm**. Não alterar `public`. A autenticação compartilhada somente recebe novas contas explicitamente autorizadas pela API oficial; nunca redefinir senhas existentes.
 2. Executar typecheck, build, testes SQL/RLS e Playwright; validar as funções com Deno.
-3. Aplicar `20260926200000_company_workspaces.sql` em transação e registrar sua versão no histórico de migrations.
+3. Aplicar as migrations pendentes `20260926200000_company_workspaces.sql` e `20260926210000_platform_owner.sql`, cada uma em transação e somente se ainda não aplicada, registrando as versões no histórico. Conferir previamente quais administradores legados serão preservados como donos.
 4. Publicar somente as funções alteradas `crm-admin-users` e `crm-ia`, preservando autenticação e secrets.
 5. Publicar o frontend desta branch com o workflow Cloudflare existente. A versão anterior do frontend não deve ser restaurada isoladamente: ela não inclui o escopo obrigatório nas gravações.
 6. Validar login, seletor, cadastro de empresas e isolamento em ambiente de teste. Em produção, conferir leitura e formulários sem gerar clientes ou disparos de teste.
