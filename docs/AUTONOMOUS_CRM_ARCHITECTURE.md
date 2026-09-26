@@ -1,5 +1,7 @@
 # CRM Ciatos Autonomous — arquitetura alvo
 
+> A implementação do piloto e suas limitações estão descritas em [AUTONOMOUS_OPERATIONS.md](AUTONOMOUS_OPERATIONS.md). O roadmap abaixo é a visão alvo, não uma declaração de que todo o SaaS está concluído. O piloto inclui worker persistente, Resend, supervisor OpenAI/Claude, Snov opcional, Central da IA e isolamento das novas entidades. Inbox/agenda automáticas, billing e migração integral do legado permanecem fora desta entrega.
+
 ## Objetivo
 Transformar o CRM atual em uma plataforma multiempresa/white-label que prospecta, enriquece, prioriza e nutre leads de forma autônoma, chamando uma pessoa quando houver intenção comercial, risco, dúvida ou necessidade de negociação.
 

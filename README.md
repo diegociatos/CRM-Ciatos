@@ -30,3 +30,8 @@ git checkout main
 - Funções em `supabase/functions/`, com prefixo `crm-` para não colidir com as do Chekly:
   `npx supabase functions deploy crm-ia --project-ref rylbvqsjnmjohxvvzstm --use-api`
 - Secrets usados: `ANTHROPIC_API_KEY` (IA), `RESEND_API_KEY` (já existe, compartilhado), `CRM_EMAIL_FROM` (opcional), `CRM_APP_URLS` (opcional; origens permitidas no link de convite).
+# CRM autônomo — implantação e operação
+
+Veja [o guia de homologação, secrets e operação](docs/AUTONOMOUS_OPERATIONS.md).
+A Central da IA usa filas persistentes e inicia em simulação, sem envio real.
+Validação local: `npm ci`, `npm run typecheck`, `npm test`, `npm run build`.
