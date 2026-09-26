@@ -1,0 +1,8 @@
+[functions.crm-automation-worker]
+verify_jwt = false
+[functions.crm-email-webhook]
+verify_jwt = false
+[functions.crm-unsubscribe]
+verify_jwt = false
+[functions.crm-inbound-event]
+verify_jwt = false

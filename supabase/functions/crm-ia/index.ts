@@ -15,7 +15,7 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-const MODELO = Deno.env.get('CRM_CLAUDE_MODEL') || 'claude-opus-5';
+const MODELO = Deno.env.get('CRM_CLAUDE_MODEL') || '';
 const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
 const CONTEXTO_CIATOS = `O Grupo Ciatos (Belo Horizonte/MG) vende serviços de contabilidade, planejamento tributário,
@@ -27,10 +27,8 @@ async function chamarClaude(params: Record<string, unknown>) {
   let msgs = params.messages as any[];
   // pause_turn: turno longo de ferramenta de servidor — reenviar para continuar.
   for (let i = 0; i < 4; i++) {
-    const resp: any = await (anthropic.beta.messages.create as any)({
+    const resp: any = await (anthropic.messages.create as any)({
       model: MODELO,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       ...params,
       messages: msgs,
     });
@@ -149,7 +147,7 @@ async function consultarReceita(cnpj: string): Promise<any | null> {
   } catch { return null; }
 }
 
-async function radar(p: any, db: SupabaseClient) {
+async function radar(p: any, db: SupabaseClient<any, any, any>) {
   const jobId = String(p.jobId || '');
   const { data: job, error: eJob } = await db.from('mining_jobs').select('*').eq('id', jobId).maybeSingle();
   if (eJob || !job) throw new Error('Busca do Radar não encontrada.');
@@ -268,6 +266,7 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
+  if (Deno.env.get('CRM_AI_ENABLED') !== 'true' || !MODELO) return json({ error: 'IA desativada ou modelo não configurado.' }, 503);
   if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'IA não configurada (ANTHROPIC_API_KEY ausente).' }, 503);
 
   const url = Deno.env.get('SUPABASE_URL')!;
@@ -285,15 +284,18 @@ Deno.serve(async (req) => {
   let p: any;
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
 
+  if (!['objecao','email','radar'].includes(p.action)) return json({ error: 'Ação desconhecida' },400);
+  const audit = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'crm' } });
+  const { data: runId, error: quotaError } = await audit.rpc('reserve_ai_run', { org: '00000000-0000-4000-8000-000000000001', lid: null });
+  if (quotaError) return json({ error: 'Limite de consultas de IA atingido ou configuração indisponível.' },429);
   try {
-    if (p.action === 'objecao') return json(await objecao(p));
-    if (p.action === 'email') return json(await email(p));
-    if (p.action === 'radar') return json(await radar(p, db));
-    return json({ error: 'Ação desconhecida' }, 400);
+    const result = p.action === 'objecao' ? await objecao(p) : p.action === 'email' ? await email(p) : await radar(p,db);
+    const { error: auditError } = await audit.from('ai_runs').update({ provider:'anthropic',model:MODELO,action:p.action,status:'DONE',completed_at:new Date().toISOString() }).eq('id',runId);
+    if (auditError) throw new Error('audit_failed');
+    return json(result);
   } catch (err) {
-    console.error(err);
+    await audit.from('ai_runs').update({status:'FAILED',completed_at:new Date().toISOString()}).eq('id',runId);
     if (err instanceof Anthropic.RateLimitError) return json({ error: 'IA sobrecarregada, tente em instantes.' }, 429);
-    if (err instanceof Anthropic.APIError) return json({ error: `Erro da IA (${err.status}): ${err.message}` }, 502);
-    return json({ error: (err as Error).message || 'Erro ao processar' }, 400);
+    return json({ error: 'Não foi possível concluir a consulta de IA.' }, 502);
   }
 });

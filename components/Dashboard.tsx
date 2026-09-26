@@ -116,7 +116,7 @@ const Dashboard: React.FC<DashboardProps> = ({ leads, notifications, currentUser
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '16px', border: 'none', shadow: 'none', fontWeight: 'bold' }} />
+                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: 'none', fontWeight: 'bold' }} />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'black', textTransform: 'uppercase' }} />
                 <Bar name="Leads Qualificados" dataKey="qualificados" fill="#0a192f" radius={[6, 6, 0, 0]} barSize={40} />
                 <Bar name="Contratos Fechados" dataKey="fechados" fill="#c5a059" radius={[6, 6, 0, 0]} barSize={40} />

@@ -1,0 +1,31 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.116.0"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.116.0": "a38014743786a06c7dbf095a99e9ef3b38c0ec16bff076fc7cd403991192b34e",
+    "https://esm.sh/@supabase/supabase-js@2.117.2": "6da4477d96ad4392b5a8be8f423384a3812cdd651df483e433ba422a69ff879b"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@anthropic-ai/sdk@0.128",
+        "npm:@electric-sql/pglite@~0.5.8",
+        "npm:@playwright/test@^1.63.0",
+        "npm:@supabase/supabase-js@^2.117.2",
+        "npm:@types/node@^22.14.0",
+        "npm:@types/react-dom@^19.3.0",
+        "npm:@types/react@^19.3.0",
+        "npm:@vitejs/plugin-react@5",
+        "npm:deno@^2.9.6",
+        "npm:react-dom@^19.2.4",
+        "npm:react@^19.2.4",
+        "npm:recharts@^3.7.0",
+        "npm:tsx@^4.23.15",
+        "npm:typescript@~5.8.2",
+        "npm:vite@^6.2.0"
+      ]
+    }
+  }
+}
