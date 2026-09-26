@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {supabase,initialPasswordRecovery,recoveryVerification} from '../lib/supabase';
 import DefinirSenha from './DefinirSenha';
 import {useDialog} from '../lib/useDialog';
-export interface Company {id:string;nome:string;registration:Record<string,string>;operating_role:string;can_manage:boolean;can_platform?:boolean;is_master?:boolean;}
+export interface Company {id:string;nome:string;registration:Record<string,string>;operating_role:string;can_manage:boolean;branding?:Record<string,string>;can_platform?:boolean;is_master?:boolean;}
 export interface WorkspaceProps {company?:Company;companies?:Company[];onCompanyChange?:(id:string)=>void;onCompaniesRefresh?:(id?:string)=>Promise<void>;}
 export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.ReactNode}){
  const [uid,setUid]=useState<string|null>(null),[ready,setReady]=useState(false),[loading,setLoading]=useState(false),[companies,setCompanies]=useState<Company[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState('');

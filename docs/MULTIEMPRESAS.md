@@ -12,7 +12,7 @@ O seletor **Empresa atual**, acima de todas as telas, define a operação aberta
 
 A administração da plataforma é uma autorização explícita em `crm.platform_admins`, separada do papel operacional ADMIN. A atualização preserva somente os administradores globais previamente confiáveis do workspace original. Novas concessões exigem operação administrativa no servidor; e-mail, convite e edição de perfil não promovem um usuário.
 
-O dono acessa **Administração da plataforma** para consultar empresas clientes, CNPJ, responsáveis master e quantidade de acessos. O painel é de cadastro administrativo; não concede acesso automático aos leads e atividades das empresas. Criar empresas continua disponível em **Gerenciar empresas** somente para o dono.
+O dono acessa **Administração da plataforma** para administrar empresas clientes, planos, contratos, limites, registros financeiros, acessos, suporte e configurações. O painel não concede acesso automático aos leads e atividades das empresas. O cadastro de empresas está disponível no painel e em **Gerenciar empresas**, somente para o dono.
 
 O **master** é um vínculo `is_master` explícito por empresa. Pode editar seus dados cadastrais e administrar usuários comuns daquele workspace, inclusive novos usuários em **Gestão de Usuários**. Não cria empresas da plataforma, não promove outros masters, não altera um vínculo master e não acessa o painel do dono. `assign_company_master(org, master_email)` é exclusivo do dono e exige identidade ativa já cadastrada. O papel ADMIN comum não equivale a master. A mesma identidade pode ser master em várias empresas.
 
@@ -39,7 +39,7 @@ Os dados existentes continuam em **Grupo Ciatos**, sem redistribuição automát
 
 O teste `companies.test.ts` executa migrations reais em PostgreSQL descartável e verifica cadastro, perfis por empresa, CNPJ composto, configurações/templates/metas independentes, bloqueio de links cruzados, tentativas de escalada e revogação em apenas uma empresa. O teste de interface usa o app completo com API simulada e cobre troca/cancelamento, gravação na empresa selecionada, seleção persistente, Central coerente e criação de operação vazia.
 
-Ainda não há transferência ou compartilhamento de clientes entre empresas, visão consolidada do grupo, múltiplos contratos por cliente, branding independente ou SDR conversacional completo. As regras atuais de colaboração dentro de uma empresa permanecem; o isolamento desta entrega é entre empresas. Endpoints externos não foram acionados com envios reais.
+Ainda não há transferência ou compartilhamento de clientes entre empresas, visão consolidada do grupo, múltiplos contratos por cliente, domínio próprio por empresa ou SDR conversacional completo. As regras atuais de colaboração dentro de uma empresa permanecem; o isolamento desta entrega é entre empresas. Endpoints externos não foram acionados com envios reais.
 
 No projeto compartilhado existente, as migrations anteriores do CRM foram aplicadas manualmente. Não executar db push indiscriminadamente contra esse projeto; conferir o histórico antes de futuras aplicações. A migration de multiempresas foi registrada individualmente após a execução transacional.
 
@@ -52,3 +52,7 @@ Novas contas criadas por `crm-admin-users` recebem a senha inicial definida pelo
 A ação autenticada `complete-password` muda a senha e remove a marca em uma única atualização administrativa, sempre na identidade do solicitante. A senha pessoal deve ter de 8 a 128 caracteres, maiúscula, minúscula e número; a senha inicial não é aceita. O frontend renova a sessão antes de carregar as empresas, conserva o formulário após erro e permite sair. A migration `20260926220000_first_password.sql` não altera senhas ou marcas de contas existentes. Publicar junto a função crm-admin-users e o frontend. Nenhum novo secret é necessário.
 
 Sessões emitidas com a marca de senha inicial permanecem bloqueadas pelo banco após a troca, até receberem um token atualizado. A liberação exige tanto a marca administrativa atual removida quanto um token sem a marca provisória.
+
+## Painel do proprietário
+
+A administração comercial da plataforma agora é feita em oito áreas descritas em [ADMINISTRACAO_PLATAFORMA.md](ADMINISTRACAO_PLATAFORMA.md): empresas, planos/limites, contratos, registros financeiros, usuários, suporte, histórico e configurações. A migration 20260926230000 preserva as empresas existentes como uso interno, sem preços atribuídos. Limites e suspensão são aplicados no servidor. A personalização inicial cobre nome de apresentação e cor; cobrança automática e white-label completo dependem de integrações adicionais.

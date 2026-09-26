@@ -1,0 +1,39 @@
+import {test,expect} from '@playwright/test';
+for(const width of [1440,390])test(`owner console completes administrative workflows at ${width}px`,async({page})=>{
+ test.setTimeout(90000);await page.setViewportSize({width,height:900});
+ const org='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ const snapshot:any={clients:[{id:org,nome:'Cliente Exemplo',registration:{cnpj:'11.222.333/0001-81'},branding:{},ativo:true,available:true,active_users:1,lead_count:0,master_email:'master@example.test',account:{status:'internal',onboarding:'ready',price_cents:0}}],plans:[],invoices:[],tickets:[],audit:[],settings:{product_name:'CRM Teste'}};
+ const calls:any[]=[];let fail=true;
+ await page.route('**/rest/v1/rpc/platform_console',async route=>{
+ const {action,payload}=route.request().postDataJSON();calls.push({action,payload});
+ if(action==='snapshot')return route.fulfill({json:snapshot});
+ if(action==='members')return route.fulfill({json:[{id:'22222222-2222-4222-8222-222222222222',nome:'Master Exemplo',email:'master@example.test',is_master:true,role:'ADMIN',active:true,profile_active:true}]});
+ if(action==='client_save'&&fail){fail=false;return route.fulfill({status:400,json:{message:'Falha temporária de teste'}});}
+ if(action==='client_save')snapshot.clients.push({id:payload.id,nome:payload.name,registration:{legalName:payload.legalName,cnpj:payload.cnpj},account:{status:'internal'},active_users:0,lead_count:0,available:true});
+ if(action==='plan_save')snapshot.plans.push({...payload,active:true});
+ if(action==='account_save')snapshot.clients.find((c:any)=>c.id===payload.organization_id).account=payload;
+ if(action==='invoice_save')snapshot.invoices.push({...payload,created_at:new Date().toISOString()});
+ if(action==='ticket_save')snapshot.tickets.push({...payload,updated_at:new Date().toISOString()});
+ if(action==='settings_save')snapshot.settings=payload;
+ snapshot.audit.unshift({id:calls.length,action,created_at:new Date().toISOString(),actor_email:'owner@example.test',details:{}});
+ return route.fulfill({json:{id:payload.id||org,ok:true}});
+ });
+ await page.route('**/functions/v1/crm-admin-users',route=>{calls.push({action:'create-user',payload:route.request().postDataJSON()});return route.fulfill({json:{contaExistente:false,user:{id:'new'}}});});
+ await page.goto('/tests/ui/?platform');
+ await expect(page.getByRole('heading',{name:'CRM Teste',exact:true})).toBeVisible();
+ await page.screenshot({path:`test-results/platform-overview-${width}.png`});
+ await page.getByRole('button',{name:'Planos e limites',exact:true}).click();await page.getByRole('button',{name:'+ Novo plano',exact:true}).click();
+ await page.getByLabel('Nome do plano *').fill('Profissional');await page.getByLabel('Preço mensal (R$)').fill('199.90');await page.getByLabel('Preço anual (R$)').fill('1990');await page.getByLabel('Limite de usuários ativos').fill('10');await page.getByLabel('Limite de contatos').fill('1000');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Profissional',exact:true})).toBeVisible();expect(calls.find(c=>c.action==='plan_save').payload.monthly_cents).toBe(19990);
+ await page.getByRole('button',{name:'Empresas clientes',exact:true}).click();await page.getByRole('button',{name:'+ Nova empresa',exact:true}).click();await page.getByLabel('Nome da empresa *').fill('Nova Empresa');await page.getByLabel('CNPJ',{exact:true}).fill('11222333000262');
+ await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Falha temporária');await expect(page.getByLabel('Nome da empresa *')).toHaveValue('Nova Empresa');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await expect(page.getByRole('heading',{name:'Nova Empresa',exact:true})).toBeVisible();
+ const client=page.getByRole('article').filter({hasText:'Cliente Exemplo'});await client.getByRole('button',{name:'Contrato',exact:true}).click();await page.getByLabel('Plano',{exact:true}).selectOption({label:'Profissional'});await page.getByLabel('Situação da assinatura').selectOption('active');await page.getByLabel('Valor contratado por período (R$)').fill('179');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();expect(calls.find(c=>c.action==='account_save').payload.price_cents).toBe(17900);
+ await client.getByRole('button',{name:'Acessos',exact:true}).click();await expect(page.getByText('Master Exemplo',{exact:true})).toBeVisible();await page.getByLabel('Nome do usuário',{exact:true}).fill('Pessoa Nova');await page.getByLabel('E-mail do usuário',{exact:true}).fill('pessoa@example.test');await page.getByRole('checkbox',{name:'Responsável master desta empresa'}).check();await page.getByRole('button',{name:'Salvar acesso',exact:true}).click();await expect(page.getByRole('status')).toContainText('troca obrigatória');expect(calls.find(c=>c.action==='create-user').payload.action).toBe('create-master');
+ await page.getByRole('button',{name:'Financeiro',exact:true}).click();await page.getByRole('button',{name:'+ Novo registro',exact:true}).click();await page.getByLabel('Referência *').fill('TEST-2026-10');await page.getByLabel('Descrição *').fill('Mensalidade');await page.getByLabel('Valor (R$)',{exact:true}).fill('179');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await expect(page.getByRole('cell').filter({hasText:'TEST-2026-10'})).toBeVisible();
+ await page.getByRole('button',{name:'Suporte',exact:true}).click();await page.getByRole('button',{name:'+ Novo atendimento',exact:true}).click();await page.getByLabel('Assunto *').fill('Configuração inicial');await page.getByLabel('Descrição do atendimento').fill('Orientar equipe');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await expect(page.getByRole('heading',{name:'Configuração inicial',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('button',{name:'Editar configurações'}).click();await page.getByLabel('E-mail de suporte').fill('support@example.test');await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await expect(page.getByText('support@example.test',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Histórico',exact:true}).click();await expect(page.getByRole('table')).toContainText('owner@example.test');
+ await page.getByRole('button',{name:'Empresas clientes',exact:true}).click();await page.getByRole('button',{name:'+ Nova empresa',exact:true}).click();await page.getByLabel('Nome da empresa *').fill('Rascunho');page.once('dialog',d=>d.dismiss());await page.getByRole('button',{name:'Cancelar',exact:true}).click();await expect(page.getByLabel('Nome da empresa *')).toHaveValue('Rascunho');page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Cancelar',exact:true}).click();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.getByRole('button',{name:'Visão geral',exact:true}).click();await page.screenshot({path:`test-results/platform-complete-${width}.png`});
+});

@@ -90,7 +90,8 @@ Deno.serve(async (req) => {
   if(accessError||!allowed)return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
 
   try {
-    if (p.action === 'create') {
+    if (p.action === 'create' || p.action === 'create-master') {
+      if(p.action==='create-master'){const {data:owner,error}=await asCaller.schema('crm').rpc('platform_admin');if(error||!owner)return json({error:'Somente o dono define usuários master.'},403);}
       const email = String(p.email ?? '').trim().toLowerCase();
       const nome = String(p.nome ?? '').trim();
       const papel = String(p.papel ?? 'SDR').toUpperCase();
@@ -123,7 +124,9 @@ Deno.serve(async (req) => {
       if(!existingProfile){
         const {error}=await admin.from('profiles').insert({id:userId,nome,email,papel:'SDR',departamento,ativo:true});if(error)throw error;
       }
-      const {error:eMember}=await asCaller.schema('crm').rpc('set_company_member',{org,member_email:email,member_role:papel,enabled:true});
+      const {error:eMember}=p.action==='create-master'
+        ?await asCaller.schema('crm').rpc('assign_company_master',{org,master_email:email})
+        :await asCaller.schema('crm').rpc('set_company_member',{org,member_email:email,member_role:papel,enabled:true});
       if(eMember)throw eMember;
 
       let link = origem;

@@ -14,7 +14,7 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
   if(req.method()==='OPTIONS')return route.fulfill({headers,status:200});
   if(url.pathname.includes('/rpc/')){
    const body=req.postDataJSON();
-   if(name==='platform_clients')return route.fulfill({headers,json:companies.map(c=>({...c,ativo:true,master_email:'master@example.test',active_users:1}))});
+   if(name==='platform_console')return route.fulfill({headers,json:{clients:companies.map(c=>({...c,ativo:true,master_email:'master@example.test',active_users:1,available:true,account:{status:'internal',onboarding:'ready'}})),plans:[],invoices:[],tickets:[],audit:[],settings:{}}});
    if(name==='save_company'){companies.push({id:c,nome:body.company_name,operating_role:'ADMIN',can_manage:true,can_platform:true,is_master:false,registration:body.details});return route.fulfill({headers,json:c});}
    return route.fulfill({headers,json:name==='my_companies'?companies:name==='company_users'?[profile]:name==='tenant_member'?true:null});
   }
@@ -43,6 +43,7 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
  await page.reload();await expect(page.getByLabel('Trocar empresa')).toHaveValue(c);
  await page.getByRole('button',{name:'Administração da plataforma',exact:true}).click();
  await expect(page.getByRole('dialog',{name:'Administração da plataforma'})).toBeVisible();
+ await page.getByRole('button',{name:'Empresas clientes',exact:true}).click();
  await page.getByLabel('Buscar empresa, CNPJ ou master').fill('CiatosLog');
  await expect(page.getByRole('article')).toHaveCount(1);
  await expect(page.getByRole('article')).toContainText('master@example.test');
