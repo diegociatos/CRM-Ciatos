@@ -1,1 +1,1 @@
-module.exports = { content: ['./index.html', './App.tsx', './components/**/*.{ts,tsx}', './tests/ui/**/*.{ts,tsx,html}'], theme: { extend: {} }, plugins: [] };
+module.exports = { content: ['./index.html', './App.tsx', './components/**/*.{ts,tsx}', './tests/ui/**/*.{ts,tsx,html}'], theme: { extend: { fontFamily: { sans: ['Book Antiqua', 'Palatino Linotype', 'Palatino', 'Georgia', 'serif'], serif: ['Book Antiqua', 'Palatino Linotype', 'Palatino', 'Georgia', 'serif'] } } }, plugins: [] };
