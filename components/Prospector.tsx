@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
-import { miningEngine } from '../services/miningService';
+import { MiningEngine } from '../services/miningService';
 
 interface ProspectorProps {
+  organizationId:string;
   onAddAsLead: (comp: any) => Promise<{ success: boolean; message: string }>;
   canImport: boolean;
   existingLeads: Lead[];
@@ -35,7 +36,8 @@ function miningParaLead(m: MiningLead): any {
   };
 }
 
-const Prospector: React.FC<ProspectorProps> =({ onAddAsLead, canImport, existingLeads }) => {
+const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canImport, existingLeads }) => {
+  const miningEngine=useMemo(()=>new MiningEngine(organizationId),[organizationId]);
   const [activeJobs, setActiveJobs] = useState<MiningJob[]>([]);
   const [showNewJobModal, setShowNewJobModal] = useState(false);
   const [inspectingJob, setInspectingJob] = useState<MiningJob | null>(null);
@@ -65,7 +67,7 @@ const Prospector: React.FC<ProspectorProps> =({ onAddAsLead, canImport, existing
     window.addEventListener('ciatos-mining-update', load);
     miningEngine.init();
     load();
-    return () => window.removeEventListener('ciatos-mining-update', load);
+    return () => {window.removeEventListener('ciatos-mining-update', load);miningEngine.dispose();};
   }, []);
 
   useEffect(() => {

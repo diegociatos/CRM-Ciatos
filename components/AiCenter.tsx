@@ -7,9 +7,9 @@ const button = 'rounded-lg px-3 py-2 bg-slate-100 text-slate-800 hover:bg-slate-
 const field = 'w-full rounded-lg border border-slate-300 px-3 py-2 bg-white';
 type Row = Record<string, any>;
 
-export default function AiCenter() {
+export default function AiCenter({workspace}:{workspace?:{id:string;nome:string}}={}) {
   const [organizations, setOrganizations] = useState<Row[]>([]);
-  const [org, setOrg] = useState('');
+  const [org, setOrg] = useState(workspace?.id||'');
   const [rows, setRows] = useState<Record<string, Row[]>>({});
   const [tab, setTab] = useState('attention');
   const [loading, setLoading] = useState(true);
@@ -27,6 +27,7 @@ export default function AiCenter() {
   const [form, setForm] = useState({ title: '', subject: '', body: '', days: 2 });
   const generation = useRef(0);
   useEffect(() => {
+    if(workspace){setOrganizations([workspace]);setOrg(workspace.id);return;}
     let active = true;
     supabase.from('organizations').select('id,nome,branding').order('nome').then(({ data, error }) => {
       if (!active) return;
@@ -34,7 +35,7 @@ export default function AiCenter() {
       else { setOrganizations(data || []); setOrg(data?.[0]?.id || ''); if (!data?.length) setLoading(false); }
     });
     return () => { active = false; };
-  }, []);
+  }, [workspace?.id]);
   const refresh = useCallback(async () => {
     if (!org) return;
     const version = ++generation.current;
@@ -78,7 +79,7 @@ export default function AiCenter() {
   return <section className="ai-center space-y-6 text-slate-800">
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div><p className="text-sm text-slate-500">{company?.branding?.displayName || company?.nome || 'CRM Ciatos'}</p><h1 className="text-3xl font-bold">Central da IA</h1><p className="text-slate-500 mt-1">Seu ponto de encontro com as oportunidades e decisões da operação.</p></div>
-      <div className="flex gap-2"><select aria-label="Empresa" disabled={busy} value={org} onChange={e => setOrg(e.target.value)} className={field}>{organizations.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}</select><button className={button} onClick={() => void refresh()}>Atualizar</button></div>
+      <div className="flex gap-2"><select aria-label="Empresa" disabled={busy||!!workspace} value={org} onChange={e => setOrg(e.target.value)} className={field}>{organizations.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}</select><button className={button} onClick={() => void refresh()}>Atualizar</button></div>
     </div>
     <div className="safe-banner"><strong>{policy?.live_enabled ? 'Envio autorizado na política da empresa' : 'Modo seguro: envio real desativado'}</strong><p className="text-sm mt-1">As inscrições desta tela são simulações: não enviam e-mail nem consultam IA. Ativação real exige configuração no servidor. Resolver um alerta não reinicia a cadência.</p></div>
     {error && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{error}</p>}

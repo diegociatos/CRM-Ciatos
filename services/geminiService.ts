@@ -15,11 +15,11 @@ async function chamarIA<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export const solveObjectionIA = (objection: string, lead: Lead, baseScriptBody?: string): Promise<ObjectionAnalysis> =>
-  chamarIA<ObjectionAnalysis>({ action: 'objecao', objecao: objection, lead, script: baseScriptBody });
+  chamarIA<ObjectionAnalysis>({ action: 'objecao',organization_id:lead.organizationId, objecao: objection, lead, script: baseScriptBody });
 
 export const personalizeMasterTemplateIA = (lead: Lead, template: MasterTemplate): Promise<{ subject: string; body: string }> =>
-  chamarIA({ action: 'email', lead, template });
+  chamarIA({ action: 'email',organization_id:lead.organizationId, lead, template });
 
 /** Processa uma "página" do Radar no servidor (busca + validação na Receita + gravação). */
-export const processarPaginaRadar = (jobId: string) =>
-  chamarIA<{ adicionadas: number; descartadas: number; status: string; foundCount: number }>({ action: 'radar', jobId });
+export const processarPaginaRadar = (jobId: string,organizationId:string) =>
+  chamarIA<{ adicionadas: number; descartadas: number; status: string; foundCount: number }>({ action: 'radar', jobId,organization_id:organizationId });

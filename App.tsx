@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import AiCenter from './components/AiCenter';
 import Header from './components/Header';
@@ -31,7 +31,8 @@ import {
 import { DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
 import { supabase } from './lib/supabase';
-import * as db from './services/db';
+import {createWorkspaceDb,roleDePapel} from './services/db';
+import {CompanyShell,CompanyManager,WorkspaceProps} from './components/CompanyWorkspace';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
@@ -75,7 +76,9 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
 
 type EstadoAuth = 'carregando' | 'deslogado' | 'sem_acesso' | 'ok';
 
-const App: React.FC = () => {
+const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onCompaniesRefresh}) => {
+  const db=useMemo(()=>createWorkspaceDb(company?.id||""),[company?.id]);
+  const [manageCompanies,setManageCompanies]=useState(false);
   const [nav, setNav] = useState<NavigationState>({ view: 'dashboard' });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
@@ -121,7 +124,8 @@ const App: React.FC = () => {
       ]);
       setLeads(ls);
       setUsers(us);
-      setConfig(cfg ? { ...DEFAULT_SYSTEM_CONFIG, ...cfg } as SystemConfig : DEFAULT_SYSTEM_CONFIG);
+      const base={...DEFAULT_SYSTEM_CONFIG,messaging:{...DEFAULT_SYSTEM_CONFIG.messaging,email:{...DEFAULT_SYSTEM_CONFIG.messaging.email,senderName:company?.nome||"Grupo Ciatos",senderEmail:"",emailSignature:company?.nome||"Grupo Ciatos"}}};
+      setConfig(cfg ? { ...base, ...cfg } as SystemConfig : base);
       setScripts(scr);
       setTemplates(tpl.length ? tpl : DEFAULT_ONBOARDING_TEMPLATES);
       setUserGoals(metas);
@@ -150,7 +154,7 @@ const App: React.FC = () => {
           setEstadoAuth('sem_acesso');
           return;
         }
-        setRealUser(perfil);
+        setRealUser(company?{...perfil,role:roleDePapel(company.operating_role)}:perfil);
         setEstadoAuth('ok');
       } catch (e) {
         erro(e);
@@ -169,7 +173,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (estadoAuth === 'ok') carregarTudo();
+    if (estadoAuth === 'ok' && company) carregarTudo();
   }, [estadoAuth, carregarTudo]);
 
   const handleLogin = async (email: string, pass: string) => {
@@ -215,6 +219,7 @@ const App: React.FC = () => {
   const handleAddLead = async (leadData: any) => {
     const newLead: Lead = {
       ...leadData,
+      organizationId:company?.id,
       id: db.isUuid(leadData.id) ? leadData.id : db.novoId(),
       status: leadData.status || LeadStatus.QUALIFICATION,
       phaseId: leadData.phaseId || 'ph-qualificado',
@@ -357,13 +362,13 @@ const App: React.FC = () => {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} onNavigate={v => setNav({view:v})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
-      case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
+      case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
-      case 'prospecting': return <Prospector onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
+      case 'prospecting': return <Prospector organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
       case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
-      case 'ai_center': return <AiCenter />;
+      case 'ai_center': return <AiCenter workspace={company} />;
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
@@ -381,15 +386,17 @@ const App: React.FC = () => {
   return (
     <div className={`crm-app min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex text-slate-900`}>
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
-      <Sidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
+      <Sidebar companyName={company?.nome} mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
         <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
+          {company&&<section className="company-switcher" aria-label="Empresa em operação"><label><span>Empresa atual</span><select aria-label="Trocar empresa" value={company.id} onChange={e=>onCompanyChange?.(e.target.value)}>{companies.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</select></label><p>Clientes e operação de <strong>{company.nome}</strong></p>{company.can_manage&&<button className="ux-secondary" onClick={()=>setManageCompanies(true)}>Gerenciar empresas</button>}</section>}
           {appNotice && <div className="app-notice" role="status"><span>{appNotice}</span><button aria-label="Fechar mensagem" onClick={()=>setAppNotice('')}>✕</button></div>}
           {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}
           <Suspense fallback={<div className="view-loading" role="status">Carregando seu espaço…</div>}>{renderView()}</Suspense>
         </main>
       </div>
+      {manageCompanies&&company&&onCompaniesRefresh&&<CompanyManager company={company} onClose={()=>setManageCompanies(false)} onRefresh={onCompaniesRefresh}/>}
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && realUser && <UserProfileModal user={realUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
       {selectedLead && <Suspense fallback={<div role="status" className="view-loading">Abrindo contato…</div>}><LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} /></Suspense>}
@@ -397,4 +404,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+export default function WorkspaceApplication(){return <CompanyShell>{props=><App {...props}/>}</CompanyShell>;}

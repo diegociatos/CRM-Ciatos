@@ -3,6 +3,7 @@ import React from 'react';
 import { NavigationState, UserRole } from '../types';
 
 interface SidebarProps {
+  companyName?:string;
   mobileOpen: boolean;
   onClose: () => void;
   currentView: NavigationState['view'];
@@ -12,7 +13,7 @@ interface SidebarProps {
   canCreate: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ companyName="Grupo Ciatos", mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
   const menuItems = [
     {id:'help',label:'Ajuda e passo a passo',icon:'M9 9a3 3 0 016 0c0 2-3 2-3 4m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',roles:Object.values(UserRole)},
     { id: 'ai_center', label: 'Central da IA', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', roles: Object.values(UserRole) },
@@ -43,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, currentView, set
     {mobileOpen && <button className="nav-backdrop md:hidden" aria-label="Fechar navegação" onClick={onClose}/>}
     <aside className={`crm-sidebar ${mobileOpen ? 'flex' : 'hidden'} md:flex`} aria-label="Navegação principal" onKeyDown={e => {if(e.key === 'Escape') onClose();}}>
       <div className="brand-lockup"><img src="/ciatos-mark.svg" alt=""/><div><span>ciatos<span className="brand-dot">.</span></span><small>RELACIONAMENTOS & NEGÓCIOS</small></div><button aria-label="Fechar menu" onClick={onClose} className="md:hidden ml-auto p-2">✕</button></div>
-      <div className="workspace-label"><span className="workspace-avatar">GC</span><div><strong>Grupo Ciatos</strong><small>Seu espaço de crescimento</small></div></div>
+      <div className="workspace-label"><span className="workspace-avatar">GC</span><div><strong>{companyName}</strong><small>Seu espaço de crescimento</small></div></div>
       {canCreate && <button onClick={onOpenNewLead} className="nav-create"><span aria-hidden="true">＋</span> Novo Lead</button>}
       <nav className="nav-groups">{groups.map(group => {
         const items = group.ids.map(id => menuItems.find(item => item.id===id)!).filter(item => item.roles.includes(role));

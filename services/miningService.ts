@@ -17,7 +17,10 @@ interface MLeadRow { id: string; job_id: string; cnpj_raw: string | null; import
 const jobDeRow = (r: JobRow): MiningJob => ({ ...r.dados, id: r.id, status: r.status as MiningJob['status'], createdAt: r.created_at, updatedAt: r.updated_at });
 const leadDeRow = (r: MLeadRow): MiningLead => ({ ...r.dados, id: r.id, jobId: r.job_id, cnpjRaw: r.cnpj_raw || '', isImported: r.imported, createdAt: r.created_at });
 
-class MiningEngine {
+export class MiningEngine {
+  constructor(private organizationId:string){}
+  private disposed=false;
+  public dispose(){this.disposed=true;this.workers.clear();this.jobs=[];this.leads={};}
   private jobs: MiningJob[] = [];
   private leads: Record<string, MiningLead[]> = {};
   private workers = new Set<string>();
@@ -26,7 +29,7 @@ class MiningEngine {
   /** Carrega as buscas e retoma as que estão rodando. Idempotente. */
   public async init() {
     await this.refresh();
-    if (this.iniciado) return;
+    if (this.iniciado||this.disposed) return;
     this.iniciado = true;
     this.jobs.filter(j => j.status === 'Running').forEach(j => this.startWorker(j.id));
   }
@@ -40,15 +43,16 @@ class MiningEngine {
   }
 
   public async refresh() {
-    const { data, error } = await supabase.from('mining_jobs').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('mining_jobs').select('*').eq('organization_id',this.organizationId).order('created_at', { ascending: false });
     if (error) { console.error('[Radar]', error.message); return; }
+    if(this.disposed)return;
     this.jobs = (data as JobRow[]).map(jobDeRow);
     emitir();
   }
 
   public async loadLeads(jobId: string) {
     const { data, error } = await supabase.from('mining_leads').select('*')
-      .eq('job_id', jobId).eq('imported', false).order('created_at', { ascending: false }).limit(1000);
+      .eq('organization_id',this.organizationId).eq('job_id', jobId).eq('imported', false).order('created_at', { ascending: false }).limit(1000);
     if (error) { console.error('[Radar]', error.message); return; }
     this.leads[jobId] = (data as MLeadRow[]).map(leadDeRow);
     emitir();
@@ -74,7 +78,7 @@ class MiningEngine {
       lastNotificationMilestone: 0,
     };
     const { data, error } = await supabase.from('mining_jobs')
-      .insert({ status: 'Running', created_by: u.user?.id ?? null, dados }).select().single();
+      .insert({ organization_id:this.organizationId,status: 'Running', created_by: u.user?.id ?? null, dados }).select().single();
     if (error) throw new Error(`Criar busca: ${error.message}`);
     const job = jobDeRow(data as JobRow);
     await this.refresh();
@@ -85,7 +89,7 @@ class MiningEngine {
   public async controlJob(jobId: string, action: 'pause' | 'resume' | 'cancel' | 'delete') {
     if (action === 'delete') {
       this.workers.delete(jobId);
-      const { error } = await supabase.from('mining_jobs').delete().eq('id', jobId);
+      const { error } = await supabase.from('mining_jobs').delete().eq('organization_id',this.organizationId).eq('id', jobId);
       if (error) alert(`Excluir busca: ${error.message}`);
       delete this.leads[jobId];
       await this.refresh();
@@ -94,7 +98,7 @@ class MiningEngine {
     const status = action === 'pause' ? 'Paused' : action === 'resume' ? 'Running' : 'Cancelled';
     const job = this.jobs.find(j => j.id === jobId);
     const { error } = await supabase.from('mining_jobs')
-      .update({ status, dados: { ...(job || {}), status } }).eq('id', jobId);
+      .update({ status, dados: { ...(job || {}), status } }).eq('organization_id',this.organizationId).eq('id', jobId);
     if (error) return alert(`Atualizar busca: ${error.message}`);
     await this.refresh();
     if (status === 'Running') this.startWorker(jobId);
@@ -106,21 +110,21 @@ class MiningEngine {
   }
 
   public async markAsImported(jobId: string, cnpjRaw: string) {
-    await supabase.from('mining_leads').update({ imported: true }).eq('job_id', jobId).eq('cnpj_raw', cnpjRaw);
+    await supabase.from('mining_leads').update({ imported: true }).eq('organization_id',this.organizationId).eq('job_id', jobId).eq('cnpj_raw', cnpjRaw);
     if (this.leads[jobId]) this.leads[jobId] = this.leads[jobId].map(l => l.cnpjRaw === cnpjRaw ? { ...l, isImported: true } : l);
     emitir();
   }
 
   /** Processa páginas em série (nunca duas ao mesmo tempo para o mesmo job). */
   private async startWorker(jobId: string) {
-    if (this.workers.has(jobId)) return;
+    if (this.disposed||this.workers.has(jobId)) return;
     this.workers.add(jobId);
     let falhasSeguidas = 0;
     while (this.workers.has(jobId)) {
       const job = this.jobs.find(j => j.id === jobId);
       if (!job || job.status !== 'Running') break;
       try {
-        const r = await processarPaginaRadar(jobId);
+        const r = await processarPaginaRadar(jobId,this.organizationId);
         falhasSeguidas = 0;
         await this.refresh();
         if (this.leads[jobId]) await this.loadLeads(jobId);
@@ -129,7 +133,7 @@ class MiningEngine {
         falhasSeguidas++;
         console.error('[Radar] página falhou:', e);
         if (falhasSeguidas >= 3) {
-          await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: String((e as Error).message || e) } }).eq('id', jobId);
+          await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: String((e as Error).message || e) } }).eq('organization_id',this.organizationId).eq('id', jobId);
           await this.refresh();
           alert(`A busca "${job.name}" foi interrompida: ${(e as Error).message}`);
           break;
@@ -141,5 +145,3 @@ class MiningEngine {
     this.workers.delete(jobId);
   }
 }
-
-export const miningEngine = new MiningEngine();

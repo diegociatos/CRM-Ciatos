@@ -80,12 +80,12 @@ Deno.serve(async (req) => {
   const admin = createClient(url, service, { db: { schema: 'crm' } });
   const { data: caller } = await admin.from('profiles').select('papel, ativo').eq('id', me.user.id).maybeSingle();
   if (!caller?.ativo || caller.papel !== 'ADMIN') return json({ error: 'Somente administradores do CRM gerenciam usuários' }, 403);
-  const legacyOrg = '00000000-0000-4000-8000-000000000001';
-  const { data: membership } = await admin.from('organization_members').select('papel').eq('organization_id', legacyOrg).eq('user_id', me.user.id).eq('ativo', true).maybeSingle();
-  if (membership?.papel !== 'ADMIN') return json({ error: 'Administração legada restrita ao Grupo Ciatos.' }, 403);
-
   let p: any;
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
+  const org=String(p.organization_id||'');
+  const {data:groupAdmin,error:groupError}=await asCaller.schema('crm').rpc('group_admin');
+  const {data:membership,error:membershipError}=await admin.from('organization_members').select('papel').eq('organization_id',org).eq('user_id',me.user.id).eq('ativo',true).maybeSingle();
+  if(groupError||!groupAdmin||membershipError||membership?.papel!=='ADMIN')return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
 
   try {
     if (p.action === 'create') {
@@ -106,10 +106,6 @@ Deno.serve(async (req) => {
         if (data.users.length < 1000) break;
       }
       const contaExistente = !!userId;
-      if (userId) {
-        const { data: tenants, error: tenantError } = await admin.from('organization_members').select('organization_id').eq('user_id',userId);
-        if (tenantError || tenants?.some(t => t.organization_id !== legacyOrg)) return json({ error: 'Gerencie este usuário pelo provisionamento multiempresa.' },403);
-      }
 
       if (!userId) {
         const { data: created, error } = await admin.auth.admin.createUser({
@@ -119,13 +115,14 @@ Deno.serve(async (req) => {
         userId = created.user!.id;
       }
 
-      const { error: eProf } = await admin.from('profiles').upsert(
-        { id: userId, nome, email, papel, departamento, ativo: true },
-        { onConflict: 'id' },
-      );
-      if (eProf) throw eProf;
-      const { error: eMember } = await admin.from('organization_members').upsert({ organization_id: legacyOrg, user_id: userId, papel: ['ADMIN','MANAGER'].includes(papel) ? 'ADMIN' : 'MEMBER', ativo: true });
-      if (eMember) throw eMember;
+      const {data:existingProfile,error:profileError}=await admin.from('profiles').select('id,ativo').eq('id',userId).maybeSingle();
+      if(profileError)throw profileError;
+      if(existingProfile&&!existingProfile.ativo)return json({error:'Perfil global desativado. Solicite revisão ao administrador.'},403);
+      if(!existingProfile){
+        const {error}=await admin.from('profiles').insert({id:userId,nome,email,papel:'SDR',departamento,ativo:true});if(error)throw error;
+      }
+      const {error:eMember}=await asCaller.schema('crm').rpc('set_company_member',{org,member_email:email,member_role:papel,enabled:true});
+      if(eMember)throw eMember;
 
       let link = origem;
       if (!contaExistente) {
@@ -141,26 +138,14 @@ Deno.serve(async (req) => {
       return json({ user: { id: userId }, contaExistente, emailEnviado, inviteLink: emailEnviado ? null : link });
     }
 
-    if (p.action === 'deactivate') {
-      const { data: memberships, error: memberError } = await admin.from('organization_members').select('organization_id').eq('user_id',p.id);
-      if (memberError || !memberships?.length || memberships.some(t=>t.organization_id!==legacyOrg)) return json({error:'Usuário fora deste workspace.'},403);
-      if (p.id === me.user.id) return json({ error: 'Você não pode desativar o próprio acesso' }, 400);
-      // Só tira o acesso ao CRM. A conta no auth continua (pode ser usada no Chekly).
-      const { error } = await admin.from('profiles').update({ ativo: false }).eq('id', p.id);
-      if (error) throw error;
-      return json({ ok: true });
-    }
-
-    if (p.action === 'set-role') {
-      const { data: memberships, error: memberError } = await admin.from('organization_members').select('organization_id').eq('user_id',p.id);
-      if (memberError || !memberships?.length || memberships.some(t=>t.organization_id!==legacyOrg)) return json({error:'Usuário fora deste workspace.'},403);
-      const papel = String(p.papel ?? '').toUpperCase();
-      if (!PAPEIS.includes(papel)) return json({ error: 'Papel inválido' }, 400);
-      const { error } = await admin.from('profiles').update({ papel }).eq('id', p.id);
-      if (error) throw error;
-      const { error: memberUpdateError } = await admin.from('organization_members').update({papel:['ADMIN','MANAGER'].includes(papel)?'ADMIN':'MEMBER'}).eq('organization_id',legacyOrg).eq('user_id',p.id);
-      if (memberUpdateError) throw memberUpdateError;
-      return json({ ok: true });
+    if(p.action==='deactivate'||p.action==='set-role'){
+      const {data:target,error}=await admin.from('profiles').select('email').eq('id',p.id).maybeSingle();
+      if(error||!target)return json({error:'Usuário não encontrado.'},404);
+      const {data:targetMember,error:targetError}=await admin.from('organization_members').select('operating_role').eq('organization_id',org).eq('user_id',p.id).eq('ativo',true).maybeSingle();
+      if(targetError||!targetMember)return json({error:'Usuário fora desta empresa.'},403);
+      const {error:changeError}=await asCaller.schema('crm').rpc('set_company_member',{org,member_email:target.email,member_role:p.action==='set-role'?String(p.papel):targetMember.operating_role,enabled:p.action!=='deactivate'});
+      if(changeError)throw changeError;
+      return json({ok:true});
     }
 
     return json({ error: 'Ação desconhecida' }, 400);

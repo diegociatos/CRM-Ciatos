@@ -30,6 +30,7 @@ const PAPEL_PARA_ROLE: Record<string, UserRole> = {
   CS: UserRole.CS,
   MARKETING: UserRole.MARKETING,
 };
+export const roleDePapel=(role:string):UserRole=>PAPEL_PARA_ROLE[role]||UserRole.SDR;
 export const roleParaPapel = (role: UserRole): string =>
   Object.keys(PAPEL_PARA_ROLE).find(k => PAPEL_PARA_ROLE[k] === role) || 'SDR';
 
@@ -106,6 +107,7 @@ function leadDeRow(r: LeadRow, interactions: Interaction[]): Lead {
     detailedPartners: [],
     ...(r.dados as any),
     id: r.id,
+    organizationId: (r as any).organization_id,
     name: r.nome || '',
     email: r.email || '',
     phone: r.telefone || '',
@@ -126,13 +128,15 @@ function leadDeRow(r: LeadRow, interactions: Interaction[]): Lead {
   };
 }
 
+export function createWorkspaceDb(organizationId:string) {
+ const requireCompany=()=>{if(!isUuid(organizationId))throw new Error("Selecione uma empresa para continuar.");return organizationId;};
 /** Busca todas as linhas paginando (PostgREST limita 1000 por request). */
 async function buscarTudo<T>(tabela: string, ordem: string, asc = false): Promise<T[]> {
   const passo = 1000;
   const out: T[] = [];
   for (let de = 0; ; de += passo) {
     const { data, error } = await supabase.from(tabela).select('*')
-      .order(ordem, { ascending: asc }).range(de, de + passo - 1);
+      .eq('organization_id', requireCompany()).order(ordem, { ascending: asc }).range(de, de + passo - 1);
     falhou(error, `Carregar ${tabela}`);
     out.push(...((data || []) as T[]));
     if (!data || data.length < passo) break;
@@ -140,7 +144,7 @@ async function buscarTudo<T>(tabela: string, ordem: string, asc = false): Promis
   return out;
 }
 
-export async function carregarLeads(): Promise<Lead[]> {
+async function carregarLeads(): Promise<Lead[]> {
   const [rows, inters] = await Promise.all([
     buscarTudo<LeadRow>('leads', 'created_at'),
     buscarTudo<InteractionRow>('interactions', 'created_at'),
@@ -154,21 +158,23 @@ export async function carregarLeads(): Promise<Lead[]> {
   return rows.map(r => leadDeRow(r, porLead.get(r.id) || []));
 }
 
-export async function salvarLead(lead: Lead): Promise<void> {
-  const { error } = await supabase.from('leads').upsert(leadParaRow(lead));
+async function salvarLead(lead: Lead): Promise<void> {
+  if ((lead as any).organizationId && (lead as any).organizationId!==requireCompany()) throw new Error('O lead pertence a outra empresa.');
+  const { error } = await supabase.from('leads').upsert({...leadParaRow(lead),organization_id:requireCompany()});
   if (error?.code === '23505') throw new Error('Já existe um lead com este CNPJ.');
   falhou(error, 'Salvar lead');
 }
 
-export async function excluirLead(id: string): Promise<void> {
-  const { error } = await supabase.from('leads').delete().eq('id', id);
+async function excluirLead(id: string): Promise<void> {
+  const { error } = await supabase.from('leads').delete().eq('organization_id',requireCompany()).eq('id', id);
   falhou(error, 'Excluir lead');
 }
 
-export async function registrarInteracao(leadId: string, inter: Interaction, autorId: string): Promise<void> {
+async function registrarInteracao(leadId: string, inter: Interaction, autorId: string): Promise<void> {
   const { id, type, title, content, author, authorId: _a, date: _d, scoreImpact, ...resto } = inter as any;
   const { error } = await supabase.from('interactions').insert({
     id: isUuid(id) ? id : novoId(),
+    organization_id: requireCompany(),
     lead_id: leadId,
     tipo: type,
     titulo: title || null,
@@ -184,19 +190,19 @@ export async function registrarInteracao(leadId: string, inter: Interaction, aut
 // ---------------------------------------------------------------------------
 // Usuários
 // ---------------------------------------------------------------------------
-export async function carregarPerfil(userId: string): Promise<User | null> {
+async function carregarPerfil(userId: string): Promise<User | null> {
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).eq('ativo', true).maybeSingle();
   falhou(error, 'Carregar perfil');
   return data ? profileParaUser(data as ProfileRow) : null;
 }
 
-export async function carregarUsuarios(): Promise<User[]> {
-  const { data, error } = await supabase.from('profiles').select('*').eq('ativo', true).order('nome');
+async function carregarUsuarios(): Promise<User[]> {
+  const { data, error } = await supabase.rpc('company_users',{org:requireCompany()});
   falhou(error, 'Carregar usuários');
   return (data as ProfileRow[]).map(profileParaUser);
 }
 
-export async function atualizarMeuPerfil(u: User): Promise<void> {
+async function atualizarMeuPerfil(u: User): Promise<void> {
   const { error } = await supabase.from('profiles')
     .update({ nome: u.name, avatar: u.avatar || null, departamento: u.department })
     .eq('id', u.id);
@@ -205,7 +211,7 @@ export async function atualizarMeuPerfil(u: User): Promise<void> {
 
 /** Criação/desativação de usuários passa pela Edge Function (service role). */
 async function adminUsers(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('crm-admin-users', { body });
+  const { data, error } = await supabase.functions.invoke('crm-admin-users', { body: {...body,organization_id:requireCompany()} });
   if (error) {
     let msg = error.message;
     try { msg = (await (error as any).context.json()).error || msg; } catch { /* sem corpo */ }
@@ -215,7 +221,7 @@ async function adminUsers(body: Record<string, unknown>) {
   return data;
 }
 
-export async function convidarUsuario(u: { name: string; email: string; role: UserRole; department: Department }) {
+async function convidarUsuario(u: { name: string; email: string; role: UserRole; department: Department }) {
   return adminUsers({
     action: 'create',
     nome: u.name,
@@ -226,21 +232,21 @@ export async function convidarUsuario(u: { name: string; email: string; role: Us
   }) as Promise<{ user: { id: string }; emailEnviado: boolean; inviteLink?: string }>;
 }
 
-export async function desativarUsuario(id: string) {
+async function desativarUsuario(id: string) {
   return adminUsers({ action: 'deactivate', id });
 }
 
 // ---------------------------------------------------------------------------
 // Configuração, scripts, templates, metas, agenda
 // ---------------------------------------------------------------------------
-export async function carregarConfig(): Promise<Partial<SystemConfig> | null> {
-  const { data, error } = await supabase.from('config').select('dados').eq('id', 1).maybeSingle();
+async function carregarConfig(): Promise<Partial<SystemConfig> | null> {
+  const { data, error } = await supabase.from('config').select('dados').eq('organization_id',requireCompany()).eq('id', 1).maybeSingle();
   falhou(error, 'Carregar configuração');
   const dados = data?.dados as Partial<SystemConfig> | undefined;
   return dados && Object.keys(dados).length ? dados : null;
 }
 
-export async function salvarConfig(cfg: SystemConfig, userId: string): Promise<void> {
+async function salvarConfig(cfg: SystemConfig, userId: string): Promise<void> {
   // Segredos de envio não ficam no banco legível pelo front: vão como secrets
   // das Edge Functions. Removemos apiKey/webhookSecret antes de gravar.
   const limpo: SystemConfig = {
@@ -251,63 +257,63 @@ export async function salvarConfig(cfg: SystemConfig, userId: string): Promise<v
       whatsapp: { ...cfg.messaging.whatsapp, apiKey: '' },
     },
   };
-  const { error } = await supabase.from('config').update({ dados: limpo, updated_by: userId }).eq('id', 1);
+  const { error } = await supabase.from('config').upsert({id:1,organization_id:requireCompany(),dados:limpo,updated_by:userId},{onConflict:'organization_id,id'});
   falhou(error, 'Salvar configuração');
 }
 
-export async function carregarScripts(): Promise<SalesScript[]> {
+async function carregarScripts(): Promise<SalesScript[]> {
   const rows = await buscarTudo<{ id: string; dados: SalesScript }>('scripts', 'created_at', true);
   return rows.map(r => ({ ...r.dados, id: r.id }));
 }
 
-export async function salvarScript(s: SalesScript): Promise<SalesScript> {
+async function salvarScript(s: SalesScript): Promise<SalesScript> {
   const id = isUuid(s.id) ? s.id : novoId();
   const script = { ...s, id };
-  const { error } = await supabase.from('scripts').upsert({ id, author_id: uuidOuNull(s.authorId), dados: script });
+  const { error } = await supabase.from('scripts').upsert({ id, organization_id:requireCompany(), author_id: uuidOuNull(s.authorId), dados: script });
   falhou(error, 'Salvar script');
   return script;
 }
 
-export async function excluirScript(id: string): Promise<void> {
-  const { error } = await supabase.from('scripts').delete().eq('id', id);
+async function excluirScript(id: string): Promise<void> {
+  const { error } = await supabase.from('scripts').delete().eq('organization_id',requireCompany()).eq('id', id);
   falhou(error, 'Excluir script');
 }
 
-export async function carregarTemplatesOnboarding(): Promise<OnboardingTemplate[]> {
+async function carregarTemplatesOnboarding(): Promise<OnboardingTemplate[]> {
   const rows = await buscarTudo<{ id: string; dados: OnboardingTemplate }>('onboarding_templates', 'id', true);
   return rows.map(r => ({ ...r.dados, id: r.id }));
 }
 
-export async function salvarTemplatesOnboarding(lista: OnboardingTemplate[]): Promise<void> {
+async function salvarTemplatesOnboarding(lista: OnboardingTemplate[]): Promise<void> {
   const atuais = await carregarTemplatesOnboarding();
   const manter = new Set(lista.map(t => t.id));
   const remover = atuais.filter(t => !manter.has(t.id)).map(t => t.id);
   if (lista.length) {
-    const { error } = await supabase.from('onboarding_templates').upsert(lista.map(t => ({ id: t.id, dados: t })));
+    const { error } = await supabase.from('onboarding_templates').upsert(lista.map(t => ({ id: t.id, organization_id:requireCompany(), dados: t })),{onConflict:'organization_id,id'});
     falhou(error, 'Salvar templates de onboarding');
   }
   if (remover.length) {
-    const { error } = await supabase.from('onboarding_templates').delete().in('id', remover);
+    const { error } = await supabase.from('onboarding_templates').delete().eq('organization_id',requireCompany()).in('id', remover);
     falhou(error, 'Remover templates de onboarding');
   }
 }
 
-export async function carregarMetas(): Promise<UserGoal[]> {
+async function carregarMetas(): Promise<UserGoal[]> {
   const rows = await buscarTudo<{ id: string; user_id: string; mes: number; ano: number; dados: UserGoal }>('user_goals', 'ano');
   return rows.map(r => ({ ...r.dados, id: r.id, userId: r.user_id, month: r.mes, year: r.ano }));
 }
 
-export async function salvarMetas(metas: UserGoal[]): Promise<void> {
+async function salvarMetas(metas: UserGoal[]): Promise<void> {
   const validas = metas.filter(g => isUuid(g.userId));
   if (!validas.length) return;
   const { error } = await supabase.from('user_goals').upsert(
-    validas.map(g => ({ user_id: g.userId, mes: g.month, ano: g.year, dados: g })),
-    { onConflict: 'user_id,mes,ano' },
+    validas.map(g => ({ organization_id:requireCompany(),user_id: g.userId, mes: g.month, ano: g.year, dados: g })),
+    { onConflict: 'organization_id,user_id,mes,ano' },
   );
   falhou(error, 'Salvar metas');
 }
 
-export async function carregarEventos(): Promise<AgendaEvent[]> {
+async function carregarEventos(): Promise<AgendaEvent[]> {
   const rows = await buscarTudo<{ id: string; titulo: string; inicio: string; fim: string | null; assigned_to_id: string | null; lead_id: string | null; creator_id: string | null; dados: AgendaEvent }>('agenda_events', 'inicio', true);
   return rows.map(r => ({
     ...r.dados,
@@ -321,11 +327,12 @@ export async function carregarEventos(): Promise<AgendaEvent[]> {
   }));
 }
 
-export async function salvarEvento(e: AgendaEvent): Promise<AgendaEvent> {
+async function salvarEvento(e: AgendaEvent): Promise<AgendaEvent> {
   const id = isUuid(e.id) ? e.id : novoId();
   const evento = { ...e, id };
   const { error } = await supabase.from('agenda_events').upsert({
     id,
+    organization_id:requireCompany(),
     titulo: e.title,
     inicio: e.start,
     fim: e.end || null,
@@ -338,7 +345,10 @@ export async function salvarEvento(e: AgendaEvent): Promise<AgendaEvent> {
   return evento;
 }
 
-export async function excluirEvento(id: string): Promise<void> {
-  const { error } = await supabase.from('agenda_events').delete().eq('id', id);
+async function excluirEvento(id: string): Promise<void> {
+  const { error } = await supabase.from('agenda_events').delete().eq('organization_id',requireCompany()).eq('id', id);
   falhou(error, 'Excluir evento');
+}
+
+return {isUuid,novoId,carregarLeads,salvarLead,excluirLead,registrarInteracao,carregarPerfil,carregarUsuarios,atualizarMeuPerfil,convidarUsuario,desativarUsuario,carregarConfig,salvarConfig,carregarScripts,salvarScript,excluirScript,carregarTemplatesOnboarding,salvarTemplatesOnboarding,carregarMetas,salvarMetas,carregarEventos,salvarEvento,excluirEvento};
 }

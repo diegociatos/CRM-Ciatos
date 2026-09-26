@@ -138,6 +138,7 @@ export interface SuccessTask { id: string; title: string; dueDate: string; statu
 export interface CustomerFeedbackPoint { id: string; type: string; text: string; date: string; authorName: string; }
 
 export interface Lead {
+  organizationId?: string;
   id: string;
   name: string; 
   email: string; 

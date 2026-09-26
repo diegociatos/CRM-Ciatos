@@ -18,10 +18,13 @@
         "npm:@types/react-dom@^19.3.0",
         "npm:@types/react@^19.3.0",
         "npm:@vitejs/plugin-react@5",
+        "npm:autoprefixer@^10.6.1",
         "npm:deno@^2.9.6",
+        "npm:postcss@^8.5.28",
         "npm:react-dom@^19.2.4",
         "npm:react@^19.2.4",
         "npm:recharts@^3.7.0",
+        "npm:tailwindcss@^3.4.17",
         "npm:tsx@^4.23.15",
         "npm:typescript@~5.8.2",
         "npm:vite@^6.2.0"

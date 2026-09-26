@@ -41,3 +41,5 @@ body, body * { font-family: "Book Antiqua", "Palatino Linotype", Palatino, Georg
  .qualification-table td:last-child>div{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;align-items:stretch}
  .qualification-table td:last-child button{display:flex;align-items:center;gap:6px}
 }
+
+.company-switcher{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid #dedbd1;border-radius:16px;padding:16px;margin-bottom:24px}.company-switcher label{display:flex;flex-direction:column;gap:5px}.company-switcher label span{font-size:12px;color:#64748b}.company-switcher select{font-size:18px;color:#123039;max-width:100%;background:#f7f8f5;padding:10px;border:1px solid #ddd;border-radius:8px}.company-switcher p{flex:1;font-size:14px;color:#64748b}@media(max-width:600px){.company-switcher label,.company-switcher select{width:100%}.company-switcher p{flex-basis:100%}}

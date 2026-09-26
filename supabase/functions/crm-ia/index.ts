@@ -149,7 +149,7 @@ async function consultarReceita(cnpj: string): Promise<any | null> {
 
 async function radar(p: any, db: SupabaseClient<any, any, any>) {
   const jobId = String(p.jobId || '');
-  const { data: job, error: eJob } = await db.from('mining_jobs').select('*').eq('id', jobId).maybeSingle();
+  const { data: job, error: eJob } = await db.from('mining_jobs').select('*').eq('organization_id',p.organization_id).eq('id', jobId).maybeSingle();
   if (eJob || !job) throw new Error('Busca do Radar não encontrada.');
   const f = (job.dados?.filters || {}) as Record<string, string>;
 
@@ -187,7 +187,7 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
   const jaNoCrm = new Set<string>();
   const jaNoJob = new Set<string>();
   if (cnpjs.length) {
-    const { data: l1 } = await db.from('leads').select('cnpj_raw').in('cnpj_raw', cnpjs);
+    const { data: l1 } = await db.from('leads').select('cnpj_raw').eq('organization_id',p.organization_id).in('cnpj_raw', cnpjs);
     (l1 || []).forEach((r: any) => jaNoCrm.add(r.cnpj_raw));
     const { data: l2 } = await db.from('mining_leads').select('cnpj_raw').eq('job_id', jobId).in('cnpj_raw', cnpjs);
     (l2 || []).forEach((r: any) => jaNoJob.add(r.cnpj_raw));
@@ -206,6 +206,7 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
     const socios: string[] = (rf.qsa || []).map((s: any) => s.nome_socio).filter(Boolean);
     const telefoneRf = fmtTel(String(rf.ddd_telefone_1 || ''));
     novos.push({
+      organization_id: p.organization_id,
       job_id: jobId,
       cnpj_raw: cnpj,
       dados: {
@@ -278,15 +279,17 @@ Deno.serve(async (req) => {
   });
   const { data: me } = await db.auth.getUser();
   if (!me?.user) return json({ error: 'Não autenticado' }, 401);
-  const { data: membro } = await db.rpc('eh_membro');
-  if (!membro) return json({ error: 'Sem acesso ao CRM' }, 403);
-
   let p: any;
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
-
+  const {data:membro,error:memberError}=await db.rpc('tenant_member',{org:p.organization_id,admin_only:false});
+  if(memberError||!membro)return json({error:'Sem acesso à empresa.'},403);
+  if(p.action!=='radar'){
+    const {data:lead,error}=await db.from('leads').select('id').eq('organization_id',p.organization_id).eq('id',p.lead?.id).maybeSingle();
+    if(error||!lead)return json({error:'Lead fora desta empresa.'},403);
+  }
   if (!['objecao','email','radar'].includes(p.action)) return json({ error: 'Ação desconhecida' },400);
   const audit = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'crm' } });
-  const { data: runId, error: quotaError } = await audit.rpc('reserve_ai_run', { org: '00000000-0000-4000-8000-000000000001', lid: null });
+  const { data: runId, error: quotaError } = await audit.rpc('reserve_ai_run', { org: p.organization_id, lid: null });
   if (quotaError) return json({ error: 'Limite de consultas de IA atingido ou configuração indisponível.' },429);
   try {
     const result = p.action === 'objecao' ? await objecao(p) : p.action === 'email' ? await email(p) : await radar(p,db);
