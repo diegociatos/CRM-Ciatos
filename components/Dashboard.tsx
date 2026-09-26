@@ -1,154 +1,35 @@
-
-import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Lead, LeadStatus, Notification, User, UserRole, AgendaEvent } from '../types';
-
+import React from 'react';
+import { Lead, LeadStatus, Notification, User, AgendaEvent, NavigationState } from '../types';
 interface DashboardProps {
-  leads: Lead[];
-  tasks: any[];
-  notifications: Notification[];
-  currentUser: User;
-  agendaEvents?: AgendaEvent[];
+  leads: Lead[]; tasks: any[]; notifications: Notification[]; currentUser: User;
+  agendaEvents?: AgendaEvent[]; onNavigate?: (view: NavigationState['view']) => void; onCreate?: () => void;
 }
-
-const Dashboard: React.FC<DashboardProps> = ({ leads, notifications, currentUser, agendaEvents = [] }) => {
-  // Helper para parsing de valores financeiros (R$ 1.000,00 -> 1000)
-  const parseCurrency = (val: string) => {
-    if (!val) return 0;
-    return parseFloat(val.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-  };
-
-  const dashboardMetrics = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    // 1. Pipeline Total (Faturamento Est. de Leads em fases comerciais)
-    const commercialLeads = leads.filter(l => !l.inQueue && [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.NEGOTIATION, LeadStatus.WON].includes(l.status));
-    const pipelineTotal = commercialLeads
-      .filter(l => l.phaseId !== 'ph-fech') // Não somar o que já fechou como "oportunidade"
-      .reduce((acc, l) => acc + parseCurrency(l.annualRevenue), 0);
-
-    // 2. Taxa de Conversão (Reunião -> Proposta)
-    const inMeeting = leads.filter(l => l.phaseId === 'ph-agend').length;
-    const inProposal = leads.filter(l => l.phaseId === 'ph-prop' || l.phaseId === 'ph-nego' || l.phaseId === 'ph-fech').length;
-    const convRate = inMeeting > 0 ? (inProposal / (inMeeting + inProposal)) * 100 : 0;
-
-    // 3. Ações do Dia
-    const actionsToday = agendaEvents.filter(e => e.start.startsWith(today) && e.assignedToId === currentUser.id).length;
-
-    // 4. Contratos do Mês
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthlyContracts = leads.filter(l => {
-      const d = new Date(l.createdAt);
-      return l.status === LeadStatus.WON && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    }).length;
-
-    return { pipelineTotal, convRate, actionsToday, monthlyContracts };
-  }, [leads, agendaEvents, currentUser.id]);
-
-  // Dados para o Gráfico de Evolução (Qualificados vs Fechados)
-  const chartData = [
-    { name: 'Semana 1', qualificados: 8, fechados: 2 },
-    { name: 'Semana 2', qualificados: 12, fechados: 4 },
-    { name: 'Semana 3', qualificados: 15, fechados: 3 },
-    { name: 'Semana 4', qualificados: leads.filter(l => !l.inQueue).length % 20, fechados: dashboardMetrics.monthlyContracts },
+const Arrow = () => <span aria-hidden="true">↗</span>;
+export default function Dashboard({leads,currentUser,agendaEvents=[],onNavigate,onCreate}:DashboardProps) {
+  const active = leads.filter(l => !l.inQueue && l.status!==LeadStatus.WON && l.status!==LeadStatus.LOST);
+  const clients = leads.filter(l => l.status===LeadStatus.WON);
+  const queued = leads.filter(l => l.inQueue && l.status!==LeadStatus.LOST && l.status!==LeadStatus.WON);
+  const upcoming = agendaEvents.filter(e => e.assignedToId===currentUser.id && new Date(e.end).getTime()>=Date.now()).sort((a,b)=>new Date(a.start).getTime()-new Date(b.start).getTime()).slice(0,3);
+  const stages = [
+    {label:'Em qualificação', count:queued.length, color:'#879caa'},
+    {label:'Em relacionamento',count:active.filter(l=>!['ph-prop','ph-nego'].includes(l.phaseId)).length,color:'#6c9490'},
+    {label:'Proposta e negociação',count:active.filter(l=>['ph-prop','ph-nego'].includes(l.phaseId)).length,color:'#ba965c'},
+    {label:'Clientes conquistados',count:clients.length,color:'#193b40'},
   ];
-
-  return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      {/* HEADER DE BOAS-VINDAS */}
-      <div className="flex justify-between items-end border-b border-slate-200 pb-8">
-        <div>
-          <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Performance Comercial</h1>
-          <p className="text-slate-500 text-lg font-medium">Gestor: <span className="text-[#c5a059] font-black uppercase text-sm">{currentUser.name}</span></p>
-        </div>
-        <div className="bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-lg shadow-emerald-500/20"></div>
-           <span className="text-[10px] font-black text-[#0a192f] uppercase tracking-[0.2em]">Ciatos Intelligence Live</span>
-        </div>
-      </div>
-
-      {/* QUADRO DE INDICADORES (TOP CARDS) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        <div className="bg-[#0a192f] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#c5a059]/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
-          <p className="text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-4">Pipeline Ativo</p>
-          <p className="text-3xl font-black serif-authority mb-2">R$ {(dashboardMetrics.pipelineTotal / 1000000).toFixed(1)}M</p>
-          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Valor sob custódia comercial</p>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Eficiência de Proposta</p>
-          <p className="text-4xl font-black text-indigo-600 serif-authority">{dashboardMetrics.convRate.toFixed(1)}%</p>
-          <div className="mt-4 h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-600" style={{ width: `${dashboardMetrics.convRate}%` }}></div>
-          </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Ações p/ Hoje</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-4xl font-black text-[#0a192f] serif-authority">{dashboardMetrics.actionsToday}</p>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Eventos</p>
-          </div>
-          <p className="text-[9px] text-emerald-500 font-black uppercase tracking-widest mt-4">Disponibilidade de Agenda</p>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Contratos (Mês)</p>
-          <p className="text-4xl font-black text-emerald-500 serif-authority">{dashboardMetrics.monthlyContracts}</p>
-          <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest mt-4">Meta Mensal: 10</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* GRÁFICO DE EVOLUÇÃO */}
-        <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-               <h3 className="text-xl font-bold text-[#0a192f] serif-authority tracking-tight">Evolução do Funil Comercial</h3>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Leads Qualificados vs Fechamentos</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} barGap={12}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: 'none', fontWeight: 'bold' }} />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'black', textTransform: 'uppercase' }} />
-                <Bar name="Leads Qualificados" dataKey="qualificados" fill="#0a192f" radius={[6, 6, 0, 0]} barSize={40} />
-                <Bar name="Contratos Fechados" dataKey="fechados" fill="#c5a059" radius={[6, 6, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* FEED DE ATIVIDADES (AUDITORIA LIVE) */}
-        <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
-            <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-sm font-black text-[#0a192f] uppercase tracking-widest serif-authority">Fluxo de Atividades</h3>
-              <span className="text-[9px] font-black text-[#c5a059] bg-amber-50 px-2 py-1 rounded shadow-sm">LIVE</span>
-            </div>
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
-              {notifications.length > 0 ? notifications.slice(0, 10).map((note) => (
-                <div key={note.id} className="p-6 hover:bg-slate-50 transition group cursor-default">
-                   <div className="flex items-center gap-3 mb-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${note.type === 'success' ? 'bg-emerald-500' : note.type === 'warning' ? 'bg-amber-500' : 'bg-indigo-500'}`}></div>
-                      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{note.timestamp}</p>
-                   </div>
-                   <p className="text-xs font-bold text-[#0a192f] leading-snug group-hover:text-[#c5a059] transition-colors">{note.title}</p>
-                   <p className="text-[10px] text-slate-400 mt-1 line-clamp-1">{note.message}</p>
-                </div>
-              )) : (
-                <div className="h-full flex items-center justify-center p-10 opacity-20 italic text-sm font-bold">Aguardando novos eventos...</div>
-              )}
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Dashboard;
+  const max = Math.max(1,...stages.map(s=>s.count));
+  return <div className="overview">
+    <div className="page-heading"><div><p className="eyebrow">VISÃO GERAL</p><h1>Seu próximo negócio começa aqui<span>.</span></h1><p>Olá, {currentUser.name.split(' ')[0]}. Um lugar para cuidar de cada relacionamento.</p></div><time className="date-chip">{new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}</time></div>
+    <section className="overview-hero" aria-label="Central de relacionamento"><div className="hero-copy"><span className="hero-kicker"><span className="gold-dot"/> INTELIGÊNCIA COMERCIAL CIATOS</span><h2>Mais conexões.<br/><em>Novas possibilidades.</em></h2><p>Organize sua carteira, acompanhe as cadências e entre na conversa quando sua atenção fizer a diferença.</p><div className="hero-actions"><button className="btn-gold" onClick={()=>onNavigate?.('ai_center')}>Abrir Central da IA <Arrow/></button><button className="hero-link" onClick={()=>onNavigate?.('customers')}>Ver clientes do grupo →</button></div></div><div className="hero-journey" aria-label="Etapas do relacionamento"><div className="journey-line"/>{[['01','Conhecer','Clientes e suas necessidades'],['02','Conectar','Oportunidades entre serviços'],['03','Conversar','Sua experiência no momento certo']].map(([n,title,sub])=><div className="journey-step" key={n}><span>{n}</span><div><strong>{title}</strong><p>{sub}</p></div></div>)}</div></section>
+    <div className="overview-metrics">{[
+      {label:'Relacionamentos na base',value:leads.length,note:'Todos os contatos cadastrados',view:'qualification',symbol:'◎'},
+      {label:'Clientes do grupo',value:clients.length,note:'Negócios marcados como ganhos',view:'customers',symbol:'◇'},
+      {label:'Oportunidades abertas',value:active.length,note:'No pipeline comercial',view:'kanban',symbol:'↗'},
+      {label:'Aguardando qualificação',value:queued.length,note:'Contatos na fila de entrada',view:'qualification',symbol:'≋'},
+    ].map(m=><button key={m.label} className="metric-card" onClick={()=>onNavigate?.(m.view as NavigationState['view'])}><div><span>{m.label}</span><i aria-hidden="true">{m.symbol}</i></div><strong>{m.value.toLocaleString('pt-BR')}</strong><p>{m.note} <span aria-hidden="true">→</span></p></button>)}</div>
+    <div className="overview-grid"><section className="surface pipeline-summary"><div className="section-title"><div><p className="eyebrow">DO PRIMEIRO CONTATO À PARCERIA</p><h2>Relacionamentos em movimento</h2></div><button className="text-action" onClick={()=>onNavigate?.('kanban')}>Ver pipeline <Arrow/></button></div><p className="section-description">Distribuição atual da sua base. Cada etapa, uma próxima ação.</p><div className="stage-list">{stages.map((s,i)=><div className="stage-row" key={s.label}><span className="stage-number">0{i+1}</span><span>{s.label}</span><div className="stage-track"><div style={{width:`${s.count/max*100}%`,background:s.color}}/></div><strong>{s.count}</strong></div>)}</div>{leads.length===0 && <div className="inline-empty"><span>Comece pelo primeiro relacionamento.</span><button onClick={onCreate}>Cadastrar lead →</button></div>}</section>
+    <section className="surface attention-card"><span className="attention-symbol" aria-hidden="true">✦</span><p className="eyebrow">SUA EXPERIÊNCIA FAZ A DIFERENÇA</p><h2>Precisa de você</h2><p>Acompanhe os contatos encaminhados para atendimento e as decisões que merecem seu olhar.</p><button className="btn-navy" onClick={()=>onNavigate?.('ai_center')}>Ver fila de atendimento <Arrow/></button><small>A fila também reúne exceções e revisões, além de oportunidades.</small></section></div>
+    <div className="overview-grid bottom-grid"><section className="surface"><div className="section-title"><div><p className="eyebrow">CONTINUIDADE NO RELACIONAMENTO</p><h2>Seus próximos encontros</h2></div><button className="text-action" onClick={()=>onNavigate?.('agenda')}>Abrir agenda <Arrow/></button></div>{upcoming.length ? <div className="meeting-list">{upcoming.map(e=><button key={e.id} onClick={()=>onNavigate?.('agenda')}><span>{new Date(e.start).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</span><div><strong>{e.title}</strong><small>{new Date(e.start).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</small></div><Arrow/></button>)}</div> : <div className="agenda-empty"><span className="empty-calendar" aria-hidden="true">▦</span><div><h3>Espaço para boas conversas</h3><p>Nenhum compromisso futuro na sua agenda.</p><button className="text-action" onClick={()=>onNavigate?.('agenda')}>Organizar minha agenda →</button></div></div>}</section>
+    <section className="surface ecosystem-card"><p className="eyebrow">UM GRUPO. MÚLTIPLAS POSSIBILIDADES.</p><h2>Conexões dentro de casa</h2><p>Conheça a carteira antes de planejar a próxima oferta.</p><div className="service-tags">{['Contabilidade','Jurídico','Consultoria','Ciatos Bank','Racionaliza','CiatosLog','Cafeworking'].map(name=><span key={name}>{name}</span>)}</div><button className="text-action" onClick={()=>onNavigate?.('customers')}>Explorar clientes ativos <Arrow/></button></section></div>
+    <footer className="overview-footer"><span>CIATOS · RELACIONAMENTOS & NEGÓCIOS</span><span>Crescimento começa com bons relacionamentos.</span></footer>
+  </div>;
+}

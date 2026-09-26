@@ -1,25 +1,25 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import AiCenter from './components/AiCenter';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
-import ExecutiveDashboard from './components/ExecutiveDashboard';
-import KanbanBoard from './components/KanbanBoard';
-import Prospector from './components/Prospector';
-import QualificationQueue from './components/QualificationQueue';
-import Settings from './components/Settings';
-import LeadDetails from './components/LeadDetails';
+const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
+const KanbanBoard = lazy(() => import('./components/KanbanBoard'));
+const Prospector = lazy(() => import('./components/Prospector'));
+const QualificationQueue = lazy(() => import('./components/QualificationQueue'));
+const Settings = lazy(() => import('./components/Settings'));
+const LeadDetails = lazy(() => import('./components/LeadDetails'));
 import NewLeadForm from './components/NewLeadForm';
-import OperationalDashboard from './components/OperationalDashboard';
-import SdrDashboard from './components/SdrDashboard';
-import CloserDashboard from './components/CloserDashboard';
-import PostSalesDashboard from './components/PostSalesDashboard';
-import CustomerDatabase from './components/CustomerDatabase';
-import Agenda from './components/Agenda';
-import MarketingAutomationDashboard from './components/MarketingAutomation';
-import ScriptsLibrary from './components/ScriptsLibrary';
-import UserManagementView from './components/UserManagementView';
+const OperationalDashboard = lazy(() => import('./components/OperationalDashboard'));
+const SdrDashboard = lazy(() => import('./components/SdrDashboard'));
+const CloserDashboard = lazy(() => import('./components/CloserDashboard'));
+const PostSalesDashboard = lazy(() => import('./components/PostSalesDashboard'));
+const CustomerDatabase = lazy(() => import('./components/CustomerDatabase'));
+const Agenda = lazy(() => import('./components/Agenda'));
+const MarketingAutomationDashboard = lazy(() => import('./components/MarketingAutomation'));
+const ScriptsLibrary = lazy(() => import('./components/ScriptsLibrary'));
+const UserManagementView = lazy(() => import('./components/UserManagementView'));
 import UserProfileModal from './components/UserProfileModal';
 import LoginPage from './components/LoginPage';
 import DefinirSenha from './components/DefinirSenha';
@@ -350,7 +350,7 @@ const App: React.FC = () => {
 
   const renderView = () => {
     switch (nav.view) {
-      case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
+      case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} onNavigate={v => setNav({view:v})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
@@ -374,18 +374,19 @@ const App: React.FC = () => {
   const podeSimular = realUser?.role === UserRole.ADMIN;
 
   return (
-    <div className={`min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex font-serif text-slate-900`}>
+    <div className={`crm-app min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex text-slate-900`}>
+      <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <Sidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <Header leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
-        <main className={`flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-12 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
+        <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
           {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}
-          {renderView()}
+          <Suspense fallback={<div className="view-loading" role="status">Carregando seu espaço…</div>}>{renderView()}</Suspense>
         </main>
       </div>
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
       {showUserProfileModal && realUser && <UserProfileModal user={realUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
-      {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} />}
+      {selectedLead && <Suspense fallback={<div role="status" className="view-loading">Abrindo contato…</div>}><LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} /></Suspense>}
     </div>
   );
 };

@@ -21,8 +21,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => 
-      c.tradeName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.cnpj.includes(searchTerm)
+      [c.tradeName, c.legalName, c.company, c.name, c.cnpj].some(value => (value || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [customers, searchTerm]);
 
@@ -94,16 +93,16 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
   if (!selectedCustomer) {
     return (
       <div className="space-y-10 animate-in fade-in duration-500">
-        <div className="flex justify-between items-end border-b border-slate-200 pb-10">
+        <div className="flex flex-wrap gap-5 justify-between items-end border-b border-slate-200 pb-6">
           <div>
-            <h1 className="text-5xl font-black text-[#0a192f] mb-2 serif-authority tracking-tighter italic">Base de Clientes Ativos</h1>
-            <p className="text-slate-500 text-lg font-medium">Gestão de Relacionamento e Consultoria de Sucesso.</p>
+            <h1 className="text-3xl font-semibold text-[#0a192f] mb-2 tracking-tight">Base de Clientes Ativos</h1>
+            <p className="text-slate-500 text-lg font-medium">Cada cliente, uma relação para cuidar e desenvolver.</p>
           </div>
           <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
              <input 
                type="text" 
                placeholder="Pesquisar por Nome ou CNPJ..." 
-               className="w-80 px-4 py-2 text-sm outline-none font-bold"
+               className="w-full md:w-64 px-4 py-2 text-sm outline-none"
                value={searchTerm}
                onChange={e => setSearchTerm(e.target.value)}
              />
@@ -113,7 +112,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
           </div>
         </div>
 
-        <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
            <table className="w-full text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                  <tr>

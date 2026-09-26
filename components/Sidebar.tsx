@@ -32,35 +32,24 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, currentView, set
     { id: 'settings', label: 'Configurações', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', roles: [UserRole.ADMIN] }
   ];
 
-  return (
-    <div className={`${mobileOpen ? "flex" : "hidden"} md:flex w-64 ${currentView === 'executive_bi' ? 'bg-[#050a15] border-white/5' : 'bg-[#0a192f] border-white/5'} text-white min-h-screen flex-col fixed left-0 top-0 h-full z-50 border-r shadow-2xl`}>
-      <button aria-label="Fechar menu" onClick={onClose} className="md:hidden absolute top-2 right-3 p-2">✕</button>
-      <div className="p-8 border-b border-white/5">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-[#c5a059] rounded-lg flex items-center justify-center shadow-lg shadow-[#c5a059]/10 text-white font-black serif-authority">CI</div>
-          <span className="serif-authority text-2xl tracking-tighter">Ciatos</span>
-        </div>
-        {canCreate && (
-          <button onClick={onOpenNewLead} className="w-full bg-[#c5a059] hover:bg-[#b08d4b] text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 group">
-            <svg className="w-4 h-4 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-            Novo Lead
-          </button>
-        )}
-      </div>
-      <nav className="flex-1 mt-6 px-4 space-y-2 overflow-y-auto custom-scrollbar">
-        {menuItems.filter(item => item.roles.includes(role)).map((item) => (
-          <button key={item.id} onClick={() => setView(item.id as any)} className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all ${currentView === item.id ? 'bg-white/10 text-[#c5a059] border border-white/10' : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'}`}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} /></svg>
-            <span className="font-semibold text-sm tracking-wide">{item.label}</span>
-          </button>
-        ))}
-      </nav>
-      <div className="p-6 border-t border-white/5 bg-black/10">
-         <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Perfil Ativo</p>
-         <p className="text-[10px] font-bold text-[#c5a059] uppercase tracking-widest">{role}</p>
-      </div>
-    </div>
-  );
+  const groups = [
+    { title: 'Seu dia a dia', ids: ['dashboard','ai_center','customers','kanban','agenda'] },
+    { title: 'Desenvolver negócios', ids: ['prospecting','qualification','scripts','marketing_automation'] },
+    { title: 'Gestão & relacionamento', ids: ['executive_bi','closer_dashboard','sdr_dashboard','operational_dashboard','post_sales'] },
+    { title: 'Workspace', ids: ['user_management','settings'] },
+  ];
+  return <>
+    {mobileOpen && <button className="nav-backdrop md:hidden" aria-label="Fechar navegação" onClick={onClose}/>}
+    <aside className={`crm-sidebar ${mobileOpen ? 'flex' : 'hidden'} md:flex`} aria-label="Navegação principal" onKeyDown={e => {if(e.key === 'Escape') onClose();}}>
+      <div className="brand-lockup"><img src="/ciatos-mark.svg" alt=""/><div><span>ciatos<span className="brand-dot">.</span></span><small>RELACIONAMENTOS & NEGÓCIOS</small></div><button aria-label="Fechar menu" onClick={onClose} className="md:hidden ml-auto p-2">✕</button></div>
+      <div className="workspace-label"><span className="workspace-avatar">GC</span><div><strong>Grupo Ciatos</strong><small>Seu espaço de crescimento</small></div></div>
+      {canCreate && <button onClick={onOpenNewLead} className="nav-create"><span aria-hidden="true">＋</span> Novo Lead</button>}
+      <nav className="nav-groups">{groups.map(group => {
+        const items = group.ids.map(id => menuItems.find(item => item.id===id)!).filter(item => item.roles.includes(role));
+        return items.length ? <div className="nav-group" key={group.title}><p>{group.title}</p>{items.map(item => <button key={item.id} aria-current={currentView===item.id ? 'page' : undefined} onClick={()=>setView(item.id as any)} className={`nav-item ${currentView===item.id?'is-current':''}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d={item.icon}/></svg><span>{item.label}</span>{item.id==='ai_center' && <small aria-hidden="true">IA</small>}</button>)}</div> : null;
+      })}</nav>
+      <div className="nav-footer"><span className="status-dot"/><div><strong>Conexões que geram valor</strong><small>Grupo Ciatos · {role}</small></div></div>
+    </aside>
+  </>;
 };
-
 export default Sidebar;

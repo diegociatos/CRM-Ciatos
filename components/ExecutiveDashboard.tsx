@@ -98,10 +98,10 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
   const labelHeader = "text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 block";
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-1000 bg-[#050a15] -m-12 p-12 min-h-screen text-slate-300">
+    <div className="space-y-10 animate-in fade-in duration-1000 bg-[#050a15] rounded-2xl p-5 md:p-8 min-h-screen text-slate-300">
       
       {/* HEADER EXECUTIVO */}
-      <div className="flex justify-between items-end border-b border-white/10 pb-10">
+      <div className="flex flex-wrap gap-4 justify-between items-end border-b border-white/10 pb-10">
         <div>
            <div className="flex items-center gap-3 mb-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]"></div>

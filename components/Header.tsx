@@ -35,14 +35,14 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-20 border-b border-slate-200 bg-white/80 backdrop-blur-md flex items-center justify-between px-3 md:px-8 fixed top-0 right-0 left-0 md:left-64 z-[40]">
+    <header className="crm-header h-20 border-b border-slate-200 bg-white/80 backdrop-blur-md flex items-center justify-between px-3 md:px-8 fixed top-0 right-0 left-0 md:left-64 z-[40]">
       <div className="flex items-center gap-2 min-w-0">
         <button aria-label="Abrir menu" onClick={onToggleMenu} className="md:hidden p-2">☰</button>
         <div className="relative min-w-0 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-3 group focus-within:border-[#c5a059] transition-all">
           <svg className="w-4 h-4 text-slate-400 group-focus-within:text-[#c5a059]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <input type="search" aria-label="Pesquisa global de leads" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if(e.key === 'Escape') setSearch(''); }} placeholder="Pesquisa global de leads..." className="bg-transparent text-sm outline-none w-full md:w-64 text-slate-600 font-medium" />
+          <input type="search" aria-label="Pesquisa global de leads" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if(e.key === 'Escape') setSearch(''); }} placeholder="Buscar empresa, contato ou CNPJ" className="bg-transparent text-sm outline-none w-full md:w-72 text-slate-600 font-medium" />
           {normalized && <div className="absolute top-full left-0 mt-2 w-72 max-w-[80vw] bg-white border rounded-xl shadow-xl p-2 max-h-80 overflow-y-auto" aria-label="Resultados da pesquisa">
             {!results.length && <p role="status" className="p-3 text-sm">Nenhum lead encontrado.</p>}
             {results.map(l => <button key={l.id} className="block w-full text-left p-3 hover:bg-slate-100 rounded-lg" onClick={() => { onSelectLead(l.id); setSearch(''); }}><strong>{l.company || l.name}</strong><span className="block text-xs text-slate-500">{l.name} · {l.email}</span></button>)}
@@ -76,7 +76,7 @@ const Header: React.FC<HeaderProps> = ({
                 <div className="p-6 bg-[#0a192f] text-white flex justify-between items-center">
                   <div>
                     <h3 className="font-bold text-lg serif-authority">Central de Alertas</h3>
-                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Feed em Tempo Real</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Notificações da conta</p>
                   </div>
                   <button onClick={onClearAll} className="text-[10px] font-bold text-[#c5a059] hover:text-white uppercase tracking-tighter transition">Limpar Tudo</button>
                 </div>
@@ -110,13 +110,13 @@ const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-4 hover:opacity-80 transition-all focus:outline-none"
           >
             <div className="text-right hidden sm:block">
-              <p className="text-base font-black text-[#0a192f] serif-authority leading-tight">{currentUser.name}</p>
+              <p className="text-sm font-semibold text-[#0a192f] leading-tight">{currentUser.name}</p>
               <p className="text-[10px] text-[#c5a059] font-black uppercase tracking-[0.2em]">{currentUser.role}</p>
             </div>
             {currentUser.avatar && !currentUser.avatar.includes('ui-avatars') ? (
-              <img className="w-12 h-12 rounded-[1.25rem] border-2 border-white shadow-xl object-cover" src={currentUser.avatar} alt="Avatar" />
+              <img className="w-10 h-10 rounded-full border-2 border-white shadow-xl object-cover" src={currentUser.avatar} alt="Avatar" />
             ) : (
-              <div className="w-12 h-12 bg-[#0a192f] text-[#c5a059] rounded-[1.25rem] flex items-center justify-center font-black text-sm border-2 border-white shadow-xl">
+              <div className="w-10 h-10 bg-[#0a192f] text-[#c5a059] rounded-full flex items-center justify-center font-black text-sm border-2 border-white shadow-xl">
                 {getInitials(currentUser.name)}
               </div>
             )}
