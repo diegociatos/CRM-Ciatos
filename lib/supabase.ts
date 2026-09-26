@@ -21,3 +21,13 @@ export const supabase = createClient(url ?? 'http://localhost', anon ?? 'anon', 
     storageKey: 'ciatos_crm_auth',
   },
 });
+
+// Verify recovery links directly in the CRM. The shared Auth project's default
+// redirect can belong to another application; never rely on that fallback.
+const recoveryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.hash.slice(1)) : null;
+const recoveryHash = recoveryParams?.get('type') === 'recovery' ? recoveryParams.get('token_hash') : null;
+export const recoveryVerification: Promise<boolean> | null = recoveryHash ? (() => {
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return supabase.auth.verifyOtp({token_hash: recoveryHash, type: 'recovery'})
+    .then(({data,error}) => !error && !!data.session).catch(() => false);
+})() : null;

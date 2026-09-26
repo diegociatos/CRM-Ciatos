@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {supabase,initialPasswordRecovery} from '../lib/supabase';
+import {supabase,initialPasswordRecovery,recoveryVerification} from '../lib/supabase';
 import DefinirSenha from './DefinirSenha';
 import {useDialog} from '../lib/useDialog';
 export interface Company {id:string;nome:string;registration:Record<string,string>;operating_role:string;can_manage:boolean;can_platform?:boolean;is_master?:boolean;}
@@ -7,6 +7,8 @@ export interface WorkspaceProps {company?:Company;companies?:Company[];onCompany
 export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.ReactNode}){
  const [uid,setUid]=useState<string|null>(null),[ready,setReady]=useState(false),[loading,setLoading]=useState(false),[companies,setCompanies]=useState<Company[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState('');
  const [recovery,setRecovery]=useState(initialPasswordRecovery);
+ const [verifying,setVerifying]=useState(!!recoveryVerification),[activationError,setActivationError]=useState(false);
+ useEffect(()=>{let active=true;recoveryVerification?.then(ok=>{if(active){setRecovery(ok);setActivationError(!ok);setVerifying(false);}});return()=>{active=false;};},[]);
  const generation=useRef(0);
  useEffect(()=>{let active=true;const apply=(id:string|null)=>{if(active){setUid(id);setReady(true);}};supabase.auth.getSession().then(({data})=>apply(data.session?.user.id||null));const {data}=supabase.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')setRecovery(true);if(event==='SIGNED_OUT')setRecovery(false);apply(session?.user.id||null);});return()=>{active=false;generation.current++;data.subscription.unsubscribe();};},[]);
  const refresh=useCallback(async(preferred?:string)=>{
@@ -17,6 +19,8 @@ export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.
  },[uid]);
  useEffect(()=>{generation.current++;setCompanies([]);setSelected('');if(uid)void refresh();return()=>{generation.current++;};},[uid,refresh]);
  const change=(id:string)=>{if(id===selected||!companies.some(c=>c.id===id))return;if(!window.confirm('Trocar de empresa? Salve o que estiver editando antes de continuar. Clientes e atividades permanecem na empresa de origem.'))return;localStorage.setItem('crm-company:'+uid,id);setSelected(id);};
+ if(verifying)return <div className="view-loading" role="status">Validando seu acesso…</div>;
+ if(activationError)return <div className="p-8 max-w-xl mx-auto space-y-5"><h1 className="text-2xl">Link inválido ou expirado</h1><p role="alert">Solicite um novo link de acesso ao administrador. Nenhuma senha foi alterada.</p><button className="ux-secondary" onClick={()=>setActivationError(false)}>Voltar ao CRM</button></div>;
  if(!ready)return <div className="view-loading" role="status">Carregando acesso…</div>;
  if(!uid)return <>{children({})}</>;
  if(recovery)return <DefinirSenha onConcluido={()=>{setRecovery(false);window.history.replaceState(null,'',window.location.pathname+window.location.search);}}/>;

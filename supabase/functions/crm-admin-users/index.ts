@@ -127,7 +127,9 @@ Deno.serve(async (req) => {
       if (!contaExistente) {
         const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: origem } });
         if (error) throw error;
-        link = (data as any)?.properties?.action_link ?? origem;
+        const tokenHash = data?.properties?.hashed_token;
+        if (!tokenHash) throw new Error('Não foi possível gerar o acesso.');
+        link = `${origem}/#type=recovery&token_hash=${encodeURIComponent(tokenHash)}`;
       }
       const emailEnviado = await enviarEmail(
         email,

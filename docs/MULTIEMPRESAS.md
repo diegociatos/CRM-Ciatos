@@ -42,3 +42,6 @@ O teste `companies.test.ts` executa migrations reais em PostgreSQL descartável 
 Ainda não há transferência ou compartilhamento de clientes entre empresas, visão consolidada do grupo, múltiplos contratos por cliente, branding independente ou SDR conversacional completo. As regras atuais de colaboração dentro de uma empresa permanecem; o isolamento desta entrega é entre empresas. Endpoints externos não foram acionados com envios reais.
 
 No projeto compartilhado existente, as migrations anteriores do CRM foram aplicadas manualmente. Não executar db push indiscriminadamente contra esse projeto; conferir o histórico antes de futuras aplicações. A migration de multiempresas foi registrada individualmente após a execução transacional.
+
+### Primeiro acesso em autenticação compartilhada
+O link privado aponta ao CRM com token de recuperação no fragmento. O aplicativo remove o token da URL e o valida pela API oficial `verifyOtp` antes de exibir a definição de senha. Tokens inválidos ou expirados não abrem essa tela, mesmo se houver outra sessão no navegador. Não registrar URLs de ativação em telemetria. Esse fluxo evita o redirecionamento padrão de outra aplicação sem modificar a configuração compartilhada. Referência: https://supabase.com/docs/reference/javascript/auth-verifyotp .

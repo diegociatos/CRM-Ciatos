@@ -7,7 +7,7 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
  const token=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:uid,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url')+'.test';
  await page.addInitScript(({user,token})=>{if(!localStorage.getItem('ciatos_crm_auth'))localStorage.setItem('ciatos_crm_auth',JSON.stringify({access_token:token,refresh_token:'test',expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user}));},{user,token});
  const profile={id:uid,nome:'Pessoa de teste',email:'test@example.test',papel:'ADMIN',departamento:'Comercial',ativo:true};
- await page.route('**/auth/v1/**',route=>route.fulfill({json:user}));
+ await page.route('**/auth/v1/**',route=>{if(route.request().url().endsWith('/verify'))return route.fulfill({json:{access_token:token,refresh_token:'test',expires_in:3600,token_type:'bearer',user}});return route.fulfill({json:user});});
  await page.route('**/rest/v1/**',async route=>{
   const req=route.request(),url=new URL(req.url()),name=url.pathname.split('/').pop()!;
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'*'};
@@ -54,4 +54,11 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
  await expect(page.getByRole('button',{name:'+ Cadastrar outra empresa'})).toHaveCount(0);
  await page.goto('/tests/ui/?companies#type=recovery');await page.reload();
  await expect(page.getByRole('heading',{name:'Crie sua senha'})).toBeVisible();
+ await page.goto('/tests/ui/?companies#type=recovery&token_hash=fake-local-token');await page.reload();
+ await expect(page.getByRole('heading',{name:'Crie sua senha'})).toBeVisible();
+ expect(new URL(page.url()).hash).toBe('');
+ await page.route('**/auth/v1/verify',route=>route.fulfill({status:403,json:{message:'Expired',code:'otp_expired'}}));
+ await page.goto('/tests/ui/?companies#type=recovery&token_hash=fake-expired-token');await page.reload();
+ await expect(page.getByRole('heading',{name:'Link inválido ou expirado'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Crie sua senha'})).toHaveCount(0);
 });
