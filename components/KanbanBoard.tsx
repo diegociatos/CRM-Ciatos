@@ -60,8 +60,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     if (!searchTerm.trim()) return boardLeads;
     const term = searchTerm.toLowerCase();
     return boardLeads.filter(l => 
-      l.tradeName.toLowerCase().includes(term) || 
-      l.cnpj.includes(term)
+      (l.tradeName || l.company || l.name || "").toLowerCase().includes(term) ||
+      (l.cnpj || "").includes(term)
     );
   }, [leads, searchTerm, role, currentUserId]);
 
@@ -126,7 +126,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       
       <div className="flex-1 overflow-x-auto pb-6 scroll-smooth pt-2">
         <div className="flex gap-8 h-full min-w-max px-4">
-          {visiblePhases.sort((a,b) => a.order - b.order).map(phase => {
+          {[...visiblePhases].sort((a,b) => a.order - b.order).map(phase => {
             const phaseLeads = filteredLeads.filter(l => l.phaseId === phase.id);
             const isTargetBlockedForSdr = role === UserRole.SDR && !['ph-qualificado', 'ph-remarcar', 'ph-agend'].includes(phase.id);
             
@@ -167,8 +167,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                              <span>🔥</span> Temp {lead.closeProbability}
                            </div>
                         </div>
-                        <h4 className="serif-authority font-bold text-sm text-[#0a192f] mb-1 line-clamp-1">{lead.tradeName}</h4>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{lead.taxRegime}</p>
+                        <h4 className="serif-authority font-bold text-sm text-[#0a192f] mb-1 line-clamp-1"><button type="button" className="text-left hover:underline" onClick={e=>{e.stopPropagation();onSelectLead(lead.id);}}>{lead.tradeName || lead.company || lead.name}</button></h4>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{lead.taxRegime}</p>                          {isDraggable && <label className="block text-xs mb-4" onClick={e=>e.stopPropagation()}><span>Mover para etapa</span><select aria-label={`Mover ${lead.tradeName || lead.company} para etapa`} className="block w-full p-2 mt-1 rounded border border-slate-200 bg-white" value={lead.phaseId} onChange={e=>onMoveLead(lead.id,e.target.value)}>{[...visiblePhases].sort((a,b)=>a.order-b.order).map(p=><option key={p.id} value={p.id} disabled={role===UserRole.SDR&&!['ph-qualificado','ph-remarcar','ph-agend'].includes(p.id)}>{p.name}</option>)}</select></label>}
                         
                         <div className="space-y-2 mb-4 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
                            <div className="flex items-center gap-2">

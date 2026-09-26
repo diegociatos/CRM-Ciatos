@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Lead, Notification, User, UserRole } from '../types';
 
 interface HeaderProps {
+  onHelp?: () => void;
   leads: Lead[];
   onSelectLead: (id: string) => void;
   onToggleMenu: () => void;
@@ -20,7 +21,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({
-  leads, onSelectLead, onToggleMenu, notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canSwitchRole, canCreate, onOpenUserProfile, onLogout
+  onHelp, leads, onSelectLead, onToggleMenu, notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canSwitchRole, canCreate, onOpenUserProfile, onLogout
 }) => {
   const [search, setSearch] = useState('');
   const normalized = search.trim().toLocaleLowerCase('pt-BR');
@@ -52,6 +53,7 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 md:gap-6">
+        {onHelp && <button onClick={onHelp} className="help-trigger" aria-label="Ajuda e passo a passo">?<span className="hidden lg:inline"> Como usar</span></button>}
         {/* Notificações */}
         <div className="relative">
           <button 

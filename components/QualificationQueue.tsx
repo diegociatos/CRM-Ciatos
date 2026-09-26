@@ -30,13 +30,13 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-8">
+      <div className="flex flex-wrap gap-5 justify-between items-end border-b border-slate-200 pb-8">
         <div>
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Fila de Qualificação</h1>
-          <p className="text-slate-500 text-base font-medium">Controle de entrada: Valide os contatos e decidores antes do comercial.</p>
+          <p className="text-slate-500 text-base font-medium">Controle de entrada: Valide os contatos e decisores antes do comercial.</p>
         </div>
         
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <div className="bg-slate-100 p-1 rounded-2xl border border-slate-200 flex shadow-inner">
              <button 
                onClick={() => setFilterOwner('all')}
@@ -66,7 +66,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
 
       <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1200px]">
+          <table className="qualification-table w-full text-left border-collapse min-w-[1200px]">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
                 <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-[25%]">Empresa / Contato Sede</th>
@@ -99,7 +99,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
                   <td className="px-6 py-6">
                     <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl group-hover:bg-white transition-colors shadow-sm">
                       <p className="text-xs font-black text-[#0a192f]">{lead.name || 'Decisor pendente'}</p>
-                      <p className="text-[9px] text-[#c5a059] font-black uppercase tracking-widest mb-2">{lead.role || 'Sócio/Diretor'}</p>
+                      <p className="text-[9px] text-[#c5a059] font-black uppercase tracking-widest mb-2">{lead.role || 'Cargo não informado'}</p>
                       
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1.5">
@@ -115,16 +115,16 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
                     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-tighter border inline-block ${lead.debtStatus === 'Regular' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
                        {lead.debtStatus}
                     </span>
-                    <p className="text-[8px] text-slate-300 font-black uppercase mt-2">ICP FIT: {lead.icpScore}/5</p>
+                    <p className="text-[8px] text-slate-300 font-black uppercase mt-2">{lead.icpScore == null ? 'ICP não avaliado' : "ICP FIT: " + lead.icpScore + '/5'}</p>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <div className="flex justify-end gap-3">
+                    <div className="flex flex-col items-end gap-2">
                       <button 
                         onClick={() => onSelectLead(lead.id)} 
                         className="p-3 bg-slate-100 text-[#0a192f] rounded-2xl hover:bg-slate-200 transition shadow-sm group-hover:scale-110 active:scale-95" 
-                        title="Ver e Editar Dossiê"
+                        aria-label="Abrir cadastro" title="Abrir cadastro"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg><span className="text-xs">Abrir cadastro</span>
                       </button>
                       <button 
                         onClick={() => {
@@ -133,16 +133,16 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
                           }
                         }} 
                         className="p-3 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition shadow-sm group-hover:scale-110 active:scale-95" 
-                        title="Excluir Lead"
+                        disabled={!canEdit} title="Excluir Lead"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg><span className="text-xs">Excluir</span>
                       </button>
                       <button 
                         onClick={() => onApprove(lead.id)} 
                         className="p-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition active:scale-90 group-hover:scale-110" 
-                        title="Aprovar para Comercial"
+                        disabled={!canEdit} aria-label="Aprovar para pipeline" title="Aprovar para pipeline"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg><span className="text-xs">Aprovar para pipeline</span>
                       </button>
                     </div>
                   </td>
@@ -152,12 +152,12 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
           </table>
         </div>
         {queueLeads.length === 0 && (
-          <div className="p-32 text-center flex flex-col items-center">
+          <div className="p-8 md:p-20 text-center flex flex-col items-center">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mb-8 border border-slate-100 shadow-inner">
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
-            <h3 className="text-[#0a192f] font-bold text-2xl serif-authority mb-2">Tudo qualificado!</h3>
-            <p className="text-slate-400 font-medium">Não há leads pendentes nesta visão. Use o Radar para prospectar novos.</p>
+            <h3 className="text-[#0a192f] font-bold text-2xl serif-authority mb-2">Nenhum lead nesta fila</h3>
+            <p className="text-slate-400 font-medium">Cadastre um lead ou altere o filtro para localizar outros contatos.</p>
           </div>
         )}
       </div>

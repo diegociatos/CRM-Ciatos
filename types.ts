@@ -212,7 +212,7 @@ export interface KanbanPhase { id: string; name: string; order: number; color: s
 export interface TaskType { id: string; name: string; channel: string; color: string; icon: string; requireDecisor: boolean; template: string; }
 export interface LeadPartner { name: string; sharePercentage: string; cpf?: string; }
 
-export interface NavigationState { view: 'ai_center' | 'executive_bi' | 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management'; }
+export interface NavigationState { view: 'help' | 'ai_center' | 'executive_bi' | 'dashboard' | 'prospecting' | 'qualification' | 'kanban' | 'agenda' | 'post_sales' | 'customers' | 'settings' | 'sdr_dashboard' | 'closer_dashboard' | 'operational_dashboard' | 'marketing_automation' | 'scripts' | 'user_management'; }
 
 export interface ScriptVersion {
   id: string;

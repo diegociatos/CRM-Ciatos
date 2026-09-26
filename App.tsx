@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import AiCenter from './components/AiCenter';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
+const HelpCenter = lazy(() => import('./components/HelpCenter'));
 const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'));
 const Prospector = lazy(() => import('./components/Prospector'));
@@ -84,6 +85,7 @@ const App: React.FC = () => {
   const [templates, setTemplates] = useState<OnboardingTemplate[]>(DEFAULT_ONBOARDING_TEMPLATES);
   const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
 
+  const [appNotice,setAppNotice] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
@@ -194,9 +196,9 @@ const App: React.FC = () => {
   };
 
   // --- Leads ------------------------------------------------------------------
-  const handleUpdateLead = (updatedLead: Lead) => {
-    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
-    db.salvarLead(updatedLead).catch(e => { erro(e); carregarTudo(); });
+  const handleUpdateLead = async (updatedLead: Lead): Promise<boolean> => {
+    try { await db.salvarLead(updatedLead); setLeads(prev=>prev.map(l=>l.id===updatedLead.id?updatedLead:l)); setAppNotice("Alterações do lead salvas."); return true; }
+    catch { setAppNotice('Não foi possível salvar as alterações do lead. Tente novamente.'); return false; }
   };
 
   const patchLead = (id: string, patch: Partial<Lead>) => {
@@ -225,7 +227,8 @@ const App: React.FC = () => {
     try {
       await db.salvarLead(newLead);
       setLeads(prev => [newLead, ...prev]);
-      return { success: true, message: 'Lead gerado.' };
+      setNav({view:'qualification'}); setAppNotice('Lead cadastrado. Revise os dados na Fila de Qualificação para seguir ao pipeline.');
+      return { success: true, message: 'Lead cadastrado.' };
     } catch (e) {
       return { success: false, message: e instanceof Error ? e.message : 'Falha ao salvar lead.' };
     }
@@ -320,7 +323,8 @@ const App: React.FC = () => {
     try {
       const salvo = await db.salvarEvento(e);
       setEvents(prev => prev.find(x => x.id === e.id || x.id === salvo.id) ? prev.map(x => (x.id === e.id || x.id === salvo.id) ? salvo : x) : [...prev, salvo]);
-    } catch (err) { erro(err); }
+      setAppNotice('Atividade salva na agenda.'); return true;
+    } catch { return false; }
   };
 
   const handleDeleteEvent = (id: string) => {
@@ -350,6 +354,7 @@ const App: React.FC = () => {
 
   const renderView = () => {
     switch (nav.view) {
+      case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} onNavigate={v => setNav({view:v})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
@@ -378,8 +383,9 @@ const App: React.FC = () => {
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <Sidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <Header leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
+        <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
         <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
+          {appNotice && <div className="app-notice" role="status"><span>{appNotice}</span><button aria-label="Fechar mensagem" onClick={()=>setAppNotice('')}>✕</button></div>}
           {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}
           <Suspense fallback={<div className="view-loading" role="status">Carregando seu espaço…</div>}>{renderView()}</Suspense>
         </main>

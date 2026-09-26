@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import {useDialog} from '../lib/useDialog';
 import { AgendaEvent, Lead, User, SystemConfig, Participant, TaskType, UserRole } from '../types';
 
 interface AgendaProps {
@@ -8,7 +9,7 @@ interface AgendaProps {
   users: User[];
   currentUser: User;
   config: SystemConfig;
-  onSaveEvent: (event: AgendaEvent) => void;
+  onSaveEvent: (event: AgendaEvent) => Promise<boolean>;
   onDeleteEvent: (id: string) => void;
   onSelectLead: (id: string) => void;
 }
@@ -20,6 +21,12 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
   const [formData, setFormData] = useState<Partial<AgendaEvent>>({});
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
 
+  const [saving,setSaving]=useState(false);
+  const [saveError,setSaveError]=useState('');
+  const [leave,setLeave]=useState(false);
+  const snapshot=useRef('');
+  const requestClose=()=>{if(saving)return;if(snapshot.current!==JSON.stringify([formData,selectedParticipantIds]))setLeave(true);else setShowCreateModal(false);};
+  const modalRef=useDialog(()=>{if(leave)setLeave(false);else requestClose();},showCreateModal);
   const selectedType = useMemo(() => 
     config.taskTypes.find(t => t.id === formData.typeId),
     [config.taskTypes, formData.typeId]
@@ -55,6 +62,7 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
 
   const openModal = (event?: AgendaEvent) => {
     if (event) {
+      snapshot.current=JSON.stringify([event,event.participants.map(p=>p.userId)]);
       setFormData(event);
       setSelectedParticipantIds(event.participants.map(p => p.userId));
     } else {
@@ -62,17 +70,18 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
       const tStr = new Date().toTimeString().slice(0, 5);
       const defaultType = config.taskTypes[0];
       
-      setFormData({
+      const initial = {
         title: '',
         start: `${dStr}T${tStr}`,
         typeId: defaultType?.id || '',
         description: defaultType?.template || '',
         leadId: '',
         assignedToId: currentUser.id 
-      });
+      };
+      snapshot.current=JSON.stringify([initial,[]]);setFormData(initial);
       setSelectedParticipantIds([]);
     }
-    setShowCreateModal(true);
+    setSaveError('');setLeave(false);setShowCreateModal(true);
   };
 
   const handleTypeChange = (typeId: string) => {
@@ -125,9 +134,10 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
     );
   };
 
-  const handleSave = () => {
-    if (!formData.title || !formData.start || !formData.typeId) {
-      alert("Por favor, preencha os campos obrigatórios.");
+  const handleSave = async () => {
+    if(saving)return;
+    if (!formData.title?.trim() || !formData.start || !formData.typeId) {
+      setSaveError("Preencha o título, o tipo de atividade e o horário.");
       return;
     }
     const type = config.taskTypes.find(t => t.id === formData.typeId);
@@ -143,8 +153,13 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
       participants: isMeeting ? selectedParticipantIds.map(id => ({ userId: id, status: 'pending' })) : []
     } as AgendaEvent;
 
-    onSaveEvent(eventToSave);
-    setShowCreateModal(false);
+    if(!Number.isFinite(new Date(eventToSave.start).getTime())){setSaveError('Escolha uma data e horário válidos.');return;}
+    const original=events.find(e=>e.id===formData.id);
+    const duration=original?new Date(original.end).getTime()-new Date(original.start).getTime():30*60000;
+    eventToSave.end=new Date(new Date(eventToSave.start).getTime()+(Number.isFinite(duration)&&duration>0?duration:30*60000)).toISOString();
+    setSaving(true);setSaveError('');
+    try{if(await onSaveEvent(eventToSave))setShowCreateModal(false);else setSaveError('Não foi possível salvar. Seus dados foram mantidos. Tente novamente.');}
+    catch{setSaveError('Não foi possível salvar. Confira a conexão e tente novamente.');}finally{setSaving(false);}
   };
 
   const labelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2";
@@ -237,18 +252,19 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
 
       {showCreateModal && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#0a192f]/95 backdrop-blur-md" onClick={() => setShowCreateModal(false)}></div>
-          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
+          <div className="absolute inset-0 bg-[#0a192f]/95 backdrop-blur-md" onClick={requestClose}></div>
+          <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Agendar atividade" className="agenda-dialog relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
              <div className="p-10 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h2 className="text-3xl font-black text-[#0a192f] serif-authority">{formData.id ? 'Editar Atividade' : 'Agendar Atividade'}</h2>
-                <button onClick={() => setShowCreateModal(false)} className="text-2xl text-slate-300">✕</button>
+                <button aria-label="Fechar agendamento" disabled={saving} onClick={requestClose} className="text-2xl text-slate-300">✕</button>
              </div>
-             <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
+             {leave && <div role="alertdialog" aria-label="Sair sem salvar?" className="leave-prompt"><strong>Sair sem salvar?</strong><p>As alterações desta atividade serão descartadas.</p><button className="btn-navy" onClick={()=>setLeave(false)}>Continuar agendamento</button><button className="ux-secondary" onClick={()=>setShowCreateModal(false)}>Sair sem salvar</button></div>}
+             <div inert={leave||saving} className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
                 <div className={`grid grid-cols-1 ${isMeeting ? 'md:grid-cols-2' : ''} gap-8`}>
                   <div className="space-y-6">
                     <div>
-                      <label className={labelClass}>Tipo de Atividade *</label>
-                      <select className={inputClass} value={formData.typeId} onChange={e => handleTypeChange(e.target.value)}>
+                      <label className={labelClass} htmlFor="agenda-field-1">Tipo de Atividade *</label>
+                      <select id="agenda-field-1" className={inputClass} value={formData.typeId} onChange={e => handleTypeChange(e.target.value)}>
                         <option value="">Selecionar tipo...</option>
                         {config.taskTypes.map(t => (
                           <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
@@ -256,16 +272,16 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>Vínculo de Lead</label>
-                      <select className={inputClass} value={formData.leadId} onChange={e => handleLeadChange(e.target.value)}>
+                      <label className={labelClass} htmlFor="agenda-field-2">Vínculo de Lead</label>
+                      <select id="agenda-field-2" className={inputClass} value={formData.leadId} onChange={e => handleLeadChange(e.target.value)}>
                         <option value="">Nenhum</option>
                         {leads.map(l => <option key={l.id} value={l.id}>{l.tradeName}</option>)}
                       </select>
                     </div>
                     {isMeeting && (
                       <div>
-                        <label className={labelClass}>Consultor Responsável</label>
-                        <select className={inputClass} value={formData.assignedToId} onChange={e => setFormData({...formData, assignedToId: e.target.value})}>
+                        <label className={labelClass} htmlFor="agenda-field-3">Consultor Responsável</label>
+                        <select id="agenda-field-3" className={inputClass} value={formData.assignedToId} onChange={e => setFormData({...formData, assignedToId: e.target.value})}>
                           {users.filter(u => u.role === UserRole.CLOSER || u.role === UserRole.ADMIN || u.role === UserRole.MANAGER).map(u => (
                             <option key={u.id} value={u.id}>{u.name}</option>
                           ))}
@@ -273,8 +289,8 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
                       </div>
                     )}
                     <div>
-                      <label className={labelClass}>Horário Agendado</label>
-                      <input type="datetime-local" className={inputClass} value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} />
+                      <label className={labelClass} htmlFor="agenda-field-4">Horário Agendado</label>
+                      <input id="agenda-field-4" type="datetime-local" className={inputClass} value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} />
                     </div>
                   </div>
 
@@ -300,27 +316,29 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
                          </div>
                       </div>
                       <div>
-                        <label className={labelClass}>Título da Tarefa</label>
-                        <input className={inputClass} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Call Diagnóstica" />
+                        <label className={labelClass} htmlFor="agenda-field-5">Título da Tarefa</label>
+                        <input id="agenda-field-5" className={inputClass} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Call Diagnóstica" />
                       </div>
                     </div>
                   )}
 
                   {!isMeeting && (
                     <div>
-                      <label className={labelClass}>Título da Tarefa</label>
-                      <input className={inputClass} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Retorno de ligação" />
+                      <label className={labelClass} htmlFor="agenda-field-6">Título da Tarefa</label>
+                      <input id="agenda-field-6" className={inputClass} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Retorno de ligação" />
                     </div>
                   )}
                 </div>
                 <div>
-                   <label className={labelClass}>Notas e Script de Abordagem</label>
-                   <textarea className={`${inputClass} h-32 resize-none`} placeholder="Notas do agendamento..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                   <label className={labelClass} htmlFor="agenda-field-7">Notas e Script de Abordagem</label>
+                   <textarea id="agenda-field-7" className={`${inputClass} h-32 resize-none`} placeholder="Notas do agendamento..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
                 </div>
              </div>
-             <div className="p-10 bg-slate-50 border-t">
-                <button onClick={handleSave} className="w-full py-5 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
-                  {isMeeting ? 'Confirmar Agendamento e Notificar Time' : 'Salvar Atividade'}
+             <div inert={leave} className="p-10 bg-slate-50 border-t shrink-0">
+                {saveError&&<p role="alert" className="ux-error">{saveError}</p>}
+                <button className="ux-secondary" disabled={saving} onClick={requestClose}>Cancelar</button>
+                <button disabled={saving} onClick={handleSave} className="w-full py-5 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
+                  {saving ? 'Salvando…' : 'Salvar atividade'}
                 </button>
              </div>
           </div>

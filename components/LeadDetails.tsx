@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, SystemConfig, User, Interaction, InteractionType, LeadStatus, AgendaEvent, LeadPartner, CompanySize, SalesScript } from '../types';
+import {useDialog} from '../lib/useDialog';
 import Timeline360 from './Timeline360';
 import Teleprompter from './Teleprompter';
 import ObjectionAssistant from './ObjectionAssistant';
@@ -10,10 +11,10 @@ interface LeadDetailsProps {
   config: SystemConfig;
   agendaEvents: AgendaEvent[];
   onClose: () => void;
-  onUpdateLead: (lead: Lead) => void;
+  onUpdateLead: (lead: Lead) => Promise<boolean>;
   onDeleteLead: (id: string) => void;
   onAddInteraction: (leadId: string, inter: Omit<Interaction, 'id' | 'date'>) => void;
-  onAddAgendaEvent: (event: AgendaEvent) => void;
+  onAddAgendaEvent: (event: AgendaEvent) => Promise<boolean>;
   onDeleteAgendaEvent: (id: string) => void;
   currentUser: User;
   allUsers: User[];
@@ -33,17 +34,24 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   // Estado para o Novo Agendamento (Modelo Unificado)
   const [quickEvent, setQuickEvent] = useState({
-    typeId: config.taskTypes[0].id,
+    typeId: config.taskTypes[0]?.id || '',
     date: new Date().toISOString().slice(0, 16),
     notes: ''
   });
 
+  const [saving,setSaving]=useState(false);
+  const [formError,setFormError]=useState('');
+  const [leave,setLeave]=useState(false);
+  const requestClose=()=>{if(saving)return;if((isEditing&&JSON.stringify(editForm)!==JSON.stringify(lead))||quickNote.trim()||quickEvent.notes.trim())setLeave(true);else onClose();};
+  const detailRef=useDialog(()=>{if(leave)setLeave(false);else requestClose();});
   useEffect(() => {
-    setEditForm(lead);
+    if(!isEditing)setEditForm(lead);
   }, [lead]);
 
-  const handleSaveDossie = () => {
-    onUpdateLead(editForm);
+  const handleSaveDossie = async () => {
+    if(saving)return;setSaving(true);setFormError('');
+    try{if(!await onUpdateLead(editForm)){setFormError('Não foi possível salvar. Revise sua conexão e tente novamente.');return;}
+
     setIsEditing(false);
     onAddInteraction(lead.id, {
       type: 'EDIT',
@@ -52,6 +60,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       author: currentUser.name,
       authorId: currentUser.id
     });
+    }catch{setFormError('Não foi possível salvar. Seus dados continuam aqui.');}finally{setSaving(false);}
   };
 
   const handleAddQuickNote = () => {
@@ -66,7 +75,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     setQuickNote('');
   };
 
-  const handleAddQuickEvent = () => {
+  const handleAddQuickEvent = async () => {
+    if(saving)return;
+    if(!quickEvent.typeId||!Number.isFinite(new Date(quickEvent.date).getTime())){setFormError('Informe o tipo e a data da atividade.');return;}
     const type = config.taskTypes.find(t => t.id === quickEvent.typeId);
     const newEvt: AgendaEvent = {
       id: `evt-${Date.now()}`,
@@ -83,8 +94,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       department: currentUser.department,
       creatorId: currentUser.id
     };
-    onAddAgendaEvent(newEvt);
-    setQuickEvent({ ...quickEvent, notes: '' });
+    setSaving(true);setFormError('');try{if(await onAddAgendaEvent(newEvt))setQuickEvent({ ...quickEvent, notes: '' });else setFormError('Não foi possível agendar. Tente novamente.');}catch{setFormError('Não foi possível agendar. Tente novamente.');}finally{setSaving(false);}
   };
 
   const leadEvents = useMemo(() => 
@@ -115,9 +125,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   return (
     <div className="fixed inset-0 z-[600] flex justify-end">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative w-full max-w-[95vw] lg:max-w-[1400px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 overflow-hidden">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={requestClose}></div>
+      <div ref={detailRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Detalhes do lead" className="lead-details-dialog relative w-full max-w-[95vw] lg:max-w-[1400px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 overflow-hidden">
         
+        {leave && <div className="leave-prompt" role="alertdialog" aria-label="Sair sem salvar?"><strong>Sair sem salvar?</strong><p>Há informações preenchidas que ainda não foram salvas.</p><button className="btn-navy" onClick={()=>setLeave(false)}>Continuar edição</button><button className="ux-secondary" onClick={onClose}>Sair sem salvar</button></div>}
+        {formError&&<p className="ux-error" role="alert">{formError}</p>}
         {/* HEADER */}
         <div className="p-8 bg-[#0a192f] text-white shrink-0 border-b-4 border-[#c5a059] relative">
           <div className="flex justify-between items-start mb-8 relative z-10">
@@ -133,9 +145,9 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                 </div>
               </div>
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               {isEditing ? (
-                  <button onClick={handleSaveDossie} className="px-8 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl border-b-4 border-emerald-800 transition-all active:translate-y-1">💾 Salvar Alterações</button>
+                  <button disabled={saving} onClick={handleSaveDossie} className="px-8 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl border-b-4 border-emerald-800 transition-all active:translate-y-1">💾 Salvar Alterações</button>
               ) : (
                   <>
                     <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-white/10 text-white border border-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all">✏️ Editar Dossiê</button>
@@ -152,11 +164,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                     </button>
                   </>
               )}
-              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white text-2xl">✕</button>
+              <button aria-label="Fechar detalhes do lead" disabled={saving} onClick={requestClose} className="p-2 text-slate-400 hover:text-white text-2xl">✕</button>
             </div>
           </div>
           
-          <div className="flex gap-8">
+          <div className="flex gap-4 overflow-x-auto">
             {(['perfil', 'timeline', 'call', 'agenda', 'marketing'] as const).map(tab => (
               <button 
                 key={tab}
@@ -169,7 +181,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50/30 custom-scrollbar">
+        <div inert={saving||leave} className="flex-1 overflow-y-auto bg-slate-50/30 custom-scrollbar">
           {activeTab === 'perfil' && (
             <div className="p-8 space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
