@@ -9,13 +9,15 @@ interface HeaderProps {
   onOpenNewLead: () => void;
   currentUser: User;
   onSwitchRole: (role: UserRole) => void;
+  /** Só o Admin real pode pré-visualizar o CRM como outro papel (apenas visual; a RLS continua valendo). */
+  canSwitchRole: boolean;
   canCreate: boolean;
   onOpenUserProfile: () => void;
   onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-  notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canCreate, onOpenUserProfile, onLogout
+const Header: React.FC<HeaderProps> = ({
+  notifications, onMarkRead, onClearAll, onOpenNewLead, currentUser, onSwitchRole, canSwitchRole, canCreate, onOpenUserProfile, onLogout
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -118,14 +120,14 @@ const Header: React.FC<HeaderProps> = ({
                   <svg className="w-4 h-4 text-[#c5a059]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                   Meu Perfil
                 </button>
-                <div className="border-t border-slate-100 my-1"></div>
-                <button 
+                {canSwitchRole && <><div className="border-t border-slate-100 my-1"></div>
+                <button
                   onClick={() => { setShowRoleSwitcher(!showRoleSwitcher); setShowProfileDropdown(false); }}
                   className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition"
                 >
                   <svg className="w-4 h-4 text-[#c5a059]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                  Trocar Perfil (Simulação)
-                </button>
+                  Visualizar como… (Admin)
+                </button></>}
                 <div className="border-t border-slate-100 my-1"></div>
                 <button 
                   onClick={onLogout}
@@ -139,7 +141,7 @@ const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Sub-menu de Troca de Perfil */}
-          {showRoleSwitcher && (
+          {canSwitchRole && showRoleSwitcher && (
             <div className="absolute right-0 mt-4 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="flex justify-between items-center px-4 py-2 border-b border-slate-50 mb-1">
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Simular Perfil</p>

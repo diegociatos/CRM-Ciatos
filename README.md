@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# CRM Ciatos
 
-# Run and deploy your AI Studio app
+CRM comercial do Grupo Ciatos: prospecção (Radar), qualificação, funil, playbook, agenda, onboarding e pós-venda.
 
-This contains everything you need to run your app locally.
+- **Frontend:** React 19 + Vite, hospedado no Cloudflare Pages (`crm-ciatos.pages.dev`), deploy automático pelo GitHub Actions a cada push na `main`.
+- **Backend:** Supabase do Chekly (`rylbvqsjnmjohxvvzstm`), schema **isolado `crm`**. Não usa nem altera o schema `public` do Chekly.
+- **Login:** Supabase Auth (compartilhado com o Chekly). Só entra no CRM quem tem linha ativa em `crm.profiles`. Usuários novos são convidados pela tela "Gestão de Usuários" e recebem por e-mail o link para criar a senha.
+- **IA:** Claude, só no servidor (Edge Function `crm-ia`). Nenhuma chave vai para o navegador.
 
-View your app in AI Studio: https://ai.studio/apps/6dfe511a-7023-468c-b169-75272d3e0278
+## Rodar local
 
-## Run Locally
+```bash
+npm install
+cp .env.example .env.local   # preencher VITE_SUPABASE_ANON_KEY
+npm run dev                   # http://localhost:3000
+```
 
-**Prerequisites:**  Node.js
+No Windows, clonar sem a pasta `migrated_prompt_history/`, que tem nomes de arquivo inválidos no NTFS:
 
+```bash
+git clone --no-checkout https://github.com/diegociatos/CRM-Ciatos.git
+cd CRM-Ciatos
+git sparse-checkout set --no-cone '/*' '!/migrated_prompt_history/'
+git checkout main
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Banco e funções
+
+- Migrations em `supabase/migrations/`, aplicadas com `supabase db query --linked -f <arquivo>` a partir da pasta do Chekly (o projeto é o mesmo). **Não** registrar no histórico de migrations do Chekly.
+- Funções em `supabase/functions/`, com prefixo `crm-` para não colidir com as do Chekly:
+  `npx supabase functions deploy crm-ia --project-ref rylbvqsjnmjohxvvzstm --use-api`
+- Secrets usados: `ANTHROPIC_API_KEY` (IA), `RESEND_API_KEY` (já existe, compartilhado), `CRM_EMAIL_FROM` (opcional), `CRM_APP_URLS` (opcional; origens permitidas no link de convite).

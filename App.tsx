@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
-import ExecutiveDashboard from './components/ExecutiveDashboard'; // Novo
+import ExecutiveDashboard from './components/ExecutiveDashboard';
 import KanbanBoard from './components/KanbanBoard';
 import Prospector from './components/Prospector';
 import QualificationQueue from './components/QualificationQueue';
@@ -20,21 +20,16 @@ import MarketingAutomationDashboard from './components/MarketingAutomation';
 import ScriptsLibrary from './components/ScriptsLibrary';
 import UserManagementView from './components/UserManagementView';
 import UserProfileModal from './components/UserProfileModal';
-import LoginPage from './components/LoginPage'; 
-import { 
-  NavigationState, Lead, LeadStatus, UserRole, User, 
-  SystemConfig, OnboardingTemplate, UserGoal, SdrQualification, AgendaEvent, AutomationFlow, Task, SalesScript, EmailProvider
+import LoginPage from './components/LoginPage';
+import DefinirSenha from './components/DefinirSenha';
+import {
+  NavigationState, Lead, LeadStatus, UserRole, User,
+  SystemConfig, OnboardingTemplate, UserGoal, AgendaEvent, SalesScript, EmailProvider, Interaction
 } from './types';
-import { INITIAL_LEADS, DEFAULT_ONBOARDING_TEMPLATES } from './constants';
+import { DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
-
-const CONFIG_KEY = 'ciatos_config_v64';
-const LEADS_KEY = 'ciatos_leads_v64';
-const SCRIPTS_KEY = 'ciatos_scripts_v64';
-const USERS_KEY = 'ciatos_users_v64';
-const TEMPLATES_KEY = 'ciatos_templates_v64';
-const GOALS_KEY = 'ciatos_goals_v64';
-const AUTH_KEY = 'ciatos_auth_v64';
+import { supabase } from './lib/supabase';
+import * as db from './services/db';
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   phases: [
@@ -55,17 +50,16 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   companySizes: ['MICROEMPRESA (ME)', 'PEQUENO PORTE (EPP)', 'MÉDIA EMPRESA', 'GRANDE EMPRESA'],
   taxRegimes: ['SIMPLES NACIONAL', 'LUCRO PRESUMIDO', 'LUCRO REAL', 'IMUNE/ISENTA'],
   serviceTypes: ['PLANEJAMENTO TRIBUTÁRIO', 'HOLDING FAMILIAR', 'CONSULTORIA EMPRESARIAL', 'AUDITORIA FISCAL'],
-  messaging: { 
+  messaging: {
     email: {
-      senderName: 'Equipe Banca Ciatos',
-      senderEmail: 'contato@grupociatos.com.br',
-      provider: EmailProvider.SENDGRID,
+      senderName: 'Grupo Ciatos',
+      senderEmail: 'envio@grupociatos.com.br',
+      provider: EmailProvider.CUSTOM_SMTP,
       apiKey: '',
-      smtpHost: 'smtp.ciatos.com.br',
-      webhookSecret: 'ciatos_secret_777',
-      emailSignature: '--\nAtenciosamente,\nEquipe Banca Ciatos\nwww.grupociatos.com.br'
+      webhookSecret: '',
+      emailSignature: '--\nAtenciosamente,\nGrupo Ciatos\nwww.grupociatos.com.br'
     },
-    whatsapp: { apiKey: '' } 
+    whatsapp: { apiKey: '' }
   },
   bonus: {
     simpleQualification: 15.00,
@@ -74,8 +68,10 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     proposalBonus: 100.00,
     contractBonus: 500.00
   },
-  publicSchedulerLink: 'https://ciatos.com.br/agenda/diagnostico'
+  publicSchedulerLink: ''
 };
+
+type EstadoAuth = 'carregando' | 'deslogado' | 'sem_acesso' | 'ok';
 
 const App: React.FC = () => {
   const [nav, setNav] = useState<NavigationState>({ view: 'dashboard' });
@@ -86,125 +82,136 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
   const [templates, setTemplates] = useState<OnboardingTemplate[]>(DEFAULT_ONBOARDING_TEMPLATES);
   const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
-  
+
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // realUser = quem está logado; currentUser pode ter o papel "simulado" (só Admin, só visual).
+  const [realUser, setRealUser] = useState<User | null>(null);
+  const [simulatedRole, setSimulatedRole] = useState<UserRole | null>(null);
+  const [estadoAuth, setEstadoAuth] = useState<EstadoAuth>('carregando');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [carregandoDados, setCarregandoDados] = useState(false);
+  const [definindoSenha, setDefinindoSenha] = useState(() => /type=(recovery|invite)/.test(window.location.hash));
 
+  const currentUser: User | null = realUser
+    ? (simulatedRole && realUser.role === UserRole.ADMIN ? { ...realUser, role: simulatedRole } : realUser)
+    : null;
+
+  const erro = (e: unknown) => {
+    console.error(e);
+    alert(e instanceof Error ? e.message : 'Erro inesperado ao falar com o servidor.');
+  };
+
+  const carregarTudo = useCallback(async () => {
+    setCarregandoDados(true);
+    try {
+      const [ls, us, cfg, scr, tpl, metas, evs] = await Promise.all([
+        db.carregarLeads(),
+        db.carregarUsuarios(),
+        db.carregarConfig(),
+        db.carregarScripts(),
+        db.carregarTemplatesOnboarding(),
+        db.carregarMetas(),
+        db.carregarEventos(),
+      ]);
+      setLeads(ls);
+      setUsers(us);
+      setConfig(cfg ? { ...DEFAULT_SYSTEM_CONFIG, ...cfg } as SystemConfig : DEFAULT_SYSTEM_CONFIG);
+      setScripts(scr);
+      setTemplates(tpl.length ? tpl : DEFAULT_ONBOARDING_TEMPLATES);
+      setUserGoals(metas);
+      setEvents(evs);
+    } catch (e) {
+      erro(e);
+    } finally {
+      setCarregandoDados(false);
+    }
+  }, []);
+
+  // Sessão do Supabase é a fonte da verdade do login.
   useEffect(() => {
-    const safeParse = (key: string) => {
+    let ativo = true;
+    const aplicarSessao = async (userId: string | null) => {
+      if (!userId) {
+        setRealUser(null);
+        setEstadoAuth('deslogado');
+        return;
+      }
       try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : null;
+        const perfil = await db.carregarPerfil(userId);
+        if (!ativo) return;
+        if (!perfil) {
+          setRealUser(null);
+          setEstadoAuth('sem_acesso');
+          return;
+        }
+        setRealUser(perfil);
+        setEstadoAuth('ok');
       } catch (e) {
-        console.error(`Error parsing ${key}:`, e);
-        return null;
+        erro(e);
+        setEstadoAuth('deslogado');
       }
     };
-
-    const savedLeads = safeParse(LEADS_KEY);
-    const savedConfig = safeParse(CONFIG_KEY);
-    const savedScripts = safeParse(SCRIPTS_KEY);
-    const savedUsers = safeParse(USERS_KEY);
-    const savedTemplates = safeParse(TEMPLATES_KEY);
-    const savedGoals = safeParse(GOALS_KEY);
-    const savedAuth = safeParse(AUTH_KEY);
-
-    if (savedConfig) setConfig(savedConfig);
-    if (savedTemplates) setTemplates(savedTemplates);
-    else setTemplates(DEFAULT_ONBOARDING_TEMPLATES);
-
-    if (savedGoals) setUserGoals(savedGoals);
-
-    let currentUsers: User[] = [];
-    if (savedUsers) {
-      currentUsers = savedUsers;
-      setUsers(currentUsers);
-    } else {
-      currentUsers = [
-        { id: 'user-diego', name: 'Diego Garcia', email: 'diego.garcia@grupociatos.com.br', password: '250500', role: UserRole.ADMIN, department: 'Comercial', avatar: `https://ui-avatars.com/api/?name=Diego+Garcia&background=0a192f&color=c5a059` },
-        { id: 'user-sdr', name: 'SDR Operacional', email: 'sdr@ciatos.com.br', password: '123', role: UserRole.SDR, department: 'Comercial', avatar: '' },
-        { id: 'user-closer', name: 'Consultor Closer', email: 'closer@ciatos.com.br', password: '123', role: UserRole.CLOSER, department: 'Comercial', avatar: '' }
-      ];
-      setUsers(currentUsers);
-      
-      const initialGoals: UserGoal[] = [
-        { id: 'g1', userId: 'user-sdr', month: new Date().getMonth(), year: 2025, qualsGoal: 40, callsGoal: 10, proposalsGoal: 0, contractsGoal: 0 },
-        { id: 'g2', userId: 'user-closer', month: new Date().getMonth(), year: 2025, qualsGoal: 0, callsGoal: 0, proposalsGoal: 15, contractsGoal: 5 }
-      ];
-      setUserGoals(initialGoals);
-    }
-
-    if (savedAuth) {
-      setCurrentUser(savedAuth);
-    }
-
-    if (savedLeads) setLeads(savedLeads); else setLeads(INITIAL_LEADS);
-    if (savedScripts) setScripts(savedScripts);
+    supabase.auth.getSession().then(({ data }) => aplicarSessao(data.session?.user.id ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, session) => {
+      if (evento === 'PASSWORD_RECOVERY') setDefinindoSenha(true);
+      if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT' || evento === 'USER_UPDATED') {
+        // Evita deadlock do supabase-js: não aguardar chamadas dentro do callback.
+        setTimeout(() => aplicarSessao(session?.user.id ?? null), 0);
+      }
+    });
+    return () => { ativo = false; sub.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
-    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
-    localStorage.setItem(GOALS_KEY, JSON.stringify(userGoals));
-    if (currentUser) localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
-    else localStorage.removeItem(AUTH_KEY);
-  }, [leads, config, scripts, users, templates, userGoals, currentUser]);
+    if (estadoAuth === 'ok') carregarTudo();
+  }, [estadoAuth, carregarTudo]);
 
-  const handleLogin = (email: string, pass: string) => {
+  const handleLogin = async (email: string, pass: string) => {
     setIsAuthLoading(true);
-    setTimeout(() => {
-      const found = users.find(u => u.email === email && u.password === pass);
-      if (found) {
-        setCurrentUser(found);
-        // Redireciona Admin direto para o BI Executivo se logar
-        if (found.role === UserRole.ADMIN) setNav({ view: 'executive_bi' as any });
-      }
-      else alert("E-mail ou senha incorretos.");
-      setIsAuthLoading(false);
-    }, 1200);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem(AUTH_KEY);
-  };
-
-  const handleResetToDefaults = () => {
-    if (confirm("Deseja restaurar os padrões de fábrica do sistema?")) {
-      localStorage.clear();
-      window.location.reload();
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
+    setIsAuthLoading(false);
+    if (error) {
+      alert(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
+      return;
     }
+    setNav({ view: 'dashboard' });
   };
 
-  const handleSeed = () => {
-    if (currentUser) {
-       const { leads: seedLeads } = seedDatabase(60, currentUser, users);
-       setLeads([...leads, ...seedLeads]);
-       alert("60 leads de amostragem gerados.");
-    }
+  const handleEsqueciSenha = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    if (error) return erro(error);
+    alert('Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.');
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSimulatedRole(null);
+    setLeads([]);
+  };
+
+  // --- Leads ------------------------------------------------------------------
   const handleUpdateLead = (updatedLead: Lead) => {
     setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+    db.salvarLead(updatedLead).catch(e => { erro(e); carregarTudo(); });
   };
 
-  const handleAddUser = (user: User) => setUsers(prev => [...prev, user]);
-  const handleUpdateUser = (updatedUser: User) => {
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    if (currentUser?.id === updatedUser.id) setCurrentUser(updatedUser);
+  const patchLead = (id: string, patch: Partial<Lead>) => {
+    const lead = leads.find(l => l.id === id);
+    if (lead) handleUpdateLead({ ...lead, ...patch });
   };
-  const handleDeleteUser = (id: string) => setUsers(prev => prev.filter(u => u.id !== id));
+
+  const handleDeleteLead = (id: string) => {
+    setLeads(prev => prev.filter(l => l.id !== id));
+    if (selectedLeadId === id) setSelectedLeadId(null);
+    db.excluirLead(id).catch(e => { erro(e); carregarTudo(); });
+  };
 
   const handleAddLead = async (leadData: any) => {
     const newLead: Lead = {
       ...leadData,
-      id: leadData.id || `lead-${Date.now()}`,
+      id: db.isUuid(leadData.id) ? leadData.id : db.novoId(),
       status: leadData.status || LeadStatus.QUALIFICATION,
       phaseId: leadData.phaseId || 'ph-qualificado',
       ownerId: leadData.ownerId || currentUser?.id,
@@ -213,45 +220,169 @@ const App: React.FC = () => {
       tasks: [],
       inQueue: leadData.inQueue ?? true
     };
-    setLeads(prev => [newLead, ...prev]);
-    return { success: true, message: 'Lead gerado.' };
+    try {
+      await db.salvarLead(newLead);
+      setLeads(prev => [newLead, ...prev]);
+      return { success: true, message: 'Lead gerado.' };
+    } catch (e) {
+      return { success: false, message: e instanceof Error ? e.message : 'Falha ao salvar lead.' };
+    }
   };
 
-  if (!currentUser) return <LoginPage onLogin={handleLogin} isLoading={isAuthLoading} />;
+  const handleAddInteraction = (leadId: string, inter: Interaction) => {
+    if (!realUser) return;
+    const nova: Interaction = { ...inter, id: db.novoId(), date: new Date().toISOString() };
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, interactions: [nova, ...l.interactions] } : l));
+    db.registrarInteracao(leadId, nova, realUser.id).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  const handleSeed = async () => {
+    if (!currentUser) return;
+    const { leads: seedLeads } = seedDatabase(60, currentUser, users);
+    const comIds = seedLeads.map(l => ({ ...l, id: db.novoId(), cnpjRaw: '', cnpj: '', interactions: [] }));
+    try {
+      await Promise.all(comIds.map(l => db.salvarLead(l)));
+      await carregarTudo();
+      alert(`${comIds.length} leads de amostragem gerados.`);
+    } catch (e) { erro(e); }
+  };
+
+  const handleResetToDefaults = async () => {
+    if (!realUser || !confirm('Restaurar a configuração padrão (fases, tipos de tarefa, bônus)? Os leads não são apagados.')) return;
+    setConfig(DEFAULT_SYSTEM_CONFIG);
+    db.salvarConfig(DEFAULT_SYSTEM_CONFIG, realUser.id).catch(erro);
+  };
+
+  // --- Usuários -----------------------------------------------------------------
+  const handleAddUser = async (user: User) => {
+    try {
+      const r = await db.convidarUsuario({ name: user.name, email: user.email, role: user.role, department: user.department });
+      await carregarTudo();
+      if (r.emailEnviado) alert(`Convite enviado para ${user.email}. A pessoa cria a própria senha pelo link do e-mail.`);
+      else if (r.inviteLink) {
+        prompt('Não foi possível enviar o e-mail. Copie o link de convite e envie para a pessoa:', r.inviteLink);
+      }
+    } catch (e) { erro(e); }
+  };
+
+  const handleUpdateUser = async (updatedUser: User & { password?: string }) => {
+    try {
+      await db.atualizarMeuPerfil(updatedUser);
+      if (updatedUser.password) {
+        const { error } = await supabase.auth.updateUser({ password: updatedUser.password });
+        if (error) throw error;
+      }
+      setRealUser(prev => prev && prev.id === updatedUser.id ? { ...prev, name: updatedUser.name, avatar: updatedUser.avatar, department: updatedUser.department } : prev);
+      setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, password: undefined } : u));
+      alert('Perfil atualizado com sucesso!');
+    } catch (e) { erro(e); }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (id === realUser?.id) return alert('Você não pode desativar o próprio acesso.');
+    try {
+      await db.desativarUsuario(id);
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } catch (e) { erro(e); }
+  };
+
+  // --- Config, scripts, templates, metas, agenda --------------------------------
+  const handleSaveConfig = (cfg: SystemConfig) => {
+    setConfig(cfg);
+    if (realUser) db.salvarConfig(cfg, realUser.id).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  const handleSaveScript = async (s: SalesScript) => {
+    try {
+      const salvo = await db.salvarScript(s);
+      setScripts(prev => prev.find(i => i.id === s.id || i.id === salvo.id) ? prev.map(i => (i.id === s.id || i.id === salvo.id) ? salvo : i) : [...prev, salvo]);
+    } catch (e) { erro(e); }
+  };
+
+  const handleDeleteScript = (id: string) => {
+    setScripts(prev => prev.filter(s => s.id !== id));
+    db.excluirScript(id).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  const handleSaveTemplates = (lista: OnboardingTemplate[]) => {
+    setTemplates(lista);
+    db.salvarTemplatesOnboarding(lista).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  const handleSaveGoals = (metas: UserGoal[]) => {
+    setUserGoals(metas);
+    db.salvarMetas(metas).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  const handleSaveEvent = async (e: AgendaEvent) => {
+    try {
+      const salvo = await db.salvarEvento(e);
+      setEvents(prev => prev.find(x => x.id === e.id || x.id === salvo.id) ? prev.map(x => (x.id === e.id || x.id === salvo.id) ? salvo : x) : [...prev, salvo]);
+    } catch (err) { erro(err); }
+  };
+
+  const handleDeleteEvent = (id: string) => {
+    setEvents(prev => prev.filter(e => e.id !== id));
+    db.excluirEvento(id).catch(e => { erro(e); carregarTudo(); });
+  };
+
+  // --- Telas de estado ------------------------------------------------------------
+  if (definindoSenha) {
+    return <DefinirSenha onConcluido={() => { setDefinindoSenha(false); window.history.replaceState(null, '', window.location.pathname); }} />;
+  }
+  if (estadoAuth === 'carregando') {
+    return <div className="min-h-screen bg-[#050a15] flex items-center justify-center text-[#c5a059] font-black uppercase tracking-widest text-xs">Carregando…</div>;
+  }
+  if (estadoAuth === 'sem_acesso') {
+    return (
+      <div className="min-h-screen bg-[#050a15] flex items-center justify-center p-6">
+        <div className="max-w-md text-center text-white space-y-6">
+          <h1 className="text-2xl font-black">Sem acesso ao CRM</h1>
+          <p className="text-slate-400">Seu login existe, mas ainda não foi liberado no CRM Ciatos. Peça a um administrador para convidar você.</p>
+          <button onClick={handleLogout} className="px-8 py-3 bg-[#c5a059] rounded-xl font-black uppercase text-xs">Sair</button>
+        </div>
+      </div>
+    );
+  }
+  if (!currentUser) return <LoginPage onLogin={handleLogin} onForgotPassword={handleEsqueciSenha} isLoading={isAuthLoading} />;
 
   const renderView = () => {
     switch (nav.view) {
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
-      case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={s => setScripts(prev => prev.find(item => item.id === s.id) ? prev.map(item => item.id === s.id ? s : item) : [...prev, s])} onDeleteScript={id => setScripts(prev => prev.filter(s => s.id !== id))} />;
+      case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
       case 'prospecting': return <Prospector onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
-      case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => setLeads(leads.map(l => l.id === id ? {...l, inQueue: false, qualifiedById: currentUser.id} : l))} onUpdateLead={handleUpdateLead} onDeleteLead={(id) => setLeads(leads.filter(l => l.id !== id))} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
+      case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
-      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => setLeads(leads.map(l => l.id === id ? {...l, phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId} : l))} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
-      case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={(e) => setEvents(prev => [...prev, e])} onDeleteEvent={(id) => setEvents(prev => prev.filter(e => e.id !== id))} onSelectLead={setSelectedLeadId} />;
+      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
+      case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
       case 'operational_dashboard': return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={templates} />;
-      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onDeleteCustomer={(id) => setLeads(leads.filter(l => l.id !== id))} />;
+      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onDeleteCustomer={handleDeleteLead} />;
       case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} />;
-      case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={setConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={setUserGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={setTemplates} onSyncTemplate={()=>{}} />;
+      case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={handleSaveConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={handleSaveGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={handleSaveTemplates} onSyncTemplate={()=>{}} />;
       default: return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;
     }
   };
 
   const selectedLead = leads.find(l => l.id === selectedLeadId);
+  const podeSimular = realUser?.role === UserRole.ADMIN;
 
   return (
     <div className={`min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex font-serif text-slate-900`}>
       <Sidebar role={currentUser.role} currentView={nav.view} setView={(v) => setNav({ view: v })} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 flex flex-col min-h-screen">
-        <Header notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} onSwitchRole={(r) => setCurrentUser(users.find(u => u.role === r) || currentUser)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
-        <main className={`flex-1 ml-64 pt-28 p-12 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>{renderView()}</main>
+        <Header notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
+        <main className={`flex-1 ml-64 pt-28 p-12 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
+          {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}
+          {renderView()}
+        </main>
       </div>
       {showNewLeadForm && <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"><NewLeadForm config={config} onSave={handleAddLead} onCancel={() => setShowNewLeadForm(false)} currentUser={currentUser} /></div>}
-      {showUserProfileModal && <UserProfileModal user={currentUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
-      {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={(id) => setLeads(leads.filter(l => l.id !== id))} onAddInteraction={(id, inter) => setLeads(leads.map(l => l.id === id ? {...l, interactions: [{...inter, id: `int-${Date.now()}`, date: new Date().toISOString()}, ...l.interactions]} : l))} onAddAgendaEvent={(e) => setEvents([...events, e])} onDeleteAgendaEvent={(id) => setEvents(events.filter(e => e.id !== id))} currentUser={currentUser} allUsers={users} scripts={scripts} />}
+      {showUserProfileModal && realUser && <UserProfileModal user={realUser} onSave={handleUpdateUser} onClose={() => setShowUserProfileModal(false)} />}
+      {selectedLead && <LeadDetails lead={selectedLead} config={config} agendaEvents={events} onClose={() => setSelectedLeadId(null)} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onAddInteraction={handleAddInteraction} onAddAgendaEvent={handleSaveEvent} onDeleteAgendaEvent={handleDeleteEvent} currentUser={currentUser} allUsers={users} scripts={scripts} />}
     </div>
   );
 };

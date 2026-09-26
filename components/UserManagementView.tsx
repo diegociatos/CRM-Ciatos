@@ -20,20 +20,19 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
     e.preventDefault();
     if (!formData.name || !formData.email) return;
 
+    // A conta é criada no servidor e a pessoa recebe um convite por e-mail
+    // para definir a própria senha (nada de senha provisória).
     const newUser: User = {
-      id: `user-${Date.now()}`,
+      id: '',
       name: formData.name,
-      email: formData.email,
-      password: '123456', // Senha provisória conforme solicitado
+      email: formData.email.trim().toLowerCase(),
       role: formData.role as UserRole,
       department: formData.department as Department,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=0a192f&color=c5a059`
     };
 
     onAddUser(newUser);
     setFormData({ role: UserRole.SDR, department: 'Comercial' });
     setShowModal(false);
-    alert(`Usuário criado com sucesso!\nSenha provisória: 123456`);
   };
 
   const labelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5";

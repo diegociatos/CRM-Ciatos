@@ -19,15 +19,13 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onSave, onClo
       alert("As senhas não coincidem.");
       return;
     }
+    if (newPassword && (newPassword.length < 8 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword))) {
+      alert("A senha precisa de pelo menos 8 caracteres, com letra maiúscula, minúscula e número.");
+      return;
+    }
 
-    const updatedUser = {
-      ...formData,
-      password: newPassword || formData.password
-    };
-
-    onSave(updatedUser);
+    onSave({ ...formData, password: newPassword || undefined });
     onClose();
-    alert("Perfil atualizado com sucesso!");
   };
 
   const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-widest block mb-2";
@@ -70,7 +68,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onSave, onClo
             </div>
             <div>
               <label className={labelClass}>E-mail de Login</label>
-              <input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              <input type="email" readOnly className={`${inputClass} opacity-60 cursor-not-allowed`} value={formData.email} title="Para trocar o e-mail de login, fale com um administrador" />
             </div>
             <div>
               <label className={labelClass}>URL da Foto (Avatar)</label>

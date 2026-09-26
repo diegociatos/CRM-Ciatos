@@ -4,20 +4,45 @@ import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { miningEngine } from '../services/miningService';
 
 interface ProspectorProps {
-  onAddAsLead: (comp: any) => Promise<boolean>;
+  onAddAsLead: (comp: any) => Promise<{ success: boolean; message: string }>;
   canImport: boolean;
   existingLeads: Lead[];
 }
 
-const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existingLeads }) => {
+/** Converte um achado do Radar (dados da Receita + web) no formato de Lead do CRM. */
+function miningParaLead(m: MiningLead): any {
+  return {
+    name: m.contactName && m.contactName !== 'Proprietário' ? m.contactName : (m.partners?.[0] || ''),
+    email: '',
+    phone: m.phone || m.phoneCompany || '',
+    company: m.tradeName || m.name,
+    tradeName: m.tradeName || m.name,
+    legalName: m.name,
+    cnpj: m.cnpj,
+    cnpjRaw: m.cnpjRaw,
+    companyEmail: m.emailCompany && m.emailCompany !== 'Não localizado' ? m.emailCompany : '',
+    companyPhone: m.phoneCompany && m.phoneCompany !== 'Não localizado' ? m.phoneCompany : '',
+    segment: m.segment,
+    city: m.city,
+    state: m.state,
+    website: m.website,
+    icpScore: m.scoreIa || m.icpScore || 3,
+    debtStatus: m.debtStatus || 'Regular',
+    detailedPartners: (m.partners || []).filter(p => p && p !== 'Não informado').map(p => ({ name: p, sharePercentage: '' })),
+    notes: (m as any).reason || '',
+    enriched: !!(m as any).verificadoReceita,
+    inQueue: true,
+  };
+}
+
+const Prospector: React.FC<ProspectorProps> =({ onAddAsLead, canImport, existingLeads }) => {
   const [activeJobs, setActiveJobs] = useState<MiningJob[]>([]);
   const [showNewJobModal, setShowNewJobModal] = useState(false);
   const [inspectingJob, setInspectingJob] = useState<MiningJob | null>(null);
   const [jobLeads, setJobLeads] = useState<MiningLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasKey, setHasKey] = useState(false);
-  
+
   const [newJob, setNewJob] = useState({
     segmentName: '',
     state: 'MG',
@@ -30,21 +55,22 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     enrich: true
   });
 
-  useEffect(() => {
-    const checkKey = async () => {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasKey(selected);
-    };
-    checkKey();
+  const [versaoLeads, setVersaoLeads] = useState(0);
 
+  useEffect(() => {
     const load = () => {
-      setActiveJobs(miningEngine.getJobs().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setActiveJobs([...miningEngine.getJobs()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setVersaoLeads(v => v + 1);
     };
+    window.addEventListener('ciatos-mining-update', load);
+    miningEngine.init();
     load();
-    const handler = () => load();
-    window.addEventListener('ciatos-mining-update', handler);
-    return () => window.removeEventListener('ciatos-mining-update', handler);
+    return () => window.removeEventListener('ciatos-mining-update', load);
   }, []);
+
+  useEffect(() => {
+    if (inspectingJob) miningEngine.loadLeads(inspectingJob.id);
+  }, [inspectingJob?.id]);
 
   useEffect(() => {
     if (inspectingJob) {
@@ -53,19 +79,18 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
       const filtered = leads.filter(l => !existingCnpjs.has(l.cnpjRaw));
       setJobLeads(filtered);
     }
-  }, [inspectingJob, activeJobs, existingLeads]);
-
-  const handleSelectKey = async () => {
-    await window.aistudio.openSelectKey();
-    setHasKey(true);
-  };
+  }, [inspectingJob, versaoLeads, existingLeads]);
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasKey) return alert("Selecione sua chave de API para habilitar a busca em tempo real.");
     if (!newJob.segmentName) return alert("Preencha o nome do segmento.");
-    
-    await miningEngine.createJob(newJob as any);
+    if (!newJob.city) return alert("Preencha a cidade.");
+
+    try {
+      await miningEngine.createJob(newJob as any);
+    } catch (err) {
+      return alert(err instanceof Error ? err.message : 'Falha ao criar a busca.');
+    }
     setShowNewJobModal(false);
     setNewJob({
       segmentName: '', state: 'MG', city: '', size: 'all', 
@@ -81,19 +106,21 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
     const leadsToSend = jobLeads.filter(l => selectedLeads.has(l.id));
     let successCount = 0;
 
+    const falhas: string[] = [];
+
     for (const lead of leadsToSend) {
-       const ok = await onAddAsLead({ ...lead, isGarimpo: true, inQueue: true });
-       if (ok) {
+       const r = await onAddAsLead(miningParaLead(lead));
+       if (r.success) {
          successCount++;
-         miningEngine.markAsImported(lead.cnpjRaw); 
+         await miningEngine.markAsImported(lead.jobId, lead.cnpjRaw);
+       } else {
+         falhas.push(`${lead.tradeName}: ${r.message}`);
        }
     }
-    
+
     setIsProcessing(false);
     setSelectedLeads(new Set());
-    const updatedLeads = jobLeads.filter(l => !selectedLeads.has(l.id));
-    setJobLeads(updatedLeads);
-    alert(`Sucesso: ${successCount} leads importados.`);
+    alert(`${successCount} leads importados.${falhas.length ? `\n\nNão importados:\n${falhas.join('\n')}` : ''}`);
   };
 
   const toggleAll = () => {
@@ -146,14 +173,6 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
           <p className="text-slate-500 text-lg font-medium">Extração estrita por Porte e Regime Tributário.</p>
         </div>
         <div className="flex gap-4">
-          {!hasKey && (
-            <button 
-              onClick={handleSelectKey}
-              className="bg-amber-100 text-amber-700 px-8 py-4 rounded-[1.8rem] font-black uppercase text-[10px] tracking-widest border-2 border-amber-200 hover:bg-amber-200 transition-all flex items-center gap-3"
-            >
-              <span className="text-xl">🔑</span> Configurar Chave de Acesso
-            </button>
-          )}
           <button 
             onClick={() => setShowNewJobModal(true)}
             className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 transition-all"
@@ -339,8 +358,9 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                               <p className="text-sm font-bold text-[#0a192f] serif-authority leading-tight">{lead.tradeName}</p>
                               <div className="flex gap-2 mt-1">
                                 <span className="text-[9px] font-mono text-slate-400 uppercase">{lead.cnpj}</span>
-                                <span className="text-[8px] bg-amber-50 px-1.5 rounded text-amber-600 font-bold uppercase">{lead.size}</span>
-                                <span className="text-[8px] bg-indigo-50 px-1.5 rounded text-indigo-600 font-bold uppercase">{lead.taxRegime}</span>
+                                {(lead as any).porteReceita && <span className="text-[8px] bg-amber-50 px-1.5 rounded text-amber-600 font-bold uppercase">{(lead as any).porteReceita}</span>}
+                                {(lead as any).simplesNacional != null && <span className="text-[8px] bg-indigo-50 px-1.5 rounded text-indigo-600 font-bold uppercase">{(lead as any).simplesNacional ? 'Simples' : 'Fora do Simples'}</span>}
+                                {(lead as any).verificadoReceita && <span className="text-[8px] bg-emerald-50 px-1.5 rounded text-emerald-600 font-bold uppercase" title="CNPJ ativo confirmado na Receita Federal">✓ Receita</span>}
                               </div>
                            </td>
                            <td className="px-4 py-6 text-xs font-bold text-slate-600 space-y-1">
@@ -363,10 +383,11 @@ const Prospector: React.FC<ProspectorProps> = ({ onAddAsLead, canImport, existin
                            <td className="px-8 py-6 text-right">
                               <button 
                                 onClick={async () => {
-                                   const ok = await onAddAsLead({ ...lead, isGarimpo: true, inQueue: true });
-                                   if (ok) {
-                                      miningEngine.markAsImported(lead.cnpjRaw);
-                                      setJobLeads(prev => prev.filter(l => l.cnpjRaw !== lead.cnpjRaw));
+                                   const r = await onAddAsLead(miningParaLead(lead));
+                                   if (r.success) {
+                                      await miningEngine.markAsImported(lead.jobId, lead.cnpjRaw);
+                                   } else {
+                                      alert(r.message);
                                    }
                                 }} 
                                 className="px-6 py-2 bg-[#0a192f] text-white rounded-xl text-[9px] font-black uppercase hover:scale-105 transition-all"

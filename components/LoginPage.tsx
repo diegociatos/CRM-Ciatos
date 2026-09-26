@@ -4,10 +4,11 @@ import { User, UserRole } from '../types';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => void;
+  onForgotPassword: (email: string) => void;
   isLoading?: boolean;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onForgotPassword, isLoading }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -33,13 +34,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
     }
   };
 
-  const handleQuickLogin = () => {
-    setEmail('diego.garcia@grupociatos.com.br');
-    setPassword('250500');
-    // Pequeno delay para visualização do preenchimento
-    setTimeout(() => {
-      onLogin('diego.garcia@grupociatos.com.br', '250500');
-    }, 500);
+  const handleForgot = () => {
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setErrors({ email: 'Informe seu e-mail para receber o link' });
+      return;
+    }
+    onForgotPassword(email);
   };
 
   return (
@@ -72,7 +72,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
                 </div>
                 <input 
                   type="email"
-                  placeholder="diego.garcia@grupociatos.com.br"
+                  placeholder="seu.email@grupociatos.com.br"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if(errors.email) validate(); }}
                   className={`w-full bg-white/5 border-2 ${errors.email ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-[#c5a059]'} rounded-2xl pl-14 pr-6 py-4 text-white font-bold outline-none transition-all placeholder:text-slate-700 placeholder:font-medium`}
@@ -85,7 +85,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-2">
                 <label className="text-[10px] font-black text-[#c5a059] uppercase tracking-[0.3em]">Credencial</label>
-                <button type="button" className="text-[9px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-all border-b border-transparent hover:border-white">Esqueci minha senha</button>
+                <button type="button" onClick={handleForgot} className="text-[9px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-all border-b border-transparent hover:border-white">Esqueci minha senha</button>
               </div>
               <div className="relative group">
                 <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#c5a059] transition-colors">
@@ -128,14 +128,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
                 </div>
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Lembrar de mim</span>
               </label>
-              
-              <button 
-                type="button" 
-                onClick={handleQuickLogin}
-                className="text-[9px] font-black text-[#c5a059] uppercase tracking-widest border border-[#c5a059]/30 px-3 py-1 rounded-lg hover:bg-[#c5a059]/10 transition-all"
-              >
-                ⚡ Acesso Rápido (Demo)
-              </button>
             </div>
 
             {/* Botão Login */}
@@ -162,10 +154,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
               <div className="flex items-center justify-center gap-2 text-[9px] font-black text-slate-600 uppercase tracking-widest">
                 <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 2.001 0 4.908-3.367 9.126-8 10.111-4.633-.985-8-5.203-8-10.111 0-.68.056-1.35.166-2.001zm8 2a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                 Conexão segura e criptografada
-              </div>
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 w-full">
-                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Credenciais Demo:</p>
-                <p className="text-[10px] font-bold text-slate-400">diego.garcia@grupociatos.com.br / 250500</p>
               </div>
             </div>
           </div>

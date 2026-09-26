@@ -1,0 +1,50 @@
+name: Deploy Cloudflare Pages
+
+# Builda e publica o CRM Ciatos no Cloudflare Pages (projeto crm-ciatos) a cada push na main.
+# As VITE_SUPABASE_* são PÚBLICAS por design (a anon key vai no bundle; a segurança
+# vem da RLS do schema crm). O único segredo é CLOUDFLARE_API_TOKEN
+# (Settings > Secrets and variables > Actions), com permissão "Cloudflare Pages: Edit".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A pasta migrated_prompt_history tem nomes de arquivo com ":" (herança do AI Studio).
+          sparse-checkout: |
+            /*
+            !/migrated_prompt_history/
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://rylbvqsjnmjohxvvzstm.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bGJ2cXNqbm1qb2h4dnZ6c3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNTAzNzQsImV4cCI6MjA5ODkyNjM3NH0.HLxGatmczQjipc8F-DKw1kDitpOwhC-XAdp03BYEAi8
+        run: npm run build
+
+      - name: Deploy no Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 9f4f2837f66e57fbe1a72c492c067de9
+          command: pages deploy dist --project-name=crm-ciatos --branch=main
