@@ -6,11 +6,12 @@ export interface Company {id:string;nome:string;registration:Record<string,strin
 export interface WorkspaceProps {company?:Company;companies?:Company[];onCompanyChange?:(id:string)=>void;onCompaniesRefresh?:(id?:string)=>Promise<void>;}
 export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.ReactNode}){
  const [uid,setUid]=useState<string|null>(null),[ready,setReady]=useState(false),[loading,setLoading]=useState(false),[companies,setCompanies]=useState<Company[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState('');
+ const [requiredPassword,setRequiredPassword]=useState(false);
  const [recovery,setRecovery]=useState(initialPasswordRecovery);
  const [verifying,setVerifying]=useState(!!recoveryVerification),[activationError,setActivationError]=useState(false);
  useEffect(()=>{let active=true;recoveryVerification?.then(ok=>{if(active){setRecovery(ok);setActivationError(!ok);setVerifying(false);}});return()=>{active=false;};},[]);
  const generation=useRef(0);
- useEffect(()=>{let active=true;const apply=(id:string|null)=>{if(active){setUid(id);setReady(true);}};supabase.auth.getSession().then(({data})=>apply(data.session?.user.id||null));const {data}=supabase.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')setRecovery(true);if(event==='SIGNED_OUT')setRecovery(false);apply(session?.user.id||null);});return()=>{active=false;generation.current++;data.subscription.unsubscribe();};},[]);
+ useEffect(()=>{let active=true;const apply=(user:any)=>{if(active){setUid(user?.id||null);setRequiredPassword(user?.app_metadata?.crm_password_change_required===true);setReady(true);}};supabase.auth.getSession().then(({data})=>apply(data.session?.user));const {data}=supabase.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')setRecovery(true);if(event==='SIGNED_OUT')setRecovery(false);apply(session?.user);});return()=>{active=false;generation.current++;data.subscription.unsubscribe();};},[]);
  const refresh=useCallback(async(preferred?:string)=>{
   if(!uid)return;const version=++generation.current;setLoading(true);setError('');
   try{const {data,error}=await supabase.rpc('my_companies');if(error)throw error;if(version!==generation.current)return;
@@ -23,7 +24,7 @@ export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.
  if(activationError)return <div className="p-8 max-w-xl mx-auto space-y-5"><h1 className="text-2xl">Link inválido ou expirado</h1><p role="alert">Solicite um novo link de acesso ao administrador. Nenhuma senha foi alterada.</p><button className="ux-secondary" onClick={()=>setActivationError(false)}>Voltar ao CRM</button></div>;
  if(!ready)return <div className="view-loading" role="status">Carregando acesso…</div>;
  if(!uid)return <>{children({})}</>;
- if(recovery)return <DefinirSenha onConcluido={()=>{setRecovery(false);window.history.replaceState(null,'',window.location.pathname+window.location.search);}}/>;
+ if(recovery||requiredPassword)return <DefinirSenha mandatory={requiredPassword} onConcluido={()=>{setRecovery(false);setRequiredPassword(false);window.history.replaceState(null,'',window.location.pathname+window.location.search);void refresh();}}/>;
  if(loading)return <div className="view-loading" role="status">Carregando suas empresas…</div>;
  if(!companies.length)return <div className="p-8 max-w-xl mx-auto space-y-5"><h1 className="text-2xl">Seu acesso às empresas</h1><p role={error?'alert':undefined}>{error||'Seu usuário ainda não está vinculado a uma empresa ativa. Solicite o acesso ao administrador do grupo.'}</p><button className="btn-navy" onClick={()=>void refresh()}>Tentar novamente</button><button className="ux-secondary" onClick={()=>void supabase.auth.signOut()}>Sair</button></div>;
  const company=companies.find(c=>c.id===selected);if(!company)return <div role="status">Selecionando empresa…</div>;

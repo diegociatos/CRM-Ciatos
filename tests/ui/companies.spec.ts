@@ -61,4 +61,22 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
  await page.goto('/tests/ui/?companies#type=recovery&token_hash=fake-expired-token');await page.reload();
  await expect(page.getByRole('heading',{name:'Link inválido ou expirado'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Crie sua senha'})).toHaveCount(0);
+ await page.goto('/tests/ui/?companies');
+ await page.evaluate(()=>{const session=JSON.parse(localStorage.getItem('ciatos_crm_auth')!);session.user.app_metadata={crm_password_change_required:true};localStorage.setItem('ciatos_crm_auth',JSON.stringify(session));});
+ await page.reload();
+ await expect(page.getByText('Antes de acessar suas empresas, substitua a senha inicial por uma senha pessoal.')).toBeVisible();
+ await expect(page.getByLabel('Trocar empresa')).toHaveCount(0);
+ await page.getByLabel('Nova senha',{exact:true}).fill('ciatos1234');await page.getByLabel('Confirme a senha').fill('ciatos1234');
+ await page.getByRole('button',{name:'Salvar e entrar'}).click();
+ await expect(page.getByRole('alert')).toContainText('maiúscula');
+ await page.route('**/functions/v1/crm-admin-users',route=>route.fulfill({status:400,json:{error:'Falha simulada'}}));
+ await page.getByLabel('Nova senha',{exact:true}).fill('NovaSenhaTeste234');await page.getByLabel('Confirme a senha').fill('NovaSenhaTeste234');
+ await page.getByRole('button',{name:'Salvar e entrar'}).click();
+ await expect(page.getByRole('alert')).toContainText('Não foi possível');
+ await expect(page.getByLabel('Trocar empresa')).toHaveCount(0);
+ await page.route('**/functions/v1/crm-admin-users',route=>{expect(route.request().postDataJSON().action).toBe('complete-password');return route.fulfill({json:{ok:true}});});
+ await page.route('**/auth/v1/token**',route=>route.fulfill({json:{access_token:token,refresh_token:'test',expires_in:3600,token_type:'bearer',user}}));
+ await page.getByRole('button',{name:'Salvar e entrar'}).click();
+ await expect(page.getByLabel('Trocar empresa')).toBeVisible();
+
 });

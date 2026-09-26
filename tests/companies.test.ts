@@ -72,5 +72,22 @@ test('company registration, shared users and complete operational isolation',asy
  await db.exec(`select set_config('request.jwt.claim.sub','${admin}',false)`);
  const clients=(await db.query<any>(`select * from crm.platform_clients()`)).rows;
  assert.equal(clients.find(c=>c.id===a).master_email,'equipe@example.test');
+
+ // A pending initial password blocks all companies, even for a master/owner.
+ await db.exec(`reset role;alter table auth.users add column raw_app_meta_data jsonb default '{}';update auth.users set raw_app_meta_data='{"crm_password_change_required":true}' where id in ('${member}','${admin}');set role authenticated;select set_config('request.jwt.claim.sub','${member}',false);`);
+ assert.equal((await db.query(`select * from crm.my_companies()`)).rows.length,0);
+ assert.equal((await db.query(`select * from crm.leads`)).rows.length,0);
+ assert.equal((await db.query<any>(`select crm.can_manage_company('${a}') allowed`)).rows[0].allowed,false);
+ await assert.rejects(db.exec(`select crm.save_company('${a}','Bloqueado','{}')`));
+ await db.exec(`select set_config('request.jwt.claim.sub','${admin}',false)`);
+ assert.equal((await db.query<any>(`select crm.platform_admin() allowed`)).rows[0].allowed,false);
+ await assert.rejects(db.exec(`select * from crm.platform_clients()`));
+ await db.exec(`reset role;update auth.users set raw_app_meta_data='{"crm_password_change_required":false}' where id='${member}';set role authenticated;select set_config('request.jwt.claim.sub','${member}',false);`);
+ assert.equal((await db.query(`select * from crm.my_companies()`)).rows.length,3);
+ await db.exec(`select set_config('request.jwt.claims','{"app_metadata":{"crm_password_change_required":true}}',false)`);
+ assert.equal((await db.query(`select * from crm.my_companies()`)).rows.length,0,'old provisional session must remain blocked after password change');
+ await db.exec(`select set_config('request.jwt.claims','{"app_metadata":{"crm_password_change_required":false}}',false)`);
+ assert.equal((await db.query(`select * from crm.my_companies()`)).rows.length,3);
+
  }finally{await db.close();}
 });

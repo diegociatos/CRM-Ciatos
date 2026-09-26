@@ -24,12 +24,6 @@ function origemPermitida(o: unknown): string {
   return typeof o === 'string' && lista.includes(o) ? o : lista[0];
 }
 
-function senhaAleatoria(): string {
-  const b = new Uint8Array(24);
-  crypto.getRandomValues(b);
-  return `${btoa(String.fromCharCode(...b)).replace(/[^a-zA-Z0-9]/g, '')}Aa1!`;
-}
-
 const esc = (s: string) => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]!));
 
 async function enviarEmail(to: string, assunto: string, html: string): Promise<boolean> {
@@ -82,6 +76,15 @@ Deno.serve(async (req) => {
   if (!caller?.ativo) return json({ error: 'Somente administradores do CRM gerenciam usuários' }, 403);
   let p: any;
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
+  if(p.action==='complete-password'){
+    if(me.user.app_metadata?.crm_password_change_required!==true)return json({error:'Não há troca inicial pendente.'},409);
+    const password=typeof p.password==='string'?p.password:'';
+    if(password.length<8||password.length>128||!/[a-z]/.test(password)||!/[A-Z]/.test(password)||!/[0-9]/.test(password)||password.toLowerCase()==='ciatos1234')return json({error:'Escolha uma nova senha de 8 a 128 caracteres, com maiúscula, minúscula e número.'},400);
+    // Password and mandatory flag change together, only for the authenticated user.
+    const {error}=await admin.auth.admin.updateUserById(me.user.id,{password,app_metadata:{...me.user.app_metadata,crm_password_change_required:false}});
+    if(error)return json({error:'Não foi possível atualizar a senha. Tente novamente.'},400);
+    return json({ok:true});
+  }
   const org=String(p.organization_id||'');
   const {data:allowed,error:accessError}=await asCaller.schema('crm').rpc('can_manage_company',{org});
   if(accessError||!allowed)return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
@@ -108,7 +111,7 @@ Deno.serve(async (req) => {
 
       if (!userId) {
         const { data: created, error } = await admin.auth.admin.createUser({
-          email, password: senhaAleatoria(), email_confirm: true, user_metadata: { nome },
+          email, password: 'ciatos1234', email_confirm: true, user_metadata: { nome }, app_metadata: { crm_password_change_required: true },
         });
         if (error) throw error;
         userId = created.user!.id;
@@ -136,7 +139,7 @@ Deno.serve(async (req) => {
         contaExistente ? 'Seu acesso ao CRM Ciatos foi liberado' : 'Convite — defina sua senha no CRM Ciatos',
         htmlConvite(nome, link, contaExistente),
       );
-      return json({ user: { id: userId }, contaExistente, emailEnviado, inviteLink: emailEnviado ? null : link });
+      return json({ user: { id: userId }, contaExistente, emailEnviado, inviteLink: emailEnviado ? null : link, requiresPasswordChange: !contaExistente });
     }
 
     if(p.action==='deactivate'||p.action==='set-role'){
