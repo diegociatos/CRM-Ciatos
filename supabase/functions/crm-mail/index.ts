@@ -55,8 +55,8 @@ Deno.serve(async req => {
       subject: `[TESTE] ${msg.subject}`, ...(msg.html ? { html: msg.html } : { text: msg.text }) });
   } catch (e) {
     const m = (e as Error).message || '';
-    return json({ error: /SendAs|send as|not have permission|ErrorAccessDenied/i.test(m)
-      ? `A caixa conectada não tem permissão "Enviar como" para ${from}. Libere no Exchange ou use a própria caixa conectada.`
+    return json({ error: /SendAs|send as|not have permission|AccessDenied|Access is denied/i.test(m)
+      ? `A conta conectada não pode enviar como ${from}. Dê a ela a permissão "Enviar como" nessa caixa no Exchange e reconecte a caixa no CRM (ou conecte com a própria ${from}).`
       : `O Microsoft 365 recusou o envio: ${m.slice(0, 200)}` }, 502);
   }
   return json({ ok: true, para: me.user.email, de: from });

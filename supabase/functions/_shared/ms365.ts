@@ -3,7 +3,10 @@
 export type Env = (name: string) => string | undefined;
 export type Requester = typeof fetch;
 
-export const SCOPE = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read';
+// Mail.Send.Shared: enviar como OUTRA caixa (ex.: envio@) com o login de um
+// usuário que tenha "Enviar como" nela no Exchange. Sem ele o Graph responde
+// "Access is denied" em /users/{outra}/sendMail.
+export const SCOPE = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Send.Shared https://graph.microsoft.com/User.Read';
 const AUTH = (tenant: string) => `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
 const unb64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
