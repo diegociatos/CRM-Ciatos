@@ -6,6 +6,7 @@ import {
 } from '../types';
 
 interface SettingsProps {
+  initialTab?: 'journeys';
   config: SystemConfig;
   role: UserRole;
   currentUser: User;
@@ -22,9 +23,9 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
-  config, onSaveConfig, leads, userGoals, allUsers, onSaveGoals, onSeedDatabase, onClearDatabase, templates, onSaveTemplates, onSyncTemplate, currentUser 
+  initialTab, config, onSaveConfig, leads, userGoals, allUsers, onSaveGoals, onSeedDatabase, onClearDatabase, templates, onSaveTemplates, onSyncTemplate, currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'comercial' | 'parametros' | 'journeys' | 'data'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'comercial' | 'parametros' | 'journeys' | 'data'>(initialTab || 'pipeline');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
   // States para novos itens
