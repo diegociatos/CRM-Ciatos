@@ -16,7 +16,9 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const MODELO = Deno.env.get('CRM_CLAUDE_MODEL') || '';
-const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
+// Chave sem escopo de workspace exige o header anthropic-workspace-id.
+const WORKSPACE = Deno.env.get('CRM_ANTHROPIC_WORKSPACE_ID');
+const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY'), ...(WORKSPACE ? { defaultHeaders: { 'anthropic-workspace-id': WORKSPACE } } : {}) });
 
 const CONTEXTO_CIATOS = `O Grupo Ciatos (Belo Horizonte/MG) vende serviços de contabilidade, planejamento tributário,
 recuperação de créditos, holding familiar/planejamento patrimonial e consultoria empresarial para PMEs.

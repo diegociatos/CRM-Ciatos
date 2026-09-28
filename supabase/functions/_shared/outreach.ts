@@ -56,7 +56,8 @@ export async function decide(env: Env, context: unknown, request: Requester = fe
   const response = await request(provider === 'openai' ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
     method: 'POST', signal: AbortSignal.timeout(30000),
     headers: provider === 'openai' ? { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
-      : { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      : { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json',
+          ...(env('CRM_ANTHROPIC_WORKSPACE_ID') ? { 'anthropic-workspace-id': env('CRM_ANTHROPIC_WORKSPACE_ID')! } : {}) },
     body: JSON.stringify(provider === 'openai' ? { model, store: false, instructions: system, input, max_output_tokens: 1000,
       text: { format: { type: 'json_schema', name: 'crm_decision', strict: true, schema: decisionSchema } } }
       : { model, system, max_tokens: 1000, messages: [{ role: 'user', content: input }] }),
