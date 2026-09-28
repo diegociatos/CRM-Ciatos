@@ -1,6 +1,6 @@
 # Administração da plataforma
 
-O proprietário abre **Administrar o CRM** no topo do CRM. **Minha empresa · operação** identifica o ambiente operacional; **Minha empresa** retorna a ele. O painel tem oito áreas, com dados persistidos no servidor e acesso exclusivo ao dono. Usuários master continuam restritos às suas empresas. Toda identidade pode ter vínculos em várias empresas, com perfis independentes.
+O cartão da empresa, no alto da barra lateral, identifica a empresa em operação. Clicando nele abre o menu para **trocar de empresa**, **Gerenciar empresas** e, para o proprietário, **Administrar o CRM**. O painel tem oito áreas, com dados persistidos no servidor e acesso exclusivo ao dono. Usuários master continuam restritos às suas empresas. Toda identidade pode ter vínculos em várias empresas, com perfis independentes.
 
 ## Rotina do proprietário
 

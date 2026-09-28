@@ -42,4 +42,22 @@ body, body * { font-family: "Book Antiqua", "Palatino Linotype", Palatino, Georg
  .qualification-table td:last-child button{display:flex;align-items:center;gap:6px}
 }
 
-.company-switcher{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid #dedbd1;border-radius:16px;padding:16px;margin-bottom:24px}.company-switcher label{display:flex;flex-direction:column;gap:5px}.company-switcher label span{font-size:12px;color:#64748b}.company-switcher select{font-size:18px;color:#123039;max-width:100%;background:#f7f8f5;padding:10px;border:1px solid #ddd;border-radius:8px}.company-switcher p{flex:1;font-size:14px;color:#64748b}@media(max-width:600px){.company-switcher label,.company-switcher select{width:100%}.company-switcher p{flex-basis:100%}}
+/* Cartão da empresa na barra lateral = seletor de empresa (padrão ContaOne) */
+.workspace-wrap{position:relative;margin:0 17px 15px}
+.workspace-wrap .workspace-label{margin:0;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:background .15s,border-color .15s}
+.workspace-wrap .workspace-label:disabled{cursor:default}
+.workspace-wrap .workspace-label:not(:disabled):hover,.workspace-wrap .workspace-label[aria-expanded="true"]{background:#ffffff0d;border-color:#ffffff26}
+.workspace-wrap .workspace-label:focus-visible{outline:2px solid #dfc696;outline-offset:2px}
+.workspace-wrap .workspace-label>div{flex:1;min-width:0}
+.workspace-wrap .workspace-label strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-chevron{color:#91a7ad;font-size:16px;transition:transform .15s}
+.workspace-chevron.open{transform:rotate(90deg)}
+.workspace-menu{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;background:#12303a;border:1px solid #ffffff1f;border-radius:10px;padding:6px;box-shadow:0 12px 32px #00000059;max-height:60vh;overflow-y:auto}
+.workspace-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:7px;background:none;border:0;color:#e4ebeb;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.workspace-menu-item:hover,.workspace-menu-item:focus-visible{background:#ffffff12;outline:none}
+.workspace-menu-item.is-current{color:#dfc696}
+.workspace-menu-item .workspace-avatar{padding:6px;font-size:10px;min-width:28px;text-align:center}
+.workspace-menu-item>span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-menu-icon{width:28px;text-align:center;color:#91a7ad}
+.workspace-check{color:#dfc696}
+.workspace-menu-divider{height:1px;background:#ffffff14;margin:6px 4px}

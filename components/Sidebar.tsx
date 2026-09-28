@@ -1,9 +1,15 @@
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationState, UserRole } from '../types';
 
 interface SidebarProps {
   companyName?:string;
+  /** Troca de empresa no cartão da barra lateral (mesmo padrão do ContaOne). */
+  companyId?:string;
+  companies?:{id:string;nome:string}[];
+  onCompanyChange?:(id:string)=>void;
+  onManageCompanies?:()=>void;
+  onOpenPlatform?:()=>void;
   brandName?:string;brandColor?:string;
   mobileOpen: boolean;
   onClose: () => void;
@@ -14,7 +20,16 @@ interface SidebarProps {
   canCreate: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Grupo Ciatos", mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Grupo Ciatos", companyId, companies=[], onCompanyChange, onManageCompanies, onOpenPlatform, mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
+  const [companyMenu,setCompanyMenu] = useState(false);
+  const companyRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(!companyMenu)return;
+    const fora=(e:MouseEvent)=>{if(!companyRef.current?.contains(e.target as Node))setCompanyMenu(false);};
+    document.addEventListener('mousedown',fora);
+    return()=>document.removeEventListener('mousedown',fora);
+  },[companyMenu]);
+  const hasCompanyMenu = companies.length>1 || !!onManageCompanies || !!onOpenPlatform;
   const menuItems = [
     {id:'help',label:'Ajuda e passo a passo',icon:'M9 9a3 3 0 016 0c0 2-3 2-3 4m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',roles:Object.values(UserRole)},
     { id: 'ai_center', label: 'Central da IA', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', roles: Object.values(UserRole) },
@@ -45,7 +60,19 @@ const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Gru
     {mobileOpen && <button className="nav-backdrop md:hidden" aria-label="Fechar navegação" onClick={onClose}/>}
     <aside className={`crm-sidebar ${mobileOpen ? 'flex' : 'hidden'} md:flex`} aria-label="Navegação principal" onKeyDown={e => {if(e.key === 'Escape') onClose();}}>
       <div className="brand-lockup"><img src="/ciatos-mark.svg" alt=""/><div><span>{brandName||<>ciatos<span className="brand-dot">.</span></>}</span><small>RELACIONAMENTOS & NEGÓCIOS</small></div><button aria-label="Fechar menu" onClick={onClose} className="md:hidden ml-auto p-2">✕</button></div>
-      <div className="workspace-label"><span className="workspace-avatar" style={brandColor?{background:brandColor,color:"white"}:undefined}>{companyName.slice(0,2).toUpperCase()}</span><div><strong>{companyName}</strong><small>Seu espaço de crescimento</small></div></div>
+      <div className="workspace-wrap" ref={companyRef} onKeyDown={e=>{if(e.key==='Escape'&&companyMenu){e.stopPropagation();setCompanyMenu(false);}}}>
+        <button type="button" className="workspace-label" disabled={!hasCompanyMenu} aria-haspopup="menu" aria-expanded={companyMenu} onClick={()=>setCompanyMenu(v=>!v)}>
+          <span className="workspace-avatar" style={brandColor?{background:brandColor,color:"white"}:undefined}>{companyName.slice(0,2).toUpperCase()}</span>
+          <div><strong>{companyName}</strong><small>{hasCompanyMenu?(companies.length>1?'Trocar empresa':'Gerenciar empresa'):'Seu espaço de crescimento'}</small></div>
+          {hasCompanyMenu&&<span className={`workspace-chevron ${companyMenu?'open':''}`} aria-hidden="true">›</span>}
+        </button>
+        {companyMenu&&<div className="workspace-menu" role="menu" aria-label="Empresas">
+          {companies.map(c=><button type="button" role="menuitemradio" aria-checked={c.id===companyId} key={c.id} className={`workspace-menu-item ${c.id===companyId?'is-current':''}`} onClick={()=>{setCompanyMenu(false);if(c.id!==companyId)onCompanyChange?.(c.id);}}><span className="workspace-avatar">{c.nome.slice(0,2).toUpperCase()}</span><span>{c.nome}</span>{c.id===companyId&&<span className="workspace-check" aria-hidden="true">✓</span>}</button>)}
+          {(onManageCompanies||onOpenPlatform)&&<div className="workspace-menu-divider"/>}
+          {onManageCompanies&&<button type="button" role="menuitem" className="workspace-menu-item" onClick={()=>{setCompanyMenu(false);onManageCompanies();}}><span className="workspace-menu-icon" aria-hidden="true">⚙</span><span>Gerenciar empresas</span></button>}
+          {onOpenPlatform&&<button type="button" role="menuitem" className="workspace-menu-item" onClick={()=>{setCompanyMenu(false);onOpenPlatform();}}><span className="workspace-menu-icon" aria-hidden="true">↗</span><span>Administrar o CRM</span></button>}
+        </div>}
+      </div>
       {canCreate && <button onClick={onOpenNewLead} className="nav-create"><span aria-hidden="true">＋</span> Novo Lead</button>}
       <nav className="nav-groups">{groups.map(group => {
         const items = group.ids.map(id => menuItems.find(item => item.id===id)!).filter(item => item.roles.includes(role));
