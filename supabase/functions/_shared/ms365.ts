@@ -6,7 +6,9 @@ export type Requester = typeof fetch;
 // Mail.Send.Shared: enviar como OUTRA caixa (ex.: envio@) com o login de um
 // usuário que tenha "Enviar como" nela no Exchange. Sem ele o Graph responde
 // "Access is denied" em /users/{outra}/sendMail.
-export const SCOPE = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Send.Shared https://graph.microsoft.com/User.Read';
+// Calendars.ReadWrite(.Shared): convites do onboarding e da Agenda no Outlook,
+// criados no calendário da caixa do grupo (ou do usuário conectado).
+export const SCOPE = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Send.Shared https://graph.microsoft.com/User.Read https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Calendars.ReadWrite.Shared';
 const AUTH = (tenant: string) => `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
 const unb64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -118,6 +120,21 @@ export async function abrirRemetente(env: Env, db: any, opts: { ignorarInterrupt
   const token = await accessToken(env, c, cif => db.from('mail_integration').update({ refresh_token_cif: cif, updated_at: new Date().toISOString() }).eq('id', 1), request);
   return {
     enviaComoPadrao: (c.envia_como || c.conta_email) as string,
+    contaConectada: c.conta_email as string,
     enviar: (m: Mensagem) => enviarGraph(token, m, request),
+    graph: (metodo: string, caminho: string, corpo?: unknown) => chamarGraph(token, metodo, caminho, corpo, request),
   };
+}
+
+export class GraphError extends Error { constructor(public status: number, msg: string) { super(msg); } }
+
+/** Chamada genérica ao Graph (calendário). Devolve o JSON ou null (204/202). */
+export async function chamarGraph(token: string, metodo: string, caminho: string, corpo?: unknown, request: Requester = fetch) {
+  const r = await request(`https://graph.microsoft.com/v1.0${caminho}`, {
+    method: metodo, signal: AbortSignal.timeout(20000),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'outlook.timezone="America/Sao_Paulo"' },
+    ...(corpo === undefined ? {} : { body: JSON.stringify(corpo) }),
+  });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new GraphError(r.status, j?.error?.message || `graph_${r.status}`); }
+  return r.status === 204 || r.status === 202 ? null : r.json().catch(() => null);
 }

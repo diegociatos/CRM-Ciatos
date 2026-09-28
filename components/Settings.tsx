@@ -573,7 +573,18 @@ const Settings: React.FC<SettingsProps> = ({
                                       setEditingTpl({ ...editingTpl, phases: next });
                                    }} />
                                 </div>
-                                <div className="md:col-span-6">
+                                <div className="md:col-span-2">
+                                   <label className={labelHeader}>QUEM EXECUTA</label>
+                                   <select className={inputStyled} value={(phase as any).executor === 'cliente' ? 'cliente' : 'equipe'} onChange={e => {
+                                      const next = [...(editingTpl.phases || [])];
+                                      next[idx] = { ...phase, executor: e.target.value } as any;
+                                      setEditingTpl({ ...editingTpl, phases: next });
+                                   }}>
+                                      <option value="equipe">Equipe</option>
+                                      <option value="cliente">Cliente</option>
+                                   </select>
+                                </div>
+                                <div className="md:col-span-4">
                                    <label className={labelHeader}>DETALHES DA EXECUÇÃO</label>
                                    <input className={inputStyled} value={phase.description} onChange={e => {
                                       const next = [...(editingTpl.phases || [])];

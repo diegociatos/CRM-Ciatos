@@ -254,6 +254,10 @@ export interface OnboardingTemplatePhase {
   order: number;
   defaultDueDays: number;
   mandatory: boolean;
+  /** Quem executa a fase: a equipe interna ou o cliente (recebe e-mail com o pedido). */
+  executor?: 'equipe' | 'cliente';
+  /** Responsável padrão (usuário) desta fase; se vazio, usa o escolhido ao iniciar. */
+  responsavelId?: string;
 }
 
 export interface OnboardingTemplate { 

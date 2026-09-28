@@ -1,6 +1,98 @@
 import { env, service, rpc, json } from '../_shared/runtime.ts';
 import { renderMessage, renderBroadcast, decide } from '../_shared/outreach.ts';
-import { abrirRemetente } from '../_shared/ms365.ts';
+import { abrirRemetente, GraphError } from '../_shared/ms365.ts';
+import { renderAviso, eventoFase, eventoAgenda } from '../_shared/onboarding.ts';
+
+const appUrl = () => (env('CRM_APP_URLS') || 'https://crm.grupociatos.com.br').split(',')[0].trim();
+
+// Avisos do onboarding são transacionais (equipe e cliente em implantação):
+// não dependem do interruptor de prospecção, só da caixa conectada.
+let remetenteTransacional: Promise<Remetente> | null = null;
+const obterTransacional = (db: Db) => (remetenteTransacional ??= abrirRemetente(env, db, { ignorarInterruptor: true }));
+
+async function processOnboarding(db: Db): Promise<string> {
+  await rpc(db, 'enqueue_onboarding_reminders');
+  const lote = await rpc(db, 'claim_onboarding_notifications', { max_n: 10 });
+  if (!lote) return 'idle';
+  let envio: Remetente | null = null;
+  try { envio = await obterTransacional(db); } catch { /* falha abaixo, com nova tentativa */ }
+  let enviados = 0;
+  for (const n of lote as any[]) {
+    try {
+      if (!envio) throw new Error('ms365_not_connected');
+      const m = renderAviso(n, appUrl());
+      await envio.enviar({ from: envio.enviaComoPadrao, fromName: n.empresa, to: n.para, subject: m.subject, html: m.html, replyTo: m.replyTo });
+      await rpc(db, 'finish_onboarding_notification', { nid: n.id, token: n.lease, ok: true });
+      enviados++;
+    } catch (e) {
+      await rpc(db, 'finish_onboarding_notification', { nid: n.id, token: n.lease, ok: false, motivo: (e as Error).message }).catch(() => {});
+    }
+    await new Promise(res => setTimeout(res, 300));
+  }
+  return `sent:${enviados}`;
+}
+
+/**
+ * Convites no Outlook: prazos das fases (dia inteiro) e compromissos da Agenda.
+ * Criados no calendário da caixa do grupo; se a conta conectada não tiver
+ * acesso a ele, cai no calendário da própria conta conectada.
+ */
+async function processCalendar(db: Db): Promise<string> {
+  const w = await rpc(db, 'claim_calendar_work', { max_n: 8 });
+  if (!w.steps.length && !w.agenda.length && !w.cancelar.length) return 'idle';
+  let envio: Remetente;
+  try { envio = await obterTransacional(db); } catch { return 'ms365_not_connected'; }
+  let base = `/users/${encodeURIComponent(envio.enviaComoPadrao)}`;
+  const chamar = async (metodo: string, caminho: string, corpo?: unknown) => {
+    try { return await envio.graph(metodo, `${base}${caminho}`, corpo); }
+    catch (e) {
+      if (e instanceof GraphError && (e.status === 403 || /access ?is ?denied|ErrorAccessDenied/i.test(e.message)) && base !== '/me') {
+        base = '/me'; return envio.graph(metodo, `${base}${caminho}`, corpo);
+      }
+      throw e;
+    }
+  };
+  const salvar = async (evId: string | null, corpo: unknown) => {
+    if (evId) {
+      try { await chamar('PATCH', `/events/${encodeURIComponent(evId)}`, corpo); return evId; }
+      catch (e) { if (!(e instanceof GraphError && e.status === 404)) throw e; }
+    }
+    const novo = await chamar('POST', '/events', corpo) as { id: string };
+    return novo.id;
+  };
+  const cancelar = async (evId: string, motivo: string) => {
+    try { await chamar('POST', `/events/${encodeURIComponent(evId)}/cancel`, { comment: motivo }); }
+    catch (e) { if (!(e instanceof GraphError && (e.status === 404 || e.status === 400))) throw e; }
+  };
+  let ok = 0;
+  for (const s of w.steps as any[]) {
+    try {
+      let evId: string | null = s.calendar_event_id;
+      if (s.status === 'Concluido' || !s.prazo || !s.resp_email) {
+        if (evId) await cancelar(evId, s.status === 'Concluido' ? 'Fase concluída no CRM.' : 'Fase sem prazo ou sem responsável.');
+        evId = null;
+      } else {
+        evId = await salvar(evId, eventoFase(s, appUrl()));
+      }
+      await rpc(db, 'finish_calendar_item', { kind: 'step', item_id: s.id, ok: true, event_id: evId });
+      ok++;
+    } catch (e) { await rpc(db, 'finish_calendar_item', { kind: 'step', item_id: s.id, ok: false, motivo: (e as Error).message }).catch(() => {}); }
+  }
+  for (const a of w.agenda as any[]) {
+    try {
+      let evId: string | null = a.calendar_event_id;
+      if (!a.convidados?.length) { if (evId) await cancelar(evId, 'Compromisso sem participantes.'); evId = null; }
+      else evId = await salvar(evId, eventoAgenda(a));
+      await rpc(db, 'finish_calendar_item', { kind: 'agenda', item_id: a.id, ok: true, event_id: evId });
+      ok++;
+    } catch (e) { await rpc(db, 'finish_calendar_item', { kind: 'agenda', item_id: a.id, ok: false, motivo: (e as Error).message }).catch(() => {}); }
+  }
+  for (const c of w.cancelar as any[]) {
+    try { await cancelar(c.event_id, 'Removido no CRM.'); await rpc(db, 'finish_calendar_item', { kind: 'cancel', item_id: String(c.id), ok: true }); ok++; }
+    catch (e) { await rpc(db, 'finish_calendar_item', { kind: 'cancel', item_id: String(c.id), ok: false, motivo: (e as Error).message }).catch(() => {}); }
+  }
+  return `synced:${ok}`;
+}
 
 type Db = ReturnType<typeof service>;
 type Remetente = Awaited<ReturnType<typeof abrirRemetente>>;
@@ -79,9 +171,11 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   if (!env('CRM_WORKER_SECRET') || req.headers.get('Authorization') !== `Bearer ${env('CRM_WORKER_SECRET')}`) return json({ error: 'unauthorized' }, 401);
   const db = service();
-  remetente = null;
+  remetente = null; remetenteTransacional = null;
   const status: Record<string, string> = {};
   try { status.outreach = await processOutreach(db); } catch { status.outreach = 'error'; }
   try { status.broadcast = await processBroadcast(db); } catch { status.broadcast = 'error'; }
+  try { status.onboarding = await processOnboarding(db); } catch { status.onboarding = 'error'; }
+  try { status.calendar = await processCalendar(db); } catch { status.calendar = 'error'; }
   return json({ status });
 });

@@ -12,7 +12,7 @@ const QualificationQueue = lazy(() => import('./components/QualificationQueue'))
 const Settings = lazy(() => import('./components/Settings'));
 const LeadDetails = lazy(() => import('./components/LeadDetails'));
 import NewLeadForm from './components/NewLeadForm';
-const OperationalDashboard = lazy(() => import('./components/OperationalDashboard'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
 const SdrDashboard = lazy(() => import('./components/SdrDashboard'));
 const CloserDashboard = lazy(() => import('./components/CloserDashboard'));
 const PostSalesDashboard = lazy(() => import('./components/PostSalesDashboard'));
@@ -90,7 +90,13 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     return r === 'ok' ? 'Caixa do Microsoft 365 conectada. Os e-mails do CRM já podem sair por ela.' : `Não foi possível conectar a caixa do Microsoft 365: ${q.get('motivo') || 'tente de novo.'}`;
   });
-  const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : 'dashboard' });
+  // Link dos e-mails do onboarding: ?onboarding=<lead> ou ?onboarding=minhas
+  const [onboardingLink, setOnboardingLink] = useState<string | null>(() => {
+    const v = new URLSearchParams(window.location.search).get('onboarding');
+    if (v) window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    return v;
+  });
+  const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : onboardingLink ? 'operational_dashboard' : 'dashboard' });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [scripts, setScripts] = useState<SalesScript[]>([]);
@@ -380,7 +386,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
-      case 'operational_dashboard': return <OperationalDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} templates={templates} />;
+      case 'operational_dashboard': return company ? <Onboarding organizationId={company.id} companyName={company.nome} leads={leads} users={users} currentUser={currentUser} templates={templates} admin={company.operating_role === 'ADMIN' || !!company.can_manage} abrirLeadId={onboardingLink} onClearDeepLink={() => setOnboardingLink(null)} /> : null;
       case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onDeleteCustomer={handleDeleteLead} />;
       case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} />;
       case 'settings': return <Settings config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={handleSaveConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={handleSaveGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={handleSaveTemplates} onSyncTemplate={()=>{}} />;

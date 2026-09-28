@@ -299,6 +299,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     await audit.from('ai_runs').update({status:'FAILED',completed_at:new Date().toISOString()}).eq('id',runId);
     if (err instanceof Anthropic.RateLimitError) return json({ error: 'IA sobrecarregada, tente em instantes.' }, 429);
-    return json({ error: 'Não foi possível concluir a consulta de IA.' }, 502);
+    console.error('crm-ia', p.action, err);
+    // Motivo curto (sem chaves nem dados do lead) para o administrador entender a falha.
+    const motivo = err instanceof Anthropic.APIError ? `provedor ${err.status}: ${String(err.message).slice(0, 180)}` : String((err as Error)?.message || err).slice(0, 180);
+    return json({ error: `Não foi possível concluir a consulta de IA (${motivo}).` }, 502);
   }
 });
