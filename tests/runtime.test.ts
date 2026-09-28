@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
-import { renderMessage, sendEmail, decide, validateDecision, verifyWebhook } from '../supabase/functions/_shared/outreach.ts';
+import { renderMessage, decide, validateDecision, verifyWebhook } from '../supabase/functions/_shared/outreach.ts';
+import { abrirRemetente } from '../supabase/functions/_shared/ms365.ts';
 
 test('templates reject headers, unresolved variables and preserve opt-out', () => {
   assert.throws(() => renderMessage({ subject: 'Hi\nBcc: x', body: 'body' }, {}, 'https://example.test'));
@@ -12,7 +13,7 @@ test('templates reject headers, unresolved variables and preserve opt-out', () =
 });
 test('live sends fail closed without explicit flag, never call transport', async () => {
   let called = false;
-  await assert.rejects(sendEmail(() => undefined, {} as any, async () => { called = true; return new Response(); }));
+  await assert.rejects(abrirRemetente(() => undefined, {} as any, {}, async () => { called = true; return new Response(); }));
   assert.equal(called, false);
 });
 test('AI requires valid confidence and sends uncertain decisions to humans', () => {

@@ -56,6 +56,14 @@ A revisão de origem/base de contato não é determinação jurídica automátic
 - **Configuração de envio por empresa** (`save_outreach_policy`, só master/dono): remetente, nome de exibição, "responder para", limite diário e envio ligado. O envio real ainda exige `CRM_LIVE_SEND_ENABLED=true` no servidor.
 - O webhook do Resend recebe eventos da conta inteira (Chekly, ContaOne...). Evento sem correspondência com mais de 10 minutos é ignorado, em vez de pedir reenvio eterno.
 
+### Envio pelo Microsoft 365 (substitui o Resend no CRM)
+
+- Mesmo modelo do ContaOne: app do Entra ID (tenant, client ID e secret) + caixa conectada por OAuth delegado (`Mail.Send`, `User.Read`, `offline_access`) + `POST /users/{remetente}/sendMail` no Graph. Só a lógica foi copiada; tokens e segredos do ContaOne não são reutilizados.
+- `crm.mail_integration` (linha única, sem acesso pelo navegador) guarda client secret e refresh token **cifrados** com AES-GCM (`CRM_CRYPTO_KEY`). A função `crm-ms365` salva o app, gera o link de login (state assinado com HMAC, 10 minutos) e recebe o retorno em `GET /functions/v1/crm-ms365` — essa URL precisa estar nas Redirect URIs (Web) do app no Azure.
+- Worker (cadência + comunicados), teste (`crm-mail`) e convites (`crm-admin-users`) enviam pela caixa conectada. Convites caem no Resend só se a caixa estiver desconectada.
+- Remetente de cada empresa = a caixa conectada ou um endereço com permissão "Enviar como" no Exchange. Limites do Exchange Online: 30 mensagens/min e 10 mil destinatários/dia por caixa; o worker usa até ~21/min.
+- O Graph não devolve id nem eventos de entrega/abertura: o CRM registra "enviado" e o descadastro pelo link. Devoluções e respostas chegam na caixa. Custom headers como `List-Unsubscribe` não são aceitos pelo Graph; o descadastro fica no rodapé.
+
 ## Webhooks e respostas
 
 Configure Resend para `crm-email-webhook` com eventos sent, delivered, opened, clicked, bounced e complained. A verificação usa corpo bruto, `svix-id`, timestamp com tolerância de cinco minutos e HMAC SHA-256. Eventos sem mensagem correlacionada retornam erro transitório para permitir retry (inclui corrida webhook antes de concluir envio). Replays não duplicam efeitos.

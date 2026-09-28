@@ -34,27 +34,6 @@ export function renderBroadcast(msg: { assunto: string; corpo: string; empresa_r
   return { subject, html, text: `${body}\n\n--\n${msg.empresa_remetente}\nPara não receber mais: ${unsubscribe}` };
 }
 
-/** Monta o "From" com nome de exibição seguro. */
-export const formatFrom = (email: string, nome?: string | null) => {
-  const n = (nome || '').replace(/["<>\r\n]/g, '').trim();
-  return n ? `${n} <${email}>` : email;
-};
-
-export async function sendEmail(env: Env, payload: { from: string; to: string; subject: string; text: string; html?: string; replyTo?: string | null; unsubscribe: string; key: string }, request: Requester = fetch) {
-  if (env('CRM_LIVE_SEND_ENABLED') !== 'true' || !env('RESEND_API_KEY')) throw new Error('live_disabled');
-  const response = await request('https://api.resend.com/emails', {
-    method: 'POST', signal: AbortSignal.timeout(20000),
-    headers: { Authorization: `Bearer ${env('RESEND_API_KEY')}`, 'Content-Type': 'application/json', 'Idempotency-Key': payload.key },
-    body: JSON.stringify({ from: payload.from, to: [payload.to], subject: payload.subject, text: payload.text,
-      ...(payload.html ? { html: payload.html } : {}), ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
-      headers: { 'List-Unsubscribe': `<${payload.unsubscribe}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
-  });
-  if (!response.ok) throw new Error(`email_provider_${response.status}`);
-  const result = await response.json();
-  if (typeof result.id !== 'string' || !result.id) throw new Error('email_provider_invalid_result');
-  return result.id as string;
-}
-
 export type Decision = { action: 'continue' | 'human' | 'stop'; confidence: number; summary: string };
 export function validateDecision(value: unknown): Decision {
   const d = value as Decision;

@@ -9,13 +9,60 @@ const vazio = { id: null as string | null, titulo: '', assunto: '', corpo: '', r
 
 const msgErro = (e: any) => String(e?.message || e || 'Erro inesperado').replace(/^.*?:\s(?=[A-ZÁÉÍÓÚ])/, '');
 
+const REDIRECT_MS = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-ms365`;
+
+async function chamarMs365(body: Row) {
+  const { data, error } = await supabase.functions.invoke('crm-ms365', { body });
+  let msg = data?.error; if (error) { try { msg = (await (error as any).context.json()).error; } catch { msg = error.message; } }
+  if (msg) throw new Error(msg);
+  return data;
+}
+
+/** Caixa do Microsoft 365 que envia todos os e-mails do CRM (mesmo modelo do ContaOne). */
+function Ms365Panel({ canPlatform, onStatus }: { canPlatform: boolean; onStatus: (s: Row | null) => void }) {
+  const [st, setSt] = useState<Row | null>(null);
+  const [f, setF] = useState({ tenant_id: '', client_id: '', client_secret: '', envia_como: '' });
+  const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [ok, setOk] = useState('');
+  const carregar = useCallback(async () => {
+    try { const s = await chamarMs365({ action: 'status' }); setSt(s); onStatus(s); setF(x => ({ ...x, tenant_id: s.tenant_id, client_id: s.client_id, envia_como: s.envia_como })); }
+    catch { setSt(null); onStatus(null); }
+  }, [onStatus]);
+  useEffect(() => { void carregar(); }, [carregar]);
+  const acao = async (fn: () => Promise<void>) => { setBusy(true); setErro(''); setOk(''); try { await fn(); } catch (e: any) { setErro(e.message); } finally { setBusy(false); } };
+  return <div className={card}>
+    <div className="flex flex-wrap justify-between items-center gap-2">
+      <h2 className="font-bold text-lg">Caixa de envio (Microsoft 365)</h2>
+      <span className={`text-sm font-bold ${st?.conectado ? 'text-emerald-700' : 'text-amber-700'}`}>{st?.conectado ? `● Conectada: ${st.conta_email}` : '○ Não conectada'}</span>
+    </div>
+    <p className="text-sm text-slate-500">Todos os e-mails do CRM saem por esta caixa do grupo, pelo Microsoft 365 (como no ContaOne). As respostas dos clientes chegam nela ou no endereço de resposta de cada empresa.</p>
+    {st?.conectado && <p className="text-sm">Remetente padrão: <strong>{st.envia_como || st.conta_email}</strong>. Cada empresa pode usar outro endereço, desde que a caixa conectada tenha a permissão “Enviar como” nele.</p>}
+    {erro && <p role="alert" className="text-red-700 text-sm">{erro}</p>}{ok && <p role="status" className="text-emerald-700 text-sm">{ok}</p>}
+    {canPlatform ? <>
+      <details open={!st?.appConfigurado}><summary className="cursor-pointer font-bold">App do Azure (Entra ID)</summary>
+        <div className="grid md:grid-cols-2 gap-3 mt-3">
+          <label className="block">Tenant ID<input className={field} disabled={busy} value={f.tenant_id} onChange={e => setF({ ...f, tenant_id: e.target.value })} /></label>
+          <label className="block">Client ID (Application ID)<input className={field} disabled={busy} value={f.client_id} onChange={e => setF({ ...f, client_id: e.target.value })} /></label>
+          <label className="block">Client secret<input type="password" autoComplete="off" className={field} disabled={busy} value={f.client_secret} onChange={e => setF({ ...f, client_secret: e.target.value })} placeholder={st?.appConfigurado ? '•••••• (guardado; preencha só para trocar)' : ''} /></label>
+          <label className="block">Enviar como (padrão)<input type="email" className={field} disabled={busy} value={f.envia_como} onChange={e => setF({ ...f, envia_como: e.target.value })} placeholder="envio@grupociatos.com.br" /></label>
+        </div>
+        <p className="text-sm text-slate-500 mt-2">No Azure, adicione em <em>Authentication → Redirect URIs (Web)</em>: <code className="break-all">{REDIRECT_MS}</code> e as permissões delegadas <em>Mail.Send</em>, <em>User.Read</em> e <em>offline_access</em>.</p>
+        <button className="ux-secondary mt-3" disabled={busy} onClick={() => acao(async () => { const s = await chamarMs365({ action: 'save_app', ...f }); setSt(s); onStatus(s); setF(x => ({ ...x, client_secret: '' })); setOk('App salvo.'); })}>Salvar app</button>
+      </details>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-navy" disabled={busy || !st?.appConfigurado} onClick={() => acao(async () => { const r = await chamarMs365({ action: 'connect', origin: window.location.origin }); window.location.href = r.url; })}>{st?.conectado ? 'Reconectar caixa' : 'Conectar caixa'}</button>
+        {st?.conectado && <button className="ux-secondary" disabled={busy} onClick={() => acao(async () => { if (!window.confirm('Desconectar a caixa? Nenhum e-mail do CRM sairá até reconectar.')) return; await chamarMs365({ action: 'disconnect' }); await carregar(); })}>Desconectar</button>}
+      </div>
+    </> : !st?.conectado && <p className="text-sm text-slate-500">O dono da plataforma precisa conectar a caixa do grupo.</p>}
+  </div>;
+}
+
 /** Configuração de remetente e limite diário da empresa (vale para comunicados e cadências). */
-function SendSettings({ org, companyName, policy, canConfigure, onSaved }: { org: string; companyName: string; policy?: Row; canConfigure: boolean; onSaved: () => void }) {
+function SendSettings({ org, companyName, policy, canConfigure, onSaved, remetentePadrao }: { org: string; companyName: string; policy?: Row; canConfigure: boolean; onSaved: () => void; remetentePadrao?: string }) {
   const [f, setF] = useState({ live: false, sender: '', name: '', reply: '', limit: 100 });
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [ok, setOk] = useState('');
   useEffect(() => {
-    setF({ live: !!policy?.live_enabled, sender: policy?.sender || '', name: policy?.sender_name || companyName, reply: policy?.reply_to || '', limit: policy?.daily_limit || 100 });
-  }, [policy, companyName]);
+    setF({ live: !!policy?.live_enabled, sender: policy?.sender || remetentePadrao || '', name: policy?.sender_name || companyName, reply: policy?.reply_to || '', limit: policy?.daily_limit || 100 });
+  }, [policy, companyName, remetentePadrao]);
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault(); setErro(''); setOk('');
     if (f.live && !policy?.live_enabled && !window.confirm(`Ligar o envio real de e-mails de ${companyName}?\n\nComunicados e cadências passarão a sair de verdade, até ${f.limit} por dia.`)) return;
@@ -33,18 +80,19 @@ function SendSettings({ org, companyName, policy, canConfigure, onSaved }: { org
     {!canConfigure && <p className="text-sm text-slate-500">Somente o master da empresa ou o dono da plataforma altera esta configuração.</p>}
     {erro && <p role="alert" className="text-red-700 text-sm">{erro}</p>}{ok && <p role="status" className="text-emerald-700 text-sm">{ok}</p>}
     <div className="grid md:grid-cols-2 gap-3">
-      <label className="block">E-mail remetente<input type="email" className={field} disabled={!canConfigure || busy} value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} placeholder="contabilidade@envio.grupociatos.com.br" /></label>
+      <label className="block">E-mail remetente<input type="email" className={field} disabled={!canConfigure || busy} value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} placeholder="envio@grupociatos.com.br" /></label>
       <label className="block">Nome que aparece para o cliente<input className={field} maxLength={80} disabled={!canConfigure || busy} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></label>
       <label className="block">Respostas vão para<input type="email" className={field} disabled={!canConfigure || busy} value={f.reply} onChange={e => setF({ ...f, reply: e.target.value })} placeholder="atendimento@suaempresa.com.br" /></label>
       <label className="block">Limite de e-mails por dia<input type="number" min={1} max={1000} className={field} disabled={!canConfigure || busy} value={f.limit} onChange={e => setF({ ...f, limit: Number(e.target.value) })} /></label>
     </div>
-    <p className="text-sm text-slate-500">O remetente precisa ser de um domínio verificado no Resend (hoje: <strong>envio.grupociatos.com.br</strong>). Use “Respostas vão para” com a caixa real da equipe, para o cliente conseguir responder.</p>
+    <p className="text-sm text-slate-500">O remetente precisa ser a caixa do Microsoft 365 conectada ou um endereço em que ela tenha permissão “Enviar como” (ex.: <strong>envio@grupociatos.com.br</strong>). Use “Respostas vão para” com a caixa real da equipe desta empresa. O Microsoft 365 aceita até 10 mil e-mails por dia por caixa.</p>
     <label className="flex items-center gap-2"><input type="checkbox" disabled={!canConfigure || busy} checked={f.live} onChange={e => setF({ ...f, live: e.target.checked })} /> Envio real ligado nesta empresa</label>
     {canConfigure && <button className="btn-navy" disabled={busy}>{busy ? 'Salvando…' : 'Salvar configuração'}</button>}
   </form>;
 }
 
-export default function Broadcasts({ organizationId: org, companyName, canConfigure, onGoImport }: { organizationId: string; companyName: string; canConfigure: boolean; onGoImport: () => void }) {
+export default function Broadcasts({ organizationId: org, companyName, canConfigure, canPlatform, onGoImport }: { organizationId: string; companyName: string; canConfigure: boolean; canPlatform: boolean; onGoImport: () => void }) {
+  const [ms, setMs] = useState<Row | null>(null);
   const [lista, setLista] = useState<Row[]>([]);
   const [stats, setStats] = useState<Record<string, Row>>({});
   const [policy, setPolicy] = useState<Row | undefined>();
@@ -123,7 +171,7 @@ export default function Broadcasts({ organizationId: org, companyName, canConfig
     setEditando(true);
   };
 
-  const live = !!policy?.live_enabled && !!policy?.sender;
+  const live = !!policy?.live_enabled && !!policy?.sender && !!ms?.conectado;
 
   return <section className="space-y-6 text-slate-800">
     <div className="flex flex-wrap justify-between items-end gap-4">
@@ -133,7 +181,7 @@ export default function Broadcasts({ organizationId: org, companyName, canConfig
     </div>
     {erro && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{erro}</p>}
     {aviso && <p role="status" className="p-3 bg-green-50 text-green-800 rounded-lg">{aviso}</p>}
-    {!live && <div className="safe-banner"><strong>Envio desligado nesta empresa</strong><p className="text-sm mt-1">Você pode escrever, salvar rascunhos e mandar testes para você. Para disparar, ligue o envio na configuração abaixo.</p></div>}
+    {!live && <div className="safe-banner"><strong>Envio desligado nesta empresa</strong><p className="text-sm mt-1">{!ms?.conectado ? 'A caixa do Microsoft 365 ainda não está conectada (veja abaixo). ' : ''}Você pode escrever e salvar rascunhos{ms?.conectado ? ' e mandar testes para você' : ''}. Para disparar, ligue o envio na configuração abaixo.</p></div>}
 
     {editando && <div className={card}>
       <h2 className="font-bold text-lg">{form.id ? 'Editar comunicado' : 'Novo comunicado'}</h2>
@@ -172,17 +220,18 @@ export default function Broadcasts({ organizationId: org, companyName, canConfig
       {lista.map(b => { const s = stats[b.id] || {}; return <div key={b.id} className="border-b pb-3 flex flex-wrap justify-between gap-3">
         <div><strong>{b.titulo}</strong><p className="text-sm text-slate-500">{b.assunto}</p>
           <p className="text-sm">{STATUS[b.status]}{b.scheduled_at && b.status === 'SCHEDULED' ? ` para ${new Date(b.scheduled_at).toLocaleString('pt-BR')}` : ''}
-            {b.status !== 'DRAFT' && ` · ${s.enviados ?? 0}/${b.total} enviados · ${s.entregues ?? 0} entregues · ${s.abertos ?? 0} abertos · ${s.clicados ?? 0} cliques`}
-            {Number(s.devolvidos) > 0 && ` · ${s.devolvidos} devolvidos`}{Number(s.descadastros) > 0 && ` · ${s.descadastros} descadastros`}{Number(s.falhas) > 0 && ` · ${s.falhas} falhas`}</p></div>
+            {b.status !== 'DRAFT' && ` · ${s.enviados ?? 0}/${b.total} enviados`}
+            {Number(s.descadastros) > 0 && ` · ${s.descadastros} descadastros`}{Number(s.falhas) > 0 && ` · ${s.falhas} falhas`}</p></div>
         {admin && <div className="flex gap-2 items-start">
           {b.status === 'DRAFT' && <><button className="ux-secondary" onClick={() => abrir(b)}>Abrir</button>
             <button className="ux-secondary" disabled={busy} onClick={() => acao(async () => { if (!window.confirm('Excluir este rascunho?')) return; const { error } = await supabase.rpc('delete_broadcast', { bid: b.id }); if (error) throw error; await carregar(); })}>Excluir</button></>}
           {['SCHEDULED', 'SENDING'].includes(b.status) && <button className="ux-secondary" disabled={busy} onClick={() => acao(async () => { if (!window.confirm('Cancelar o envio? Quem já recebeu não é afetado.')) return; const { error } = await supabase.rpc('cancel_broadcast', { bid: b.id }); if (error) throw error; await carregar(); })}>Cancelar envio</button>}
         </div>}
       </div>; })}
-      <p className="text-sm text-slate-500">Abertura e clique dependem do rastreio do Resend e podem não aparecer para todos os leitores de e-mail.</p>
+      <p className="text-sm text-slate-500">Os e-mails saem pela caixa do Microsoft 365: devoluções e respostas chegam nela. Quem clica em “não quero mais receber” sai da lista automaticamente.</p>
     </div>
 
-    <SendSettings org={org} companyName={companyName} policy={policy} canConfigure={canConfigure} onSaved={() => void carregar()} />
+    <Ms365Panel canPlatform={canPlatform} onStatus={setMs} />
+    <SendSettings org={org} companyName={companyName} policy={policy} canConfigure={canConfigure} remetentePadrao={ms?.envia_como || ms?.conta_email} onSaved={() => void carregar()} />
   </section>;
 }

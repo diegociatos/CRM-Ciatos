@@ -10,6 +10,7 @@ test('importa planilha de clientes e monta comunicado com público e teste', asy
   const calls: { name: string; body: any }[] = [];
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
   await page.route('**/auth/v1/**', route => route.fulfill({ json: user }));
+  await page.route('**/functions/v1/crm-ms365', route => route.fulfill({ headers, json: { appConfigurado: true, conectado: true, conta_email: 'envio@grupociatos.com.br', envia_como: 'envio@grupociatos.com.br' } }));
   await page.route('**/functions/v1/crm-mail', route => { calls.push({ name: 'crm-mail', body: route.request().postDataJSON() }); return route.fulfill({ headers, json: { ok: true, para: 'test@example.test' } }); });
   await page.route('**/rest/v1/**', async route => {
     const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').pop()!;
@@ -45,6 +46,8 @@ test('importa planilha de clientes e monta comunicado com público e teste', asy
 
   await page.getByRole('button', { name: 'Comunicados', exact: true }).click();
   await expect(page.getByText('Envio desligado nesta empresa')).toBeVisible();
+  await expect(page.getByText('● Conectada: envio@grupociatos.com.br')).toBeVisible();
+  await expect(page.getByLabel('E-mail remetente')).toHaveValue('envio@grupociatos.com.br');
   await page.getByRole('button', { name: '+ Novo comunicado' }).click();
   await page.getByLabel('Nome interno').fill('Aviso IR');
   await page.getByLabel('Assunto do e-mail').fill('{{company}}, prazo do IR');

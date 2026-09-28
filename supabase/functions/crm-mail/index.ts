@@ -1,10 +1,11 @@
 // Edge Function: crm-mail — e-mail de TESTE de comunicado ou cadência.
-// Vai só para o próprio usuário logado, com o remetente configurado da empresa,
-// para conferir aparência e entrega antes de disparar. Não depende de
-// CRM_LIVE_SEND_ENABLED (não atinge nenhum contato), mas exige remetente.
+// Vai só para o próprio usuário logado, pela caixa do Microsoft 365 e com o
+// remetente configurado da empresa, para conferir aparência e entrega antes de
+// disparar. Não depende de CRM_LIVE_SEND_ENABLED (não atinge nenhum contato).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.117.2';
 import { env, service } from '../_shared/runtime.ts';
-import { renderBroadcast, renderMessage, formatFrom } from '../_shared/outreach.ts';
+import { renderBroadcast, renderMessage } from '../_shared/outreach.ts';
+import { abrirRemetente } from '../_shared/ms365.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -33,9 +34,6 @@ Deno.serve(async req => {
   const db = service();
   const { data: pol } = await db.from('outreach_policy').select('sender, sender_name, reply_to').eq('organization_id', org).maybeSingle();
   const { data: empresa } = await db.from('organizations').select('nome').eq('id', org).maybeSingle();
-  if (!pol?.sender) return json({ error: 'Configure o e-mail remetente da empresa antes do teste.' }, 400);
-  const key = env('RESEND_API_KEY');
-  if (!key) return json({ error: 'Envio de e-mail não configurado no servidor.' }, 503);
 
   const unsub = `${env('SUPABASE_URL')}/functions/v1/crm-unsubscribe?token=00000000-0000-4000-8000-000000000000`;
   const exemplo = { name: String(p.nome_exemplo || 'Maria Silva'), company: String(p.empresa_exemplo || 'Empresa Exemplo') };
@@ -48,19 +46,18 @@ Deno.serve(async req => {
     return json({ error: 'Assunto ou mensagem inválidos (use só {{name}} e {{company}}; assunto em uma linha).' }, 400);
   }
 
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST', signal: AbortSignal.timeout(20000),
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: formatFrom(pol.sender, pol.sender_name || empresa?.nome), to: [me.user.email],
-      subject: `[TESTE] ${msg.subject}`, text: msg.text, ...(msg.html ? { html: msg.html } : {}),
-      ...(pol.reply_to ? { reply_to: pol.reply_to } : {}),
-    }),
-  });
-  if (!r.ok) {
-    let detalhe = '';
-    try { detalhe = (await r.json())?.message || ''; } catch { /* sem corpo */ }
-    return json({ error: `O provedor recusou o envio${detalhe ? `: ${detalhe}` : ''}. Confira se o domínio do remetente está verificado no Resend.` }, 502);
+  let envio;
+  try { envio = await abrirRemetente(env, db, { ignorarInterruptor: true }); }
+  catch { return json({ error: 'A caixa do Microsoft 365 não está conectada. Conecte em Comunicados → Configuração de envio.' }, 400); }
+  const from = pol?.sender || envio.enviaComoPadrao;
+  try {
+    await envio.enviar({ from, fromName: pol?.sender_name || empresa?.nome, to: me.user.email, replyTo: pol?.reply_to,
+      subject: `[TESTE] ${msg.subject}`, ...(msg.html ? { html: msg.html } : { text: msg.text }) });
+  } catch (e) {
+    const m = (e as Error).message || '';
+    return json({ error: /SendAs|send as|not have permission|ErrorAccessDenied/i.test(m)
+      ? `A caixa conectada não tem permissão "Enviar como" para ${from}. Libere no Exchange ou use a própria caixa conectada.`
+      : `O Microsoft 365 recusou o envio: ${m.slice(0, 200)}` }, 502);
   }
-  return json({ ok: true, para: me.user.email });
+  return json({ ok: true, para: me.user.email, de: from });
 });

@@ -82,7 +82,15 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const db=useMemo(()=>createWorkspaceDb(company?.id||""),[company?.id]);
   const [manageCompanies,setManageCompanies]=useState(false);
   const [platformOpen,setPlatformOpen]=useState(false);
-  const [nav, setNav] = useState<NavigationState>({ view: 'dashboard' });
+  // Volta do login da Microsoft (crm-ms365): abre Comunicados com o resultado.
+  const [retornoMs365] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get('ms365');
+    if (!r) return null;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    return r === 'ok' ? 'Caixa do Microsoft 365 conectada. Os e-mails do CRM já podem sair por ela.' : `Não foi possível conectar a caixa do Microsoft 365: ${q.get('motivo') || 'tente de novo.'}`;
+  });
+  const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : 'dashboard' });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [scripts, setScripts] = useState<SalesScript[]>([]);
@@ -91,7 +99,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const [templates, setTemplates] = useState<OnboardingTemplate[]>(DEFAULT_ONBOARDING_TEMPLATES);
   const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
 
-  const [appNotice,setAppNotice] = useState('');
+  const [appNotice,setAppNotice] = useState(retornoMs365 || '');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
@@ -367,7 +375,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       case 'prospecting': return <Prospector organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
       case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
       case 'ai_center': return <AiCenter workspace={company} />;
-      case 'broadcasts': return company ? <Broadcasts organizationId={company.id} companyName={company.nome} canConfigure={!!company.can_manage} onGoImport={() => setNav({ view: 'import_contacts' })} /> : null;
+      case 'broadcasts': return company ? <Broadcasts organizationId={company.id} companyName={company.nome} canConfigure={!!company.can_manage} canPlatform={!!company.can_platform} onGoImport={() => setNav({ view: 'import_contacts' })} /> : null;
       case 'import_contacts': return company ? <ImportContacts organizationId={company.id} companyName={company.nome} onImported={() => void carregarTudo()} /> : null;
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;

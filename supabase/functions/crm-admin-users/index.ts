@@ -5,6 +5,7 @@
 // (ex.: usuário do Chekly), NÃO recriamos nem trocamos a senha dele — só
 // liberamos o acesso ao CRM criando a linha em crm.profiles.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { abrirRemetente } from '../_shared/ms365.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -34,8 +35,14 @@ function senhaAleatoria(): string {
 }
 
 // Convite de acesso é e-mail transacional: NÃO depende de CRM_LIVE_SEND_ENABLED,
-// que é o interruptor das cadências de prospecção.
-async function enviarEmail(to: string, assunto: string, html: string): Promise<boolean> {
+// que é o interruptor das cadências de prospecção. Sai pela caixa do Microsoft
+// 365 do grupo; o Resend fica só de reserva se a caixa não estiver conectada.
+async function enviarEmail(db: any, to: string, assunto: string, html: string): Promise<boolean> {
+  try {
+    const envio = await abrirRemetente((n: string) => Deno.env.get(n), db, { ignorarInterruptor: true });
+    await envio.enviar({ from: envio.enviaComoPadrao, fromName: 'CRM Ciatos', to, subject: assunto, html });
+    return true;
+  } catch { /* segue para a reserva */ }
   const key = Deno.env.get('RESEND_API_KEY');
   const from = Deno.env.get('CRM_EMAIL_FROM') || 'CRM Ciatos <nao-responder@envio.grupociatos.com.br>';
   if (!key) return false;
@@ -155,6 +162,7 @@ Deno.serve(async (req) => {
         link = `${origem}/#type=recovery&token_hash=${encodeURIComponent(tokenHash)}`;
       }
       const emailEnviado = await enviarEmail(
+        admin,
         email,
         contaExistente ? 'Seu acesso ao CRM Ciatos foi liberado' : 'Convite — defina sua senha no CRM Ciatos',
         htmlConvite(nome, link, contaExistente),

@@ -1,8 +1,14 @@
 import { env, service, rpc, json } from '../_shared/runtime.ts';
-import { renderMessage, renderBroadcast, sendEmail, decide, formatFrom } from '../_shared/outreach.ts';
+import { renderMessage, renderBroadcast, decide } from '../_shared/outreach.ts';
+import { abrirRemetente } from '../_shared/ms365.ts';
 
 type Db = ReturnType<typeof service>;
+type Remetente = Awaited<ReturnType<typeof abrirRemetente>>;
 const unsubscribeUrl = (token: string) => `${env('SUPABASE_URL')}/functions/v1/crm-unsubscribe?token=${token}`;
+
+// Uma renovação de token do Microsoft 365 por invocação, só quando for enviar.
+let remetente: Promise<Remetente> | null = null;
+const obterRemetente = (db: Db) => (remetente ??= abrirRemetente(env, db));
 
 /** Um passo de cadência por invocação: mantém a lease dentro do tempo da função. */
 async function processOutreach(db: Db): Promise<string> {
@@ -20,7 +26,8 @@ async function processOutreach(db: Db): Promise<string> {
     if (job.kind === 'EMAIL') {
       if (job.dry_run) outcome = 'simulated';
       else {
-        mid = await sendEmail(env, { from: formatFrom(gate.sender, gate.sender_name), replyTo: gate.reply_to, to: job.lead.email, ...message!, unsubscribe: base, key: job.idempotency_key });
+        const r = await obterRemetente(db);
+        await r.enviar({ from: gate.sender, fromName: gate.sender_name, replyTo: gate.reply_to, to: job.lead.email, subject: message!.subject, text: message!.text });
         outcome = 'sent';
       }
     } else if (job.kind === 'AI_DECISION') {
@@ -41,24 +48,29 @@ async function processOutreach(db: Db): Promise<string> {
   }
 }
 
-/** Um lote de comunicado por invocação (Resend: ~2 req/s → pausa entre envios). */
+/**
+ * Um lote de comunicado por invocação. Microsoft 365 aceita 30 mensagens/min
+ * por caixa: lote de 20 + 1 passo de cadência fica abaixo, com pausa curta.
+ */
 async function processBroadcast(db: Db): Promise<string> {
   if (env('CRM_LIVE_SEND_ENABLED') !== 'true') return 'broadcast_disabled';
   const lote = await rpc(db, 'claim_broadcast_batch', { max_n: 20 });
   if (!lote) return 'broadcast_idle';
   let enviados = 0;
+  let envio: Remetente | null = null;
+  try { envio = await obterRemetente(db); } catch { /* cada destinatário falha abaixo, sem reenvio */ }
   for (const r of lote.recipients as any[]) {
     const unsub = unsubscribeUrl(r.optout_token);
     try {
+      if (!envio) throw new Error('ms365_not_connected');
       const m = renderBroadcast(lote, { name: r.nome || '', company: r.empresa || '' }, unsub);
-      const mid = await sendEmail(env, { from: formatFrom(lote.sender, lote.sender_name), replyTo: lote.reply_to, to: r.email,
-        subject: m.subject, text: m.text, html: m.html, unsubscribe: unsub, key: `bcast:${r.id}` });
-      await rpc(db, 'finish_broadcast_recipient', { rid: r.id, token: r.lease_token, ok: true, message_id: mid });
+      await envio.enviar({ from: lote.sender, fromName: lote.sender_name, replyTo: lote.reply_to, to: r.email, subject: m.subject, html: m.html });
+      await rpc(db, 'finish_broadcast_recipient', { rid: r.id, token: r.lease_token, ok: true });
       enviados++;
     } catch (e) {
       await rpc(db, 'finish_broadcast_recipient', { rid: r.id, token: r.lease_token, ok: false, motivo: (e as Error).message }).catch(() => {});
     }
-    await new Promise(res => setTimeout(res, 550));
+    await new Promise(res => setTimeout(res, 300));
   }
   return `broadcast_sent:${enviados}`;
 }
@@ -67,6 +79,7 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   if (!env('CRM_WORKER_SECRET') || req.headers.get('Authorization') !== `Bearer ${env('CRM_WORKER_SECRET')}`) return json({ error: 'unauthorized' }, 401);
   const db = service();
+  remetente = null;
   const status: Record<string, string> = {};
   try { status.outreach = await processOutreach(db); } catch { status.outreach = 'error'; }
   try { status.broadcast = await processBroadcast(db); } catch { status.broadcast = 'error'; }
