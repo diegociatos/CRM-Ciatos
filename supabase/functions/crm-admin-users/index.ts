@@ -26,10 +26,19 @@ function origemPermitida(o: unknown): string {
 
 const esc = (s: string) => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]!));
 
+// Senha que ninguém conhece: a pessoa define a própria pelo link do convite.
+function senhaAleatoria(): string {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return `${btoa(String.fromCharCode(...b)).replace(/[^a-zA-Z0-9]/g, '')}Aa1!`;
+}
+
+// Convite de acesso é e-mail transacional: NÃO depende de CRM_LIVE_SEND_ENABLED,
+// que é o interruptor das cadências de prospecção.
 async function enviarEmail(to: string, assunto: string, html: string): Promise<boolean> {
   const key = Deno.env.get('RESEND_API_KEY');
   const from = Deno.env.get('CRM_EMAIL_FROM') || 'CRM Ciatos <nao-responder@envio.grupociatos.com.br>';
-  if (!key || Deno.env.get('CRM_LIVE_SEND_ENABLED') !== 'true') return false;
+  if (!key) return false;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -102,20 +111,28 @@ Deno.serve(async (req) => {
 
       // Já existe conta no auth (Chekly ou convite anterior)? Procura pelo e-mail.
       let userId: string | null = null;
+      let pendente = false;
       for (let page = 1; page <= 20 && !userId; page++) {
         const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
         if (error) throw error;
-        userId = data.users.find(u => (u.email || '').toLowerCase() === email)?.id ?? null;
+        const achado = data.users.find(u => (u.email || '').toLowerCase() === email);
+        userId = achado?.id ?? null;
+        pendente = achado?.app_metadata?.crm_password_change_required === true;
         if (data.users.length < 1000) break;
       }
-      const contaExistente = !!userId;
+      // Conta criada pelo CRM que ainda não definiu senha: trata como convite novo
+      // (reenvia o link) e troca a senha inicial por uma aleatória.
+      const contaExistente = !!userId && !pendente;
 
       if (!userId) {
         const { data: created, error } = await admin.auth.admin.createUser({
-          email, password: 'ciatos1234', email_confirm: true, user_metadata: { nome }, app_metadata: { crm_password_change_required: true },
+          email, password: senhaAleatoria(), email_confirm: true, user_metadata: { nome }, app_metadata: { crm_password_change_required: true },
         });
         if (error) throw error;
         userId = created.user!.id;
+      } else if (pendente) {
+        const { error } = await admin.auth.admin.updateUserById(userId, { password: senhaAleatoria() });
+        if (error) throw error;
       }
 
       const {data:existingProfile,error:profileError}=await admin.from('profiles').select('id,ativo').eq('id',userId).maybeSingle();

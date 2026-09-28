@@ -20,7 +20,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
     e.preventDefault();
     if (!formData.name || !formData.email) return;
 
-    // Novas identidades recebem senha inicial e troca obrigatória no servidor.
+    // Novas identidades recebem, por e-mail, um link para criar a própria senha.
     const newUser: User = {
       id: '',
       name: formData.name,
@@ -104,7 +104,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
           <form onSubmit={handleSubmit} className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-10 bg-slate-50 border-b border-slate-100">
                <h2 className="text-3xl font-black text-[#0a192f] serif-authority tracking-tight">Novo Colaborador</h2>
-               <p className="text-slate-500 font-medium mt-1">Novas contas usam ciatos1234 e precisam trocar a senha antes de acessar o CRM. Contas existentes mantêm sua senha.</p>
+               <p className="text-slate-500 font-medium mt-1">Novas contas recebem um e-mail com link para criar a própria senha antes de acessar o CRM. Contas existentes mantêm sua senha.</p>
             </div>
             
             <div className="p-10 space-y-6">
