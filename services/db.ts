@@ -79,9 +79,11 @@ const interactionDeRow = (r: InteractionRow): Interaction => ({
 
 function leadParaRow(lead: Lead) {
   // interactions vivem em tabela própria; o resto do objeto vai em `dados`.
-  const { interactions: _i, id: _id, ...resto } = lead as any;
+  const { interactions: _i, id: _id, organizationId: _o, relacao, tags, ...resto } = lead as any;
   return {
     id: lead.id,
+    ...(relacao ? { relacao } : {}),
+    ...(Array.isArray(tags) ? { tags } : {}),
     nome: lead.name || null,
     email: lead.email || null,
     telefone: lead.phone || null,
@@ -108,6 +110,8 @@ function leadDeRow(r: LeadRow, interactions: Interaction[]): Lead {
     ...(r.dados as any),
     id: r.id,
     organizationId: (r as any).organization_id,
+    relacao: (r as any).relacao === 'cliente' ? 'cliente' : 'prospect',
+    tags: Array.isArray((r as any).tags) ? (r as any).tags : [],
     name: r.nome || '',
     email: r.email || '',
     phone: r.telefone || '',

@@ -11,12 +11,42 @@ export function renderMessage(config: Record<string, unknown>, lead: Record<stri
   return { subject, text: `${body}\n\nPara não receber novos contatos: ${unsubscribe}` };
 }
 
-export async function sendEmail(env: Env, payload: { from: string; to: string; subject: string; text: string; unsubscribe: string; key: string }, request: Requester = fetch) {
+const escHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+/** Comunicado (aviso/notícia): texto do usuário vira HTML escapado, com links e rodapé de descadastro. */
+export function renderBroadcast(msg: { assunto: string; corpo: string; empresa_remetente: string }, lead: Record<string, string>, unsubscribe: string) {
+  const primeiroNome = (lead.name || '').trim().split(/\s+/)[0] || '';
+  const render = (value: string) => String(value ?? '')
+    .replace(/\{\{name\}\}/g, primeiroNome).replace(/\{\{company\}\}/g, lead.company || '')
+    .replace(/[ \t]+([,.!?])/g, '$1').replace(/[ \t]{2,}/g, ' ');
+  const subject = render(msg.assunto).trim();
+  const body = render(msg.corpo).trim();
+  if (!subject || subject.length > 200 || /[\r\n]/.test(subject) || !body || body.length > 20000 || /\{\{/.test(subject + body)) {
+    throw new Error('invalid_template');
+  }
+  const empresa = escHtml(msg.empresa_remetente || '');
+  const paragrafos = body.split(/\n{2,}/).map(p =>
+    `<p style="margin:0 0 16px;line-height:1.6">${escHtml(p).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#0a192f">${u}</a>`).replace(/\n/g, '<br>')}</p>`).join('');
+  const html = `<!doctype html><html lang="pt-BR"><body style="margin:0;background:#f5f5f0"><div style="max-width:600px;margin:0 auto;padding:24px;font-family:Georgia,'Times New Roman',serif;color:#1e293b">
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">${paragrafos}</div>
+<p style="font-size:12px;color:#64748b;line-height:1.5;margin:16px 4px 0">Você recebe este e-mail por ter relacionamento com ${empresa}. <a href="${escHtml(unsubscribe)}" style="color:#64748b">Não quero mais receber</a>.</p>
+</div></body></html>`;
+  return { subject, html, text: `${body}\n\n--\n${msg.empresa_remetente}\nPara não receber mais: ${unsubscribe}` };
+}
+
+/** Monta o "From" com nome de exibição seguro. */
+export const formatFrom = (email: string, nome?: string | null) => {
+  const n = (nome || '').replace(/["<>\r\n]/g, '').trim();
+  return n ? `${n} <${email}>` : email;
+};
+
+export async function sendEmail(env: Env, payload: { from: string; to: string; subject: string; text: string; html?: string; replyTo?: string | null; unsubscribe: string; key: string }, request: Requester = fetch) {
   if (env('CRM_LIVE_SEND_ENABLED') !== 'true' || !env('RESEND_API_KEY')) throw new Error('live_disabled');
   const response = await request('https://api.resend.com/emails', {
     method: 'POST', signal: AbortSignal.timeout(20000),
     headers: { Authorization: `Bearer ${env('RESEND_API_KEY')}`, 'Content-Type': 'application/json', 'Idempotency-Key': payload.key },
     body: JSON.stringify({ from: payload.from, to: [payload.to], subject: payload.subject, text: payload.text,
+      ...(payload.html ? { html: payload.html } : {}), ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
       headers: { 'List-Unsubscribe': `<${payload.unsubscribe}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
   });
   if (!response.ok) throw new Error(`email_provider_${response.status}`);

@@ -32,6 +32,8 @@ const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Gru
   const hasCompanyMenu = companies.length>1 || !!onManageCompanies || !!onOpenPlatform;
   const menuItems = [
     {id:'help',label:'Ajuda e passo a passo',icon:'M9 9a3 3 0 016 0c0 2-3 2-3 4m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',roles:Object.values(UserRole)},
+    { id: 'broadcasts', label: 'Comunicados', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', roles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.MARKETING, UserRole.CS] },
+    { id: 'import_contacts', label: 'Importar contatos', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12', roles: [UserRole.ADMIN, UserRole.MANAGER] },
     { id: 'ai_center', label: 'Central da IA', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', roles: Object.values(UserRole) },
     { id: 'executive_bi', label: 'Estratégico (Admin)', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: [UserRole.ADMIN] },
     { id: 'dashboard', label: 'Painel Geral', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', roles: [UserRole.ADMIN, UserRole.MANAGER] },
@@ -52,9 +54,9 @@ const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Gru
 
   const groups = [
     { title: 'Seu dia a dia', ids: ['dashboard','ai_center','customers','kanban','agenda'] },
-    { title: 'Desenvolver negócios', ids: ['prospecting','qualification','scripts','marketing_automation'] },
+    { title: 'Desenvolver negócios', ids: ['prospecting','qualification','broadcasts','scripts','marketing_automation'] },
     { title: 'Gestão & relacionamento', ids: ['executive_bi','closer_dashboard','sdr_dashboard','operational_dashboard','post_sales'] },
-    { title: 'Workspace', ids: ['help','user_management','settings'] },
+    { title: 'Workspace', ids: ['help','import_contacts','user_management','settings'] },
   ];
   return <>
     {mobileOpen && <button className="nav-backdrop md:hidden" aria-label="Fechar navegação" onClick={onClose}/>}

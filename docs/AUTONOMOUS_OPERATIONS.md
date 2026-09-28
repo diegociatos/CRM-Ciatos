@@ -45,6 +45,17 @@ Envio real exige **todos** os controles: flag global, política `outreach_policy
 
 A revisão de origem/base de contato não é determinação jurídica automática. Registre a avaliação da finalidade e base legal, mantenha canal para direitos do titular e valide política de retenção com o responsável de privacidade. Resend deve ser usado somente para tráfego permitido pelos termos do provedor e com domínio autenticado; descoberta de e-mail não é consentimento.
 
+## Carteira, importação e comunicados (2026-09-28)
+
+- **Tipo do contato (`leads.relacao`)**: `cliente` (carteira, relação contratual) ou `prospect`. Fechar contrato (status "Fechado (Ganho)") vira `cliente` automaticamente, e o cliente recebe a base "Cliente da carteira: relação contratual" se nenhuma foi registrada.
+- **Cliente da carteira dispensa a verificação Snov.io** para cadência e comunicado. Prospect continua exigindo e-mail verificado há menos de 30 dias e base/origem registradas; comunicado para prospect só alcança os verificados.
+- **Etiquetas (`leads.tags`)** segmentam comunicados e inscrições.
+- **Importar contatos** (tela própria, CSV ou Excel): `crm.import_leads` casa por CNPJ ou e-mail dentro da empresa, só completa campos vazios, soma etiquetas e registra a origem. Lotes de até 1000 linhas.
+- **Comunicados** (`crm.broadcasts`/`broadcast_recipients`): rascunho → público (tipo, etiquetas, UF, segmento) → teste para si (`crm-mail`) → disparo ou agendamento. O worker envia em lotes de até 20 por minuto, HTML escapado com rodapé e `List-Unsubscribe`, e o limite diário da empresa soma cadência + comunicado. Resultado incerto nunca é reenviado.
+- **Cadência com 1 a 8 e-mails** (`create_cadence_v2`) com público (carteira ou prospecção) e inscrição em lote (`enroll_leads`), em simulação ou envio real.
+- **Configuração de envio por empresa** (`save_outreach_policy`, só master/dono): remetente, nome de exibição, "responder para", limite diário e envio ligado. O envio real ainda exige `CRM_LIVE_SEND_ENABLED=true` no servidor.
+- O webhook do Resend recebe eventos da conta inteira (Chekly, ContaOne...). Evento sem correspondência com mais de 10 minutos é ignorado, em vez de pedir reenvio eterno.
+
 ## Webhooks e respostas
 
 Configure Resend para `crm-email-webhook` com eventos sent, delivered, opened, clicked, bounced e complained. A verificação usa corpo bruto, `svix-id`, timestamp com tolerância de cinco minutos e HMAC SHA-256. Eventos sem mensagem correlacionada retornam erro transitório para permitir retry (inclui corrida webhook antes de concluir envio). Replays não duplicam efeitos.

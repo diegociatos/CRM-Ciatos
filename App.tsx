@@ -21,6 +21,8 @@ const Agenda = lazy(() => import('./components/Agenda'));
 const MarketingAutomationDashboard = lazy(() => import('./components/MarketingAutomation'));
 const ScriptsLibrary = lazy(() => import('./components/ScriptsLibrary'));
 const UserManagementView = lazy(() => import('./components/UserManagementView'));
+const Broadcasts = lazy(() => import('./components/Broadcasts'));
+const ImportContacts = lazy(() => import('./components/ImportContacts'));
 import UserProfileModal from './components/UserProfileModal';
 import LoginPage from './components/LoginPage';
 import {
@@ -365,6 +367,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       case 'prospecting': return <Prospector organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
       case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
       case 'ai_center': return <AiCenter workspace={company} />;
+      case 'broadcasts': return company ? <Broadcasts organizationId={company.id} companyName={company.nome} canConfigure={!!company.can_manage} onGoImport={() => setNav({ view: 'import_contacts' })} /> : null;
+      case 'import_contacts': return company ? <ImportContacts organizationId={company.id} companyName={company.nome} onImported={() => void carregarTudo()} /> : null;
       case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;

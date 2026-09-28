@@ -15,7 +15,7 @@ test('Central works with mocked data: safe enrollment, intervention, tenant swit
     if(url.pathname.includes('/rpc/')){
       const body=route.request().postDataJSON();calls.push({name,body});
       if(name==='resolve_handoff') data.human_handoffs[0].status=body.resolution;
-      await route.fulfill({json:name==='tenant_member'?true:null,headers});return;
+      await route.fulfill({json:name==='tenant_member'?true:name==='enroll_leads'?{inscritos:1,ignorados:0}:null,headers});return;
     }
     if(name==='message_events') expect(url.searchParams.get('order')).toBe('occurred_at.desc');
     const org=url.searchParams.get('organization_id')?.replace('eq.','');
@@ -28,10 +28,11 @@ test('Central works with mocked data: safe enrollment, intervention, tenant swit
   await expect(page.getByText('Em atendimento · Alta prioridade')).toBeVisible();
   await page.getByRole('button',{name:'Cadências',exact:true}).click();
   await page.getByLabel('Cadência',{exact:true}).selectOption('seq-a');
-  await page.getByLabel('Lead',{exact:true}).selectOption('lead-a');
-  await page.getByRole('button',{name:'Inscrever em simulação'}).click();
-  await expect(page.getByRole('status').filter({hasText:'Alteração registrada.'})).toHaveText('Alteração registrada.');
-  expect(calls.find(c=>c.name==='enroll_lead')?.body).toEqual({sid:'seq-a',lid:'lead-a',simulate:true});
+  await page.getByRole('checkbox',{name:/Empresa de teste/}).check();
+  await expect(page.getByRole('radio',{name:/Envio real/})).toBeDisabled();
+  await page.getByRole('button',{name:'Simular com 1'}).click();
+  await expect(page.getByRole('status').filter({hasText:'inscrito'})).toContainText('1 contato(s) inscrito(s) em simulação');
+  expect(calls.find(c=>c.name==='enroll_leads')?.body).toEqual({sid:'seq-a',lids:['lead-a'],simulate:true});
   await page.getByLabel('Empresa',{exact:true}).selectOption('org-b');
   await expect(page.getByText('Cadência de teste',{exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Precisa de você',exact:true}).click();
