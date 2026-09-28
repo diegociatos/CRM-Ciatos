@@ -329,9 +329,9 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     db.excluirScript(id).catch(e => { erro(e); carregarTudo(); });
   };
 
-  const handleSaveTemplates = (lista: OnboardingTemplate[]) => {
+  const handleSaveTemplates = async (lista: OnboardingTemplate[]) => {
+    await db.salvarTemplatesOnboarding(lista);
     setTemplates(lista);
-    db.salvarTemplatesOnboarding(lista).catch(e => { erro(e); carregarTudo(); });
   };
 
   const handleSaveGoals = (metas: UserGoal[]) => {
