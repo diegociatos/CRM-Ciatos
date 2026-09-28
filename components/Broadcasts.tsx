@@ -21,19 +21,22 @@ async function chamarMs365(body: Row) {
 /** Caixa do Microsoft 365 que envia todos os e-mails do CRM (mesmo modelo do ContaOne). */
 function Ms365Panel({ canPlatform, onStatus }: { canPlatform: boolean; onStatus: (s: Row | null) => void }) {
   const [st, setSt] = useState<Row | null>(null);
+  const [loadingStatus,setLoadingStatus]=useState(true);
   const [f, setF] = useState({ tenant_id: '', client_id: '', client_secret: '', envia_como: '' });
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [ok, setOk] = useState('');
   const carregar = useCallback(async () => {
     try { const s = await chamarMs365({ action: 'status' }); setSt(s); onStatus(s); setF(x => ({ ...x, tenant_id: s.tenant_id, client_id: s.client_id, envia_como: s.envia_como })); }
-    catch { setSt(null); onStatus(null); }
+    catch { setSt(null); onStatus(null); setErro('Não foi possível verificar a integração. Confira sua conexão e tente recarregar.'); }
+    finally {setLoadingStatus(false);}
   }, [onStatus]);
   useEffect(() => { void carregar(); }, [carregar]);
   const acao = async (fn: () => Promise<void>) => { setBusy(true); setErro(''); setOk(''); try { await fn(); } catch (e: any) { setErro(e.message); } finally { setBusy(false); } };
   return <div className={card}>
     <div className="flex flex-wrap justify-between items-center gap-2">
       <h2 className="font-bold text-lg">Caixa de envio (Microsoft 365)</h2>
-      <span className={`text-sm font-bold ${st?.conectado ? 'text-emerald-700' : 'text-amber-700'}`}>{st?.conectado ? `● Conectada: ${st.conta_email}` : '○ Não conectada'}</span>
+      <span className={`text-sm font-bold ${st?.conectado ? 'text-emerald-700' : 'text-amber-700'}`}>{st?.conectado ? `● Conectada: ${st.conta_email}` : loadingStatus ? 'Verificando conexão…' : st ? '○ Não conectada' : 'Estado indisponível'}</span>
     </div>
+    <p className="text-sm text-slate-600">Para o agente reconhecer respostas, o dono precisa reconectar a caixa com Mail.Read e Mail.Read.Shared após habilitar a leitura no servidor. Isso permite ler mensagens das caixas de resposta configuradas no CRM.</p>
     <p className="text-sm text-slate-500">Todos os e-mails do CRM saem por esta caixa do grupo, pelo Microsoft 365 (como no ContaOne). As respostas dos clientes chegam nela ou no endereço de resposta de cada empresa.</p>
     {st?.conectado && <p className="text-sm">Remetente padrão: <strong>{st.envia_como || st.conta_email}</strong>. Cada empresa pode usar outro endereço, desde que a caixa conectada tenha a permissão “Enviar como” nele.</p>}
     {erro && <p role="alert" className="text-red-700 text-sm">{erro}</p>}{ok && <p role="status" className="text-emerald-700 text-sm">{ok}</p>}

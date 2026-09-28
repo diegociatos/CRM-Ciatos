@@ -9,6 +9,7 @@ export type Requester = typeof fetch;
 // Calendars.ReadWrite(.Shared): convites do onboarding e da Agenda no Outlook,
 // criados no calendário da caixa do grupo (ou do usuário conectado).
 export const SCOPE = 'offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Send.Shared https://graph.microsoft.com/User.Read https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Calendars.ReadWrite.Shared';
+export const replyScope = (enabled=false) => SCOPE+(enabled?' https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Read.Shared':'');
 const AUTH = (tenant: string) => `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0`;
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
 const unb64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -65,14 +66,14 @@ export const statusPublico = (c: Integracao | null) => ({
   envia_como: c?.envia_como || '', conectado_em: c?.conectado_em || '',
 });
 
-export function urlAutorizacao(c: Integracao, redirectUri: string, state: string) {
+export function urlAutorizacao(c: Integracao, redirectUri: string, state: string, readReplies=false) {
   const q = new URLSearchParams({ client_id: c.client_id!, response_type: 'code', redirect_uri: redirectUri,
-    response_mode: 'query', scope: SCOPE, state, prompt: 'select_account' });
+    response_mode: 'query', scope: replyScope(readReplies), state, prompt: 'select_account' });
   return `${AUTH(c.tenant_id!)}/authorize?${q}`;
 }
 
 export async function trocarToken(env: Env, c: Integracao, params: Record<string, string>, request: Requester = fetch) {
-  const body = new URLSearchParams({ client_id: c.client_id!, client_secret: await decifrar(env, c.client_secret_cif!), scope: SCOPE, ...params });
+  const body = new URLSearchParams({ client_id: c.client_id!, client_secret: await decifrar(env, c.client_secret_cif!), scope: replyScope(env('CRM_REPLY_READ_ENABLED')==='true'), ...params });
   const r = await request(`${AUTH(c.tenant_id!)}/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: AbortSignal.timeout(15000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error_description || j.error || 'Falha ao autenticar na Microsoft.');
@@ -113,11 +114,13 @@ export async function enviarGraph(token: string, m: Mensagem, request: Requester
  * interruptor global CRM_LIVE_SEND_ENABLED (exceto quando `ignorarInterruptor`,
  * usado só para testes para o próprio usuário e convites de acesso).
  */
-export async function abrirRemetente(env: Env, db: any, opts: { ignorarInterruptor?: boolean } = {}, request: Requester = fetch) {
+export async function abrirRemetente(env: Env, db: any, opts: { ignorarInterruptor?: boolean; readReplies?:boolean } = {}, request: Requester = fetch) {
   if (!opts.ignorarInterruptor && env('CRM_LIVE_SEND_ENABLED') !== 'true') throw new Error('live_disabled');
   const { data: c, error } = await db.from('mail_integration').select('*').eq('id', 1).maybeSingle();
   if (error || !c?.refresh_token_cif) throw new Error('ms365_not_connected');
-  const token = await accessToken(env, c, cif => db.from('mail_integration').update({ refresh_token_cif: cif, updated_at: new Date().toISOString() }).eq('id', 1), request);
+  // A pending reading consent must not break existing Mail.Send/calendar sessions.
+  const tokenEnv:Env=name=>name==='CRM_REPLY_READ_ENABLED'?(opts.readReplies?'true':'false'):env(name);
+  const token = await accessToken(tokenEnv, c, cif => db.from('mail_integration').update({ refresh_token_cif: cif, updated_at: new Date().toISOString() }).eq('id', 1), request);
   return {
     enviaComoPadrao: (c.envia_como || c.conta_email) as string,
     contaConectada: c.conta_email as string,

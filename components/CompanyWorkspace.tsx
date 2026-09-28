@@ -15,7 +15,7 @@ export function CompanyShell({children}:{children:(props:WorkspaceProps)=>React.
  const refresh=useCallback(async(preferred?:string)=>{
   if(!uid)return;const version=++generation.current;setLoading(true);setError('');
   try{const {data,error}=await supabase.rpc('my_companies');if(error)throw error;if(version!==generation.current)return;
-   const list=(data||[]) as Company[];if(preferred&&list.some(c=>c.id===preferred))localStorage.setItem("crm-company:"+uid,preferred);setCompanies(list);setSelected(old=>{const wanted=preferred||old||localStorage.getItem('crm-company:'+uid);return list.some(c=>c.id===wanted)?wanted!:list[0]?.id||'';});
+   const list=(data||[]) as Company[];if(preferred&&list.some(c=>c.id===preferred))localStorage.setItem("crm-company:"+uid,preferred);setCompanies(list);setSelected(old=>{const wanted=preferred||old||new URLSearchParams(window.location.search).get('company')||localStorage.getItem('crm-company:'+uid);return list.some(c=>c.id===wanted)?wanted!:list[0]?.id||'';});
   }catch{if(version===generation.current){setCompanies([]);setError('Não foi possível carregar suas empresas. Tente novamente.');}}finally{if(version===generation.current)setLoading(false);}
  },[uid]);
  useEffect(()=>{generation.current++;setCompanies([]);setSelected('');if(uid)void refresh();return()=>{generation.current++;};},[uid,refresh]);

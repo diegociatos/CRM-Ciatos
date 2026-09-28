@@ -93,7 +93,7 @@ Deno.serve(async req => {
     if (p.action === 'connect') {
       if (!c?.client_secret_cif || !c.tenant_id || !c.client_id) return json({ error: 'Salve o app do Microsoft 365 antes de conectar.' }, 400);
       const state = await assinarState(env, { uid: me.user.id, origin: origemPermitida(p.origin) });
-      return json({ url: urlAutorizacao(c, redirectUri(), state), redirect_uri: redirectUri() });
+      return json({ url: urlAutorizacao(c, redirectUri(), state, env('CRM_REPLY_READ_ENABLED')==='true'), redirect_uri: redirectUri() });
     }
     if (p.action === 'disconnect') {
       await db.from('mail_integration').update({ refresh_token_cif: null, conta_email: null, conta_nome: null, conectado_em: null, updated_at: new Date().toISOString() }).eq('id', 1);

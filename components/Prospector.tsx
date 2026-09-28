@@ -5,6 +5,7 @@ import { MiningEngine } from '../services/miningService';
 
 interface ProspectorProps {
   organizationId:string;
+  onGoAgent?:()=>void;
   onAddAsLead: (comp: any) => Promise<{ success: boolean; message: string }>;
   canImport: boolean;
   existingLeads: Lead[];
@@ -36,7 +37,7 @@ function miningParaLead(m: MiningLead): any {
   };
 }
 
-const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canImport, existingLeads }) => {
+const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAsLead, canImport, existingLeads }) => {
   const miningEngine=useMemo(()=>new MiningEngine(organizationId),[organizationId]);
   const [activeJobs, setActiveJobs] = useState<MiningJob[]>([]);
   const [showNewJobModal, setShowNewJobModal] = useState(false);
@@ -44,6 +45,8 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
   const [jobLeads, setJobLeads] = useState<MiningLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadingResults,setLoadingResults]=useState(false);
+  const [resultError,setResultError]=useState('');
 
   const [newJob, setNewJob] = useState({
     segmentName: '',
@@ -68,11 +71,13 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
     miningEngine.init();
     load();
     return () => {window.removeEventListener('ciatos-mining-update', load);miningEngine.dispose();};
-  }, []);
+  }, [miningEngine]);
 
   useEffect(() => {
-    if (inspectingJob) miningEngine.loadLeads(inspectingJob.id);
-  }, [inspectingJob?.id]);
+    if (!inspectingJob)return;let active=true;setLoadingResults(true);setResultError('');setJobLeads([]);setSelectedLeads(new Set());
+    miningEngine.loadLeads(inspectingJob.id).catch(()=>{if(active)setResultError('Não foi possível carregar os resultados. Feche e tente novamente.');}).finally(()=>{if(active)setLoadingResults(false);});
+    return()=>{active=false;};
+  }, [inspectingJob?.id,miningEngine]);
 
   useEffect(() => {
     if (inspectingJob) {
@@ -162,6 +167,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const inputClass = "w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#c5a059]";
@@ -184,6 +190,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
         </div>
       </div>
 
+      <div className="bg-white border rounded-xl p-5 flex flex-wrap gap-4 justify-between"><div><h2 className="text-xl font-bold">Seu próximo passo pode ser automático</h2><p>Configure o Agente SDR para preparar os resultados pendentes, verificar e-mails no Snov.io e iniciar a cadência da empresa.</p><p className="text-sm text-slate-600 mt-2">Busca interrompida não apaga os resultados já encontrados. Você pode inspecionar ou retomar.</p></div>{onGoAgent&&<button className="btn-navy" onClick={onGoAgent}>Configurar agente</button>}</div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {activeJobs.map(job => (
           <div key={job.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[380px] hover:shadow-xl transition-all">
@@ -194,13 +201,13 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                   job.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
                   'bg-slate-100 text-slate-500'
                 }`}>
-                  {job.status === 'Running' ? 'Buscando...' : job.status}
+                  {({Running:'Buscando…',Failed:'Busca interrompida',Completed:'Concluída',Paused:'Pausada',Cancelled:'Cancelada'} as Record<string,string>)[job.status] || job.status}
                 </span>
                 <div className="flex gap-2">
                    {job.status === 'Running' ? (
-                     <button onClick={() => miningEngine.controlJob(job.id, 'pause')} className="p-2 bg-slate-50 rounded-lg text-xs">⏸️</button>
-                   ) : job.status === 'Paused' ? (
-                     <button onClick={() => miningEngine.controlJob(job.id, 'resume')} className="p-2 bg-slate-50 rounded-lg text-xs">▶️</button>
+                     <button onClick={() => miningEngine.controlJob(job.id, 'pause')} aria-label="Pausar busca" className="p-2 bg-slate-50 rounded-lg text-xs">⏸️</button>
+                   ) : ['Paused','Failed'].includes(job.status) ? (
+                     <button onClick={() => miningEngine.controlJob(job.id, 'resume')} aria-label="Retomar busca" className="p-2 bg-slate-50 rounded-lg text-xs">▶️</button>
                    ) : null}
                    <button onClick={() => {
                      if(confirm("Deseja excluir este radar e todos os seus resultados?")) {
@@ -323,7 +330,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                       {isProcessing ? '⏳ TRANSMITINDO...' : `📥 MOVER ${selectedLeads.size} PARA QUALIFICAÇÃO`}
                     </button>
                    )}
-                   <button onClick={() => setInspectingJob(null)} className="p-4 bg-slate-200 text-slate-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest">FECHAR</button>
+                   <button disabled={isProcessing} onClick={() => setInspectingJob(null)} className="p-4 bg-slate-200 text-slate-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest">FECHAR</button>
                 </div>
              </div>
 
@@ -401,10 +408,10 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                       ))}
                    </tbody>
                 </table>
-                {jobLeads.length === 0 && (
+                {loadingResults ? <p role="status" className="p-8">Carregando resultados…</p> : resultError ? <p role="alert" className="p-8 text-red-700">{resultError}</p> : jobLeads.length === 0 && (
                    <div className="py-40 text-center opacity-30 flex flex-col items-center">
                       <div className="text-6xl mb-6">🎯</div>
-                      <p className="text-3xl font-bold serif-authority">Lote Processado.</p>
+                      <p className="text-3xl font-bold serif-authority">Nenhum resultado pendente.</p>
                    </div>
                 )}
              </div>

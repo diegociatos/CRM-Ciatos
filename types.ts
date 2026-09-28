@@ -290,7 +290,7 @@ export interface ProspectCompany {
   estimatedRevenue?: string; 
 }
 
-export interface Notification { id: string; title: string; message: string; timestamp: string; type: 'success' | 'warning' | 'info'; read: boolean; }
+export interface Notification { id: string; leadId?:string; title: string; message: string; timestamp: string; type: 'success' | 'warning' | 'info'; read: boolean; }
 
 export interface LeadFilters {
   status: LeadStatus[];

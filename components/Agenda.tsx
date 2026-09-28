@@ -171,11 +171,11 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
         <div className="flex items-center gap-8">
           <h1 className="text-4xl font-black text-[#0a192f] serif-authority">Agenda Corporativa</h1>
           <div className="flex items-center bg-slate-50 rounded-2xl p-1 border border-slate-100">
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 text-slate-400 hover:text-[#0a192f]">←</button>
+            <button aria-label="Mês anterior" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(),currentDate.getMonth()-1,1))} className="p-3 text-slate-400 hover:text-[#0a192f]">←</button>
             <span className="px-6 font-bold text-[#0a192f] min-w-[180px] text-center capitalize">
               {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
             </span>
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 text-slate-400 hover:text-[#0a192f]">→</button>
+            <button aria-label="Próximo mês" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(),currentDate.getMonth()+1,1))} className="p-3 text-slate-400 hover:text-[#0a192f]">→</button>
           </div>
         </div>
         <button onClick={() => openModal()} className="bg-[#0a192f] text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest border-b-4 border-[#c5a059] shadow-xl active:translate-y-1 transition-all">

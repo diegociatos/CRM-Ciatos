@@ -53,7 +53,7 @@ export class MiningEngine {
   public async loadLeads(jobId: string) {
     const { data, error } = await supabase.from('mining_leads').select('*')
       .eq('organization_id',this.organizationId).eq('job_id', jobId).eq('imported', false).order('created_at', { ascending: false }).limit(1000);
-    if (error) { console.error('[Radar]', error.message); return; }
+    if (error) throw new Error('Não foi possível carregar os resultados do Radar.');
     this.leads[jobId] = (data as MLeadRow[]).map(leadDeRow);
     emitir();
   }

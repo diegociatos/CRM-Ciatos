@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from
 import Sidebar from './components/Sidebar';
 import AiCenter from './components/AiCenter';
 import Header from './components/Header';
+import {useSdrNotifications} from './lib/useSdrNotifications';
 import Dashboard from './components/Dashboard';
 const HelpCenter = lazy(() => import('./components/HelpCenter'));
 const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
@@ -107,11 +108,12 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
 
   const [appNotice,setAppNotice] = useState(retornoMs365 || '');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(()=>new URLSearchParams(window.location.search).get('lead'));
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   // realUser = quem está logado; currentUser pode ter o papel "simulado" (só Admin, só visual).
   const [realUser, setRealUser] = useState<User | null>(null);
+  const {notifications,markRead,clearAll}=useSdrNotifications(company?.id,realUser?.id);
   const [simulatedRole, setSimulatedRole] = useState<UserRole | null>(null);
   const [estadoAuth, setEstadoAuth] = useState<EstadoAuth>('carregando');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -125,6 +127,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     console.error(e);
     alert(e instanceof Error ? e.message : 'Erro inesperado ao falar com o servidor.');
   };
+
+  const openLead=async(id:string)=>{try{const fresh=await db.carregarLeads();setLeads(fresh);if(fresh.some(l=>l.id===id))setSelectedLeadId(id);else setAppNotice('Este contato não está disponível na empresa selecionada.');}catch{setAppNotice('Não foi possível abrir o contato. Tente novamente.');}};
 
   const carregarTudo = useCallback(async () => {
     setCarregandoDados(true);
@@ -378,12 +382,12 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
-      case 'prospecting': return <Prospector organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
+      case 'prospecting': return <Prospector onGoAgent={()=>setNav({view:'ai_center'})} organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
       case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
-      case 'ai_center': return <AiCenter workspace={company} />;
+      case 'ai_center': return <AiCenter onOpenLead={id=>void openLead(id)} workspace={company} />;
       case 'broadcasts': return company ? <Broadcasts organizationId={company.id} companyName={company.nome} canConfigure={!!company.can_manage} canPlatform={!!company.can_platform} onGoImport={() => setNav({ view: 'import_contacts' })} /> : null;
       case 'import_contacts': return company ? <ImportContacts organizationId={company.id} companyName={company.nome} onImported={() => void carregarTudo()} /> : null;
-      case 'marketing_automation': return <MarketingAutomationDashboard leads={leads} onUpdateLead={handleUpdateLead} currentUser={currentUser} config={config} allUsers={users} />;
+      case 'marketing_automation': return <AiCenter onOpenLead={id=>void openLead(id)} workspace={company}/>;
       case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
       case 'operational_dashboard': return company ? <Onboarding organizationId={company.id} companyName={company.nome} leads={leads} users={users} currentUser={currentUser} templates={templates} admin={company.operating_role === 'ADMIN' || !!company.can_manage} abrirLeadId={onboardingLink} onClearDeepLink={() => setOnboardingLink(null)} onImport={()=>setNav({view:'import_contacts'})} onCustomers={()=>setNav({view:'customers'})} onTemplates={()=>setNav({view:'settings',settingsTab:'journeys'})} /> : null;
@@ -402,7 +406,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <Sidebar brandName={company?.branding?.display_name} brandColor={company?.branding?.color} companyName={company?.nome} companyId={company?.id} companies={companies} onCompanyChange={onCompanyChange} onManageCompanies={company?.can_manage?()=>{setManageCompanies(true);setMobileMenuOpen(false);}:undefined} onOpenPlatform={company?.can_platform?()=>{setPlatformOpen(true);setMobileMenuOpen(false);}:undefined} mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={setSelectedLeadId} onToggleMenu={() => setMobileMenuOpen(true)} notifications={[]} onMarkRead={() => {}} onClearAll={() => {}} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
+        <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={id=>void openLead(id)} onToggleMenu={() => setMobileMenuOpen(true)} notifications={notifications} onMarkRead={id=>void markRead(id)} onClearAll={()=>void clearAll()} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
         <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
           {appNotice && <div className="app-notice" role="status"><span>{appNotice}</span><button aria-label="Fechar mensagem" onClick={()=>setAppNotice('')}>✕</button></div>}
           {carregandoDados && <div className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando dados…</div>}

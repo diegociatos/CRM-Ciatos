@@ -20,4 +20,4 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
-      - run: npx deno check supabase/functions/crm-automation-worker/index.ts supabase/functions/crm-email-webhook/index.ts supabase/functions/crm-unsubscribe/index.ts supabase/functions/crm-enrichment/index.ts supabase/functions/crm-ai-supervisor/index.ts supabase/functions/crm-inbound-event/index.ts supabase/functions/crm-admin-users/index.ts supabase/functions/crm-ia/index.ts supabase/functions/crm-mail/index.ts
+      - run: npx deno check supabase/functions/crm-email-open/index.ts supabase/functions/crm-ms365/index.ts supabase/functions/crm-automation-worker/index.ts supabase/functions/crm-email-webhook/index.ts supabase/functions/crm-unsubscribe/index.ts supabase/functions/crm-enrichment/index.ts supabase/functions/crm-ai-supervisor/index.ts supabase/functions/crm-inbound-event/index.ts supabase/functions/crm-admin-users/index.ts supabase/functions/crm-ia/index.ts supabase/functions/crm-mail/index.ts

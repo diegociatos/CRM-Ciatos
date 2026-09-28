@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { cadenceLibrary } from '../lib/cadenceLibrary';
 
 type Row = Record<string, any>;
 const field = 'w-full rounded-lg border border-slate-300 px-3 py-2 bg-white';
@@ -66,6 +67,9 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
   const setPasso = (i: number, patch: Row) => setNova({ ...nova, passos: nova.passos.map((p, j) => j === i ? { ...p, ...patch } : p) });
 
   return <div className="space-y-6">
+    {admin && <section className="bg-[#15343e] text-white p-6 rounded-xl space-y-4"><h2 className="text-2xl">E-mails prontos para iniciar uma conversa</h2><p>Dez serviços, quatro mensagens por cadência. Escolha um modelo para revisar ou instale a biblioteca como rascunhos. Nenhum contato é inscrito automaticamente.</p><div className="flex flex-wrap gap-2">{cadenceLibrary.map(c=><button key={c.id} className="rounded-lg border border-white/40 px-3 py-2 hover:bg-white/10" onClick={()=>{setNova({titulo:c.titulo,publico:c.publico,espera_final:c.espera_final,passos:c.passos.map(p=>({...p}))});setAviso(`Modelo ${c.name} carregado no formulário Nova cadência. Revise e salve.`);}}>{c.name}</button>)}</div><button className="bg-[#e2c18a] text-[#15343e] rounded-lg px-4 py-3 font-bold disabled:opacity-50" disabled={busy} onClick={()=>acao(async()=>{
+      const {data,error}=await supabase.rpc('install_sdr_library',{org,library:cadenceLibrary});if(error)throw error;await onChanged();setAviso(`${data} cadência(s) instalada(s) como rascunho. As já instaladas foram preservadas.`);
+    })}>Instalar biblioteca · 40 e-mails</button></section>}
     {erro && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{erro}</p>}
     {aviso && <p role="status" className="p-3 bg-green-50 text-green-800 rounded-lg">{aviso}</p>}
     <div className="grid xl:grid-cols-2 gap-6">

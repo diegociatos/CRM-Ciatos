@@ -19,6 +19,10 @@ export class SnovAdapter {
     return await response.json();
   }
   async start(kind: string, value: string) {
+    if (kind === 'reveal') {
+      if (!/^[a-zA-Z0-9_-]{1,200}$/.test(value)) throw new Error('invalid_task');
+      return this.call(`/v2/domain-search/prospects/search-emails/start/${value}`, new URLSearchParams());
+    }
     if (kind === 'verify') {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw new Error('invalid_email');
       return this.call('/v2/email-verification/start', new URLSearchParams({ 'emails[]': value }));
@@ -28,8 +32,17 @@ export class SnovAdapter {
   }
   async result(kind: string, hash: string) {
     if (!/^[a-zA-Z0-9_-]{1,200}$/.test(hash)) throw new Error('invalid_task');
-    return this.call(kind === 'verify' ? `/v2/email-verification/result?task_hash=${hash}` : `/v2/domain-search/prospects/result/${hash}`);
+    return this.call(kind === 'verify' ? `/v2/email-verification/result?task_hash=${hash}` : kind === 'reveal' ? `/v2/domain-search/prospects/search-emails/result/${hash}` : `/v2/domain-search/prospects/result/${hash}`);
   }
+}
+export function snovCandidates(result: any): Array<{name:string;position:string;hash:string;emails:Array<{email:string}>}> {
+  const entries = Array.isArray(result.data) ? result.data : result.data ? [result.data] : [];
+  return entries.slice(0,20).map((p: any) => ({
+    name: String(p.name || [p.first_name,p.last_name].filter(Boolean).join(' ')).slice(0,200),
+    position: String(p.position || '').slice(0,200),
+    hash: String(p.search_emails_start || '').match(/^https:\/\/api\.snov\.io\/v2\/domain-search\/prospects\/search-emails\/start\/([a-zA-Z0-9_-]{1,200})$/)?.[1] || '',
+    emails: (Array.isArray(p.emails) ? p.emails : []).slice(0,3).map((e: any) => ({email: String(e.email || '').slice(0,254)})),
+  }));
 }
 export function verifiedResult(data: any, email: string): boolean {
   const entry = data?.status === 'completed' && Array.isArray(data.data) ? data.data.find((r: any) => r.email?.toLowerCase() === email.toLowerCase()) : null;
