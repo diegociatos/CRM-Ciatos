@@ -26,3 +26,18 @@ test('Inbox fits a phone viewport',async({page})=>{
  await expect(page.getByText('Gostaria de conversar amanhã.')).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+test('Inbox requires a preview and explicit confirmation before a reply',async({page})=>{
+ await page.goto('/tests/ui/?inbox');
+ await page.getByRole('button',{name:/Empresa Exemplo.*Nova/}).click();
+ await page.getByLabel('Responder por e-mail').fill('Olá Ana, podemos conversar amanhã às 10h?');
+ await expect(page.getByText('E-mail aceito pela Microsoft')).toHaveCount(0);
+ await page.getByRole('button',{name:'Revisar resposta'}).click();
+ await expect(page.getByText('Prévia para ana@example.test')).toBeVisible();
+ await page.getByRole('button',{name:'Voltar e editar'}).click();
+ await expect(page.getByRole('button',{name:'Confirmar envio'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Revisar resposta'}).click();
+ await page.getByRole('button',{name:'Confirmar envio'}).click();
+ await expect(page.getByText('Resposta aceita pela Microsoft 365. A entrega ainda não foi confirmada.')).toBeVisible();
+ await expect(page.getByText('Olá Ana, podemos conversar amanhã às 10h?')).toBeVisible();
+});
