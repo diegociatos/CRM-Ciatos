@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { MiningEngine } from '../services/miningService';
+import WorkspaceEmpty from './WorkspaceEmpty';
 
 interface ProspectorProps {
   organizationId:string;
@@ -180,7 +181,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
       <div className="flex justify-between items-end border-b border-slate-200 pb-8">
         <div>
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Radar de Inteligência</h1>
-          <p className="text-slate-500 text-lg font-medium">Extração estrita por Porte e Regime Tributário.</p>
+          <p className="text-slate-500 text-lg font-medium">Crie listas de empresas por segmento e escolha a abrangência: cidade, estado ou Brasil inteiro.</p>
         </div>
         <div className="flex gap-4">
           <button
@@ -193,6 +194,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
       </div>
 
       <div className="bg-white border rounded-xl p-5 flex flex-wrap gap-4 justify-between"><div><h2 className="text-xl font-bold">Seu próximo passo pode ser automático</h2><p>Configure o Agente SDR para preparar os resultados pendentes, verificar e-mails no Snov.io e iniciar a cadência da empresa.</p><p className="text-sm text-slate-600 mt-2">Busca interrompida não apaga os resultados já encontrados. Você pode inspecionar ou retomar.</p></div>{onGoAgent&&<button className="btn-navy" onClick={onGoAgent}>Configurar agente</button>}</div>
+      {activeJobs.length === 0 && <WorkspaceEmpty eyebrow="NENHUMA LISTA CRIADA" title="Comece por uma busca com objetivo claro." description="Dê um nome à lista, informe o segmento e escolha os filtros que realmente importam. Cidade, estado, porte e regime tributário são opcionais." steps={['Nomeie a lista e informe o público que quer alcançar.', 'Confira os resultados encontrados antes de importar.', 'Prepare os contatos e a cadência na Central da IA.']} action={{label:'Criar primeira lista',onClick:()=>setShowNewJobModal(true)}} secondary={onGoAgent?{label:'Conhecer o Agente SDR',onClick:onGoAgent}:undefined}/>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {activeJobs.map(job => (
           <div key={job.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[380px] hover:shadow-xl transition-all">

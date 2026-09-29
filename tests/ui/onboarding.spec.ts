@@ -1,4 +1,11 @@
 import {test,expect} from '@playwright/test';
+test('CafeWorking does not preview a tax or accounting journey',async({page})=>{
+ await page.route('**/rest/v1/onboarding_steps*',r=>r.fulfill({json:[]}));
+ await page.goto('/tests/ui/?onboarding-empty-cafe');
+ await expect(page.getByRole('heading',{name:'Uma jornada para sua operação'})).toBeVisible();
+ await expect(page.getByText('Implantação contábil')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/Criar modelo de jornada/})).toBeVisible();
+});
 for(const width of [1440,390]){
  test(`onboarding empty state has useful actions at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:1000});let failure=true;

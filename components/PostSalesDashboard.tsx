@@ -1,6 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, User, LeadStatus, NpsSurvey, SuccessTask, WelcomeData, SystemConfig, OnboardingTemplate, OnboardingItem } from '../types';
+import WorkspaceEmpty from './WorkspaceEmpty';
 
 interface PostSalesDashboardProps {
   leads: Lead[];
@@ -9,6 +10,8 @@ interface PostSalesDashboardProps {
   onUpdateLead: (lead: Lead) => void;
   config: SystemConfig;
   templates: OnboardingTemplate[];
+  onGoCustomers?: () => void;
+  onGoOnboarding?: () => void;
 }
 
 const SUCCESS_STAGES = [
@@ -19,7 +22,7 @@ const SUCCESS_STAGES = [
 ];
 
 const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({ 
-  leads, users, currentUser, onUpdateLead, config, templates 
+  leads, users, currentUser, onUpdateLead, config, templates, onGoCustomers, onGoOnboarding
 }) => {
   const contracts = useMemo(() => leads.filter(l => l.status === LeadStatus.WON), [leads]);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(contracts[0]?.id || null);
@@ -28,6 +31,8 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
   const [npsScore, setNpsScore] = useState(10);
   const [npsNotes, setNpsNotes] = useState('');
   const [newExpandTaskTitle, setNewExpandTaskTitle] = useState('');
+
+  useEffect(() => { if (contracts.length && !contracts.some(c => c.id === selectedContractId)) setSelectedContractId(contracts[0].id); }, [contracts, selectedContractId]);
 
   const activeContract = useMemo(() => contracts.find(c => c.id === selectedContractId), [contracts, selectedContractId]);
 
@@ -140,12 +145,14 @@ const PostSalesDashboard: React.FC<PostSalesDashboardProps> = ({
   const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-2 block";
   const inputClass = "w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-[#c5a059] transition-all";
 
+  if (!contracts.length) return <div className="space-y-5"><div><p className="text-sm text-slate-500">Gestão & relacionamento</p><h1 className="text-3xl font-bold text-[#0a192f]">Pós-venda e sucesso</h1><p className="text-slate-600 mt-1">Acompanhe a experiência dos clientes depois da contratação.</p></div><WorkspaceEmpty eyebrow="CARTEIRA EM FORMAÇÃO" title="A jornada de sucesso começa com um cliente." description="Quando houver um contrato ganho nesta empresa, você poderá acompanhar boas-vindas, implantação, satisfação e expansão do relacionamento." steps={['Cadastre ou importe os clientes da empresa.', 'Registre o contrato e inicie a jornada de onboarding.', 'Acompanhe satisfação e próximos passos aqui.']} action={onGoCustomers?{label:'Abrir clientes',onClick:onGoCustomers}:undefined} secondary={onGoOnboarding?{label:'Ver onboarding',onClick:onGoOnboarding}:undefined}/></div>;
+
   return (
-    <div className="flex gap-8 animate-in fade-in duration-700">
+    <div className="post-sales-dashboard flex gap-8 animate-in fade-in duration-700">
       <div className="flex-1 space-y-10">
         <div className="flex justify-between items-start">
           <div className="max-w-xl">
-            <h1 className="text-5xl font-black text-[#0a192f] serif-authority tracking-tighter mb-2">Success Central</h1>
+            <h1 className="text-5xl font-black text-[#0a192f] serif-authority tracking-tighter mb-2">Pós-venda e sucesso</h1>
             <p className="text-slate-400 text-sm font-medium">Gestão de LTV e Satisfação para o cliente <span className="text-[#c5a059] font-bold">{activeContract?.tradeName}</span></p>
             <div className="mt-8">
                <select 

@@ -195,6 +195,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     if (estadoAuth === 'ok' && company) carregarTudo();
   }, [estadoAuth, carregarTudo]);
 
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [nav.view, company?.id]);
+
   const handleLogin = async (email: string, pass: string) => {
     setIsAuthLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
@@ -377,22 +379,22 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     switch (nav.view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
-      case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
+      case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
       case 'prospecting': return <Prospector onGoAgent={()=>setNav({view:'ai_center'})} organizationId={company?.id||""} onAddAsLead={handleAddLead} canImport={true} existingLeads={leads} />;
       case 'qualification': return <QualificationQueue leads={leads} config={config} onApprove={(id) => patchLead(id, { inQueue: false, qualifiedById: currentUser.id })} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onSelectLead={setSelectedLeadId} onOpenManualLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canEdit={true} canCreate={true} />;
-      case 'ai_center': return <AiCenter onOpenLead={id=>void openLead(id)} workspace={company} />;
+      case 'ai_center': return <AiCenter key={`central-${company?.id}`} onOpenLead={id=>void openLead(id)} workspace={company} />;
       case 'broadcasts': return company ? <Broadcasts organizationId={company.id} companyName={company.nome} canConfigure={!!company.can_manage} canPlatform={!!company.can_platform} onGoImport={() => setNav({ view: 'import_contacts' })} /> : null;
       case 'import_contacts': return company ? <ImportContacts organizationId={company.id} companyName={company.nome} onImported={() => void carregarTudo()} /> : null;
-      case 'marketing_automation': return <AiCenter onOpenLead={id=>void openLead(id)} workspace={company}/>;
-      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} />;
+      case 'marketing_automation': return <AiCenter key={`marketing-${company?.id}`} initialTab="cadences" onOpenLead={id=>void openLead(id)} workspace={company}/>;
+      case 'kanban': return <KanbanBoard leads={leads} phases={config.phases} onMoveLead={(id, ph) => { const l = leads.find(x => x.id === id); if (l) patchLead(id, { phaseId: ph, ownerId: currentUser.role === UserRole.CLOSER ? currentUser.id : l.ownerId }); }} onSelectLead={setSelectedLeadId} role={currentUser.role} currentUserId={currentUser.id} searchTerm="" users={users} onCreate={()=>setShowNewLeadForm(true)} />;
       case 'agenda': return <Agenda events={events} leads={leads} users={users} currentUser={currentUser} config={config} onSaveEvent={handleSaveEvent} onDeleteEvent={handleDeleteEvent} onSelectLead={setSelectedLeadId} />;
       case 'operational_dashboard': return company ? <Onboarding organizationId={company.id} companyName={company.nome} leads={leads} users={users} currentUser={currentUser} templates={templates} admin={company.operating_role === 'ADMIN' || !!company.can_manage} abrirLeadId={onboardingLink} onClearDeepLink={() => setOnboardingLink(null)} onImport={()=>setNav({view:'import_contacts'})} onCustomers={()=>setNav({view:'customers'})} onTemplates={()=>setNav({view:'settings',settingsTab:'journeys'})} /> : null;
-      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onDeleteCustomer={handleDeleteLead} />;
-      case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} />;
+      case 'customers': return <CustomerDatabase leads={leads} currentUser={currentUser} onUpdateCustomer={handleUpdateLead} onDeleteCustomer={handleDeleteLead} onImport={()=>setNav({view:'import_contacts'})} onCreate={()=>setShowNewLeadForm(true)} />;
+      case 'post_sales': return <PostSalesDashboard leads={leads} users={users} currentUser={currentUser} onUpdateLead={handleUpdateLead} config={config} templates={templates} onGoCustomers={()=>setNav({view:'customers'})} onGoOnboarding={()=>setNav({view:'operational_dashboard'})} />;
       case 'settings': return <Settings initialTab={nav.settingsTab==='journeys'?'journeys':undefined} config={config} role={currentUser.role} currentUser={currentUser} onSaveConfig={handleSaveConfig} leads={leads} userGoals={userGoals} allUsers={users} onSaveGoals={handleSaveGoals} onSeedDatabase={handleSeed} onClearDatabase={handleResetToDefaults} templates={templates} onSaveTemplates={handleSaveTemplates} onSyncTemplate={()=>{}} />;
       default: return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} />;
     }

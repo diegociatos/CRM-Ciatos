@@ -9,12 +9,12 @@ const button = 'rounded-lg px-3 py-2 bg-slate-100 text-slate-800 hover:bg-slate-
 const field = 'w-full rounded-lg border border-slate-300 px-3 py-2 bg-white';
 type Row = Record<string, any>;
 
-export default function AiCenter({workspace,onOpenLead}:{workspace?:{id:string;nome:string};onOpenLead?:(id:string)=>void}={}) {
+export default function AiCenter({workspace,onOpenLead,initialTab}:{workspace?:{id:string;nome:string};onOpenLead?:(id:string)=>void;initialTab?:'cadences'|'attention'}={}) {
   const [organizations, setOrganizations] = useState<Row[]>([]);
   const [org, setOrg] = useState(workspace?.id||'');
   const [rows, setRows] = useState<Record<string, Row[]>>({});
   const [rowsOrg, setRowsOrg] = useState('');
-  const [tab, setTab] = useState(workspace?.id === '0d1ee589-5acc-4321-a560-b6f176394a6e' ? 'cadences' : 'attention');
+  const [tab, setTab] = useState<string>(initialTab || (workspace?.id === '0d1ee589-5acc-4321-a560-b6f176394a6e' ? 'cadences' : 'attention'));
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,7 +81,7 @@ export default function AiCenter({workspace,onOpenLead}:{workspace?:{id:string;n
   const policy = rows.outreach_policy?.[0];
   return <section className="ai-center space-y-6 text-slate-800">
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <div><p className="text-sm text-slate-500">{company?.branding?.displayName || company?.nome || 'CRM Ciatos'}</p><h1 className="text-3xl font-bold">Central da IA</h1><p className="text-slate-500 mt-1">Seu ponto de encontro com as oportunidades e decisões da operação.</p></div>
+      <div><p className="text-sm text-slate-500">{company?.branding?.displayName || company?.nome || 'CRM Ciatos'}</p><h1 className="text-3xl font-bold">{initialTab === 'cadences' ? 'Cadências e automações' : 'Central da IA'}</h1><p className="text-slate-500 mt-1">{initialTab === 'cadences' ? 'Crie, revise e acompanhe as conversas automatizadas desta empresa.' : 'Seu ponto de encontro com as oportunidades e decisões da operação.'}</p></div>
       <div className="flex gap-2"><select aria-label="Empresa" disabled={busy||!!workspace} value={org} onChange={e => setOrg(e.target.value)} className={field}>{organizations.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}</select><button className={button} onClick={() => void refresh()}>Atualizar</button></div>
     </div>
     <div className="safe-banner"><strong>{policy?.live_enabled ? 'Envio real ligado nesta empresa' : 'Modo seguro: envio real desligado'}</strong><p className="text-sm mt-1">{policy?.live_enabled ? `Cadências inscritas em "envio real" disparam e-mails em dias úteis, das 9h às 18h, até ${policy?.daily_limit} por dia (somando comunicados).` : 'Inscrições só em simulação. Para enviar de verdade, ligue o envio em Comunicados → Configuração de envio.'} Resolver um alerta não reinicia a cadência.</p></div>

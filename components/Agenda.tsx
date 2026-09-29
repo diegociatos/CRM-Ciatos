@@ -166,10 +166,10 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
   const inputClass = "w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-5 py-3.5 font-bold text-[#0a192f] outline-none focus:border-[#c5a059] transition-all";
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 h-[calc(100vh-140px)] flex flex-col">
-      <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm shrink-0">
-        <div className="flex items-center gap-8">
-          <h1 className="text-4xl font-black text-[#0a192f] serif-authority">Agenda Corporativa</h1>
+    <div className="agenda-workspace space-y-6 animate-in fade-in duration-500 min-h-[calc(100vh-140px)] flex flex-col">
+      <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm shrink-0">
+        <div className="flex flex-wrap items-center gap-4 md:gap-8">
+          <div><h1 className="text-3xl font-bold text-[#0a192f] serif-authority">Minha agenda</h1><p className="text-sm text-slate-600">Organize reuniões, retornos e próximos passos.</p></div>
           <div className="flex items-center bg-slate-50 rounded-2xl p-1 border border-slate-100">
             <button aria-label="Mês anterior" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(),currentDate.getMonth()-1,1))} className="p-3 text-slate-400 hover:text-[#0a192f]">←</button>
             <span className="px-6 font-bold text-[#0a192f] min-w-[180px] text-center capitalize">
@@ -245,7 +245,7 @@ const Agenda: React.FC<AgendaProps> = ({ events, leads, users, currentUser, conf
                     )}
                   </div>
               ))}
-              {dayEvents.length === 0 && <p className="py-20 text-center text-slate-300 italic text-sm">Sem eventos.</p>}
+              {dayEvents.length === 0 && <div className="agenda-empty-day"><p>Nenhum compromisso neste dia.</p><button type="button" onClick={() => openModal()}>Agendar atividade →</button></div>}
            </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Lead, LeadStatus, SystemConfig, User, UserRole } from '../types';
+import WorkspaceEmpty from './WorkspaceEmpty';
 
 interface QualificationQueueProps {
   leads: Lead[];
@@ -64,7 +65,13 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
+      {queueLeads.length === 0 ? <WorkspaceEmpty
+        eyebrow={filterOwner === 'mine' ? 'SUA FILA' : 'FILA DE ENTRADA'}
+        title={filterOwner === 'mine' ? 'Nenhum contato atribuído a você.' : 'Tudo pronto para receber novos leads.'}
+        description={filterOwner === 'mine' ? 'Confira todos os leads ou aguarde uma atribuição nesta empresa.' : 'Os leads cadastrados ou importados como prospects entram aqui para revisão antes de seguir ao pipeline.'}
+        steps={filterOwner === 'mine' ? undefined : ['Cadastre ou importe um prospect.', 'Confira empresa, contato e origem dos dados.', 'Aprove o contato para o pipeline comercial.']}
+        action={filterOwner === 'mine' ? {label:'Ver todos os leads',onClick:()=>setFilterOwner('all')} : canCreate ? {label:'Cadastrar lead',onClick:onOpenManualLead} : undefined}
+      /> : <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="qualification-table w-full text-left border-collapse min-w-[1200px]">
             <thead className="bg-slate-50/50 border-b border-slate-100">
@@ -151,16 +158,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
             </tbody>
           </table>
         </div>
-        {queueLeads.length === 0 && (
-          <div className="p-8 md:p-20 text-center flex flex-col items-center">
-            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mb-8 border border-slate-100 shadow-inner">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <h3 className="text-[#0a192f] font-bold text-2xl serif-authority mb-2">Nenhum lead nesta fila</h3>
-            <p className="text-slate-400 font-medium">Cadastre um lead ou altere o filtro para localizar outros contatos.</p>
-          </div>
-        )}
-      </div>
+      </div>}
     </div>
   );
 };

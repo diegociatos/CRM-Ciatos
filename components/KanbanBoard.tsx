@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Lead, KanbanPhase, UserRole, LeadStatus, User } from '../types';
+import WorkspaceEmpty from './WorkspaceEmpty';
 
 interface KanbanBoardProps {
   leads: Lead[];
@@ -11,6 +12,7 @@ interface KanbanBoardProps {
   currentUserId: string;
   searchTerm: string;
   users: User[];
+  onCreate?: () => void;
 }
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
@@ -21,7 +23,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   role,
   currentUserId,
   searchTerm,
-  users
+  users,
+  onCreate
 }) => {
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
 
@@ -105,8 +108,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   const getUserName = (id?: string) => users.find(u => u.id === id)?.name || '—';
 
+  if (filteredLeads.length === 0) return <div className="space-y-5"><div><p className="text-sm text-slate-500">Sua operação comercial</p><h1 className="text-3xl font-bold text-[#0a192f]">Pipeline Comercial</h1><p className="text-slate-600 mt-1">Acompanhe cada oportunidade do primeiro contato ao contrato.</p></div><WorkspaceEmpty eyebrow="PRIMEIRA OPORTUNIDADE" title="O pipeline começa com um lead qualificado." description="Os contatos aprovados na Fila de Qualificação aparecem aqui. Você poderá abrir cada cadastro e mover o negócio entre etapas." steps={['Cadastre um lead ou importe prospects.', 'Revise os dados na Fila de Qualificação.', 'Aprove o lead e acompanhe a próxima ação aqui.']} action={onCreate ? {label:'Cadastrar lead',onClick:onCreate} : undefined}/></div>;
+
   return (
     <div className="flex flex-col h-[calc(100vh-230px)] overflow-hidden">
+      <div className="mb-4"><p className="text-sm text-slate-500">Sua operação comercial</p><h1 className="text-3xl font-bold text-[#0a192f]">Pipeline Comercial</h1><p className="text-sm text-slate-600">Arraste um cartão ou use “Mover para etapa” para avançar.</p></div>
       <div className="mb-4 flex gap-4">
         {role === UserRole.SDR && (
           <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-2xl flex items-center gap-3">
@@ -195,9 +201,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     );
                   })}
                   {phaseLeads.length === 0 && (
-                    <div className="py-10 text-center opacity-10 flex flex-col items-center">
-                      <div className="w-12 h-12 border-2 border-dashed border-slate-400 rounded-full mb-2"></div>
-                      <p className="text-[10px] font-bold uppercase">Vazio</p>
+                    <div className="py-10 text-center text-slate-500 flex flex-col items-center">
+                      <p className="text-sm">Nenhuma oportunidade</p>
                     </div>
                   )}
                 </div>

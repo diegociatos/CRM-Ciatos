@@ -166,18 +166,18 @@ const Settings: React.FC<SettingsProps> = ({
   const inputStyled = "w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold text-[#0a192f] outline-none focus:border-[#c5a059] transition-all";
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in pb-20">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-10">
+    <div className="settings-workspace max-w-7xl mx-auto space-y-8 animate-in fade-in pb-20">
+      <div className="flex flex-wrap gap-5 justify-between items-end border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Configurações Gerais</h1>
-          <p className="text-slate-500 text-lg font-medium">Customização de Pipeline, Bônus e Canais.</p>
+          <h1 className="text-3xl font-bold text-[#0a192f] mb-2 serif-authority tracking-tight">Configurações</h1>
+          <p className="text-slate-600">Organize etapas, metas, jornadas e preferências desta empresa.</p>
         </div>
-        <div className="flex bg-slate-100 p-1.5 rounded-[2.2rem] border border-slate-200 shadow-inner overflow-x-auto no-scrollbar">
-           {([['pipeline', '📝 PIPELINE & CANAIS'], ['comercial', '💸 METAS & BÔNUS'], ['parametros', '⚙️ PARÂMETROS'], ['journeys', '🏁 JORNADAS'], ['data', '💾 SISTEMA']] as const).map(([id, label]) => (
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
+           {([['pipeline', 'Pipeline e canais'], ['comercial', 'Metas e bônus'], ['parametros', 'Parâmetros'], ['journeys', 'Jornadas'], ['data', 'Sistema']] as const).map(([id, label]) => (
              <button 
                key={id}
                onClick={() => setActiveTab(id)}
-               className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === id ? 'bg-white text-[#0a192f] shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+               className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === id ? 'bg-white text-[#0a192f] shadow-sm' : 'text-slate-600 hover:text-[#0a192f]'}`}
              >
                {label}
              </button>
@@ -195,7 +195,7 @@ const Settings: React.FC<SettingsProps> = ({
              </h3>
              <div className="space-y-6">
                 <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
-                  Esta assinatura será fixada automaticamente em todos os e-mails enviados pelo CRM, utilizando a fonte **Book Antiqua**.
+                  Esta assinatura será adicionada aos e-mails enviados pelo CRM com a fonte Book Antiqua.
                 </p>
                 <div>
                    <label className={labelHeader}>Conteúdo da Assinatura (Texto ou HTML)</label>
