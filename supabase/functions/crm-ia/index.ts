@@ -166,8 +166,8 @@ async function radar(p: any, db: SupabaseClient<any, any, any>) {
     system: `Você é um pesquisador de prospecção B2B no Brasil. Encontre empresas REAIS e ATIVAS usando a busca na web. Para cada uma, o CNPJ é obrigatório e precisa ter sido visto numa fonte (site da empresa, cnpj.biz, casadosdados, econodata, Receita etc.). Não invente CNPJ, telefone nem pessoa — deixe vazio o que não encontrar.`,
     messages: [{
       role: 'user',
-      content: `Encontre até 10 empresas do segmento "${f.segment || ''}" em ${f.city || ''}/${f.state || ''}.
-Porte desejado: ${f.size && f.size !== 'all' ? f.size : 'indiferente'}. Regime tributário desejado: ${f.taxRegime || 'indiferente'}.
+      content: `Encontre até 10 empresas do segmento "${f.segment || ''}" em ${f.city?.trim() ? [f.city.trim(), f.state?.trim()].filter(Boolean).join(' / ') : f.state?.trim() ? 'todo o estado de ' + f.state.trim() : 'todo o Brasil'}. Não restrinja a uma cidade quando nenhuma cidade foi informada.
+Porte desejado: ${f.size && f.size !== 'all' ? f.size : 'indiferente'}. Regime tributário desejado: ${f.taxRegime?.trim() || 'todos os regimes, sem restrição tributária'}.
 ${excluir.length ? `NÃO repita estas empresas: ${excluir.slice(0, 150).join('; ')}` : ''}
 
 Responda SOMENTE com um JSON, sem texto antes ou depois, no formato:
