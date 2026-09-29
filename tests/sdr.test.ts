@@ -45,6 +45,13 @@ test('agente: biblioteca idempotente, Radar persistente, alertas isolados, abert
  await db.query('select crm.finish_sdr_mailbox($1,$2,null,now(),null)',[cursor.mailbox,cursor.lease]);
  assert.equal((await db.query(`select * from crm.outreach_steps where tipo='NOTIFY_HUMAN'`)).rows.length,0);
  const mid=(await db.query<any>(`insert into crm.mining_jobs(organization_id,status,dados) values('${org}','Completed','{}') returning id`)).rows[0].id;
+ await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${user}',false);`);
+ await db.query(`select crm.save_sdr_settings($1,true,$2,true,'Finalidade avaliada para público empresarial','diego.garcia@grupociatos.com.br',true,$3)`,[org,sid,mid]);
+ assert.equal((await db.query<any>(`select radar_job_id from crm.sdr_settings where organization_id='${org}'`)).rows[0].radar_job_id,mid);
+ await assert.rejects(db.query(`select crm.save_sdr_settings($1,true,$2,true,'Finalidade avaliada para público empresarial','diego.garcia@grupociatos.com.br',true,$3)`,[org,sid,other]));
+ await db.exec('reset role;');
+ const excluded=(await db.query<any>(`insert into crm.mining_jobs(organization_id,status,dados) values('${org}','Completed','{}') returning id`)).rows[0].id;
+ await db.query(`insert into crm.mining_leads(organization_id,job_id,cnpj_raw,dados) values($1,$2,'99999999000199',$3::jsonb)`,[org,excluded,JSON.stringify({tradeName:'Outra lista',emailCompany:'other@example.test'})]);
  await db.query(`insert into crm.mining_leads(organization_id,job_id,cnpj_raw,dados) values($1,$2,'12345678000190',$3::jsonb)`,[org,mid,JSON.stringify({tradeName:'Alfa',contactName:'Ana',emailCompany:'ana@alfa.test',phoneCompany:'31999999999',website:'alfa.test'})]);
  assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,1);assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,0);
  assert.equal((await db.query<any>(`select dados->>'radarJobId' job from crm.leads where organization_id='${org}'`)).rows[0].job,mid);
