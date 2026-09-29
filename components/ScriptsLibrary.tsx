@@ -15,11 +15,14 @@ const ScriptsLibrary: React.FC<ScriptsLibraryProps> = ({ scripts, onSaveScript, 
   const [filterService, setFilterService] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [editingScript, setEditingScript] = useState<Partial<SalesScript> | null>(null);
+  const [readingScript, setReadingScript] = useState<SalesScript | null>(null);
+  const [copied, setCopied] = useState(false);
+  const serviceOptions = useMemo(() => Array.from(new Set([...config.serviceTypes, ...scripts.map(s => s.serviceType)])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')), [config.serviceTypes, scripts]);
 
   const filteredScripts = useMemo(() => {
     return scripts.filter(s => {
-      const matchSearch = s.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+      const term = searchTerm.toLocaleLowerCase('pt-BR');
+      const matchSearch = [s.title, s.serviceType, s.objective, ...(s.tags || [])].some(value => value?.toLocaleLowerCase('pt-BR').includes(term));
       const matchService = filterService === 'all' || s.serviceType === filterService;
       const matchAccess = s.isGlobal || s.authorId === currentUser.id;
       return matchSearch && matchService && matchAccess;
@@ -63,87 +66,101 @@ const ScriptsLibrary: React.FC<ScriptsLibraryProps> = ({ scripts, onSaveScript, 
     setShowModal(false);
   };
 
+  const scriptBody = (script: SalesScript) => script.versions?.find(v => v.id === script.currentVersionId)?.body || script.versions?.at(-1)?.body || '';
+  const copyScript = async (script: SalesScript) => {
+    try {
+      await navigator.clipboard.writeText(scriptBody(script));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch { window.alert('Não foi possível copiar. Abra o roteiro e selecione o texto.'); }
+  };
+
   const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-2 block";
   const inputClass = "w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-[#c5a059] transition-all";
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-10">
+      <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-6 border-b border-slate-200 pb-7">
         <div>
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Sales Playbook</h1>
-          <p className="text-slate-500 text-lg font-medium">Biblioteca de Scripts, Pitches e Tratamento de Objeções.</p>
+          <p className="text-slate-500 text-lg font-medium">Conversas prontas para apresentar, entender e avançar cada serviço da empresa.</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
            <input 
             type="text" 
             placeholder="Buscar por título ou tag..." 
-            className="w-80 bg-white border border-slate-200 rounded-2xl px-6 py-3 text-sm font-bold shadow-sm"
+            className="w-full sm:w-72 bg-white border border-slate-200 rounded-2xl px-5 py-3 text-sm shadow-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
            />
            <button 
             onClick={handleOpenNew}
-            className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 active:scale-95 transition-all"
+            className="bg-[#0a192f] text-white px-6 py-3 rounded-2xl font-bold shadow-sm border-b-2 border-[#c5a059] hover:bg-[#173744] transition-all"
            >
-             + Criar Script
+             + Criar roteiro
            </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="service-filter" className="font-bold text-[#0a192f]">Serviço</label>
+        <select id="service-filter" value={filterService} onChange={e => setFilterService(e.target.value)} className="min-w-64 max-w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0a192f]">
+          <option value="all">Todos os serviços</option>
+          {serviceOptions.map(service => <option key={service} value={service}>{service}</option>)}
+        </select>
+        <span className="text-sm text-slate-500">{filteredScripts.length} {filteredScripts.length === 1 ? 'roteiro' : 'roteiros'}</span>
+      </div>
+
+      {filteredScripts.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-600">Nenhum roteiro encontrado. Escolha outro serviço ou ajuste a busca.</div>}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {filteredScripts.map(script => {
           const currentVersion = script.versions.find(v => v.id === script.currentVersionId) || script.versions[0];
           return (
-            <div key={script.id} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between min-h-[450px]">
+            <div key={script.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between min-h-[340px]">
               <div>
                 <div className="flex justify-between items-start mb-6">
-                  <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
-                    script.isGlobal ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                  }`}>
-                    {script.isGlobal ? 'Global / Admin' : 'Pessoal'}
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#f4eee0] text-[#705326]">
+                    {script.serviceType}
                   </span>
                   <div className="flex gap-2">
-                    <button onClick={() => { setEditingScript(script); setShowModal(true); }} className="text-slate-300 hover:text-indigo-600 transition">✏️</button>
-                    <button onClick={() => onDeleteScript(script.id)} className="text-slate-300 hover:text-red-500 transition">✕</button>
+                    {(currentUser.role === UserRole.ADMIN || script.authorId === currentUser.id) && <button aria-label={`Editar ${script.title}`} onClick={() => { setEditingScript(script); setShowModal(true); }} className="text-slate-500 hover:text-[#0a192f] transition">Editar</button>}
+                    {(currentUser.role === UserRole.ADMIN || script.authorId === currentUser.id) && <button aria-label={`Excluir ${script.title}`} onClick={() => { if (window.confirm(`Excluir o roteiro “${script.title}”?`)) onDeleteScript(script.id); }} className="text-slate-400 hover:text-red-700 transition">Excluir</button>}
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-4 group-hover:text-[#c5a059] transition-colors leading-tight">{script.title}</h3>
-                
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Duração Est.</p>
-                      <p className="text-lg font-bold text-[#0a192f]">{script.estimatedDuration} min</p>
-                   </div>
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Taxa Conv.</p>
-                      <p className="text-lg font-bold text-emerald-600">{script.usageStats.totalUsed > 0 ? Math.round((script.usageStats.convertedToMeeting / script.usageStats.totalUsed)*100) : 0}%</p>
-                   </div>
-                </div>
+                <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-2 leading-tight">{script.title}</h3>
+                <p className="text-sm text-slate-500 mb-5">{script.objective} · cerca de {script.estimatedDuration} min</p>
 
-                <div className="space-y-3 mb-8">
-                   <p className="text-[9px] font-black text-[#c5a059] uppercase tracking-widest">3 Bullets de Abordagem</p>
-                   {script.bullets.map((b, i) => (
-                     <div key={i} className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                        {b || 'Ponto tático...'}
+                <div className="space-y-2 mb-5">
+                   {(script.bullets || []).filter(Boolean).slice(0, 3).map((b, i) => (
+                     <div key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <span className="text-[#c5a059]">•</span>
+                        <span>{b}</span>
                      </div>
                    ))}
                 </div>
               </div>
 
-              <div className="border-t border-slate-50 pt-8">
-                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                       v{script.versions.length}
-                    </div>
-                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Versionamento Ativo</p>
-                 </div>
+              <div className="border-t border-slate-100 pt-4 flex gap-2">
+                <button onClick={() => setReadingScript(script)} className="flex-1 rounded-xl bg-[#0a192f] px-4 py-3 text-sm font-bold text-white hover:bg-[#173744]">Ler roteiro</button>
+                <button onClick={() => copyScript(script)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-[#0a192f] hover:bg-slate-50">Copiar</button>
               </div>
             </div>
           );
         })}
       </div>
+
+      {copied && <div role="status" className="fixed bottom-6 right-6 z-[2600] rounded-xl bg-[#0a192f] px-5 py-3 text-white shadow-xl">Roteiro copiado.</div>}
+      {readingScript && <div className="fixed inset-0 z-[2500] flex items-center justify-center bg-[#0a192f]/80 p-4" onClick={() => setReadingScript(null)}>
+        <div role="dialog" aria-modal="true" aria-label={readingScript.title} className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6">
+            <div><p className="mb-2 text-sm font-bold text-[#a07538]">{readingScript.serviceType} · {readingScript.objective}</p><h2 className="serif-authority text-3xl font-bold text-[#0a192f]">{readingScript.title}</h2></div>
+            <button aria-label="Fechar roteiro" onClick={() => setReadingScript(null)} className="text-2xl text-slate-500">×</button>
+          </div>
+          <div className="overflow-y-auto p-6"><div className="whitespace-pre-wrap text-base leading-8 text-[#243d49]">{scriptBody(readingScript)}</div></div>
+          <div className="flex justify-end gap-3 border-t border-slate-100 p-4"><button onClick={() => setReadingScript(null)} className="rounded-xl px-5 py-3 text-sm font-bold text-slate-600">Fechar</button><button onClick={() => copyScript(readingScript)} className="rounded-xl bg-[#0a192f] px-5 py-3 text-sm font-bold text-white">Copiar roteiro</button></div>
+        </div>
+      </div>}
 
       {showModal && editingScript && (
         <div className="fixed inset-0 z-[2500] flex items-center justify-center p-4 bg-[#0a192f]/95 backdrop-blur-md">
@@ -167,7 +184,7 @@ const ScriptsLibrary: React.FC<ScriptsLibraryProps> = ({ scripts, onSaveScript, 
                          <div>
                             <label className={labelClass}>Serviço Alvo</label>
                             <select className={inputClass} value={editingScript.serviceType} onChange={e => setEditingScript({...editingScript, serviceType: e.target.value})}>
-                               {config.serviceTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                               {serviceOptions.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                          </div>
                       </div>
