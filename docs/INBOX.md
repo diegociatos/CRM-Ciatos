@@ -27,3 +27,9 @@ O item **Caixa de entrada** mostra respostas recebidas a cadências do CRM na em
 Após autorização já concedida para o deploy, a migration foi aplicada exclusivamente ao schema `crm` do projeto vinculado. A versão atualizada de `crm-automation-worker` foi publicada antes da interface. O frontend foi publicado pelo workflow Cloudflare [36623945179](https://github.com/diegociatos/CRM-Ciatos/actions/runs/36623945179), concluído com sucesso no commit `a3578e9`.
 
 Verificação remota: tabelas presentes, função de captura indisponível para o papel `authenticated`, função de notas disponível ao usuário autenticado, zero conversas e zero mensagens. O navegador abriu o Inbox no CafeWorking e exibiu o estado vazio sem erro. Nenhum agente SDR foi ligado nesta implantação; políticas de envio preexistentes não foram alteradas. Nenhuma mensagem de teste foi enviada.
+
+## Respostas manuais publicadas em 29/09/2026
+
+A migration `20260930160000_inbox_replies.sql` foi aplicada somente ao schema `crm` e a função `crm-inbox-send` foi publicada. O frontend do commit `928fe91` foi publicado pelo [workflow 36626894138](https://github.com/diegociatos/CRM-Ciatos/actions/runs/36626894138), concluído com sucesso. No navegador, o Inbox do CafeWorking abriu sem erro; não há conversas nessa empresa para exercitar a resposta visualmente em produção. Os três fluxos de interface foram testados localmente com transporte simulado.
+
+Verificação remota: zero respostas manuais registradas, função de reserva negada a `authenticated` e liberada somente a `service_role`. As duas políticas de empresa previamente ativas permaneceram assim; nenhuma flag, agente ou configuração de remetente foi alterada nesta publicação. Nenhum e-mail de teste foi enviado.
