@@ -47,6 +47,12 @@ test('agente: biblioteca idempotente, Radar persistente, alertas isolados, abert
  const mid=(await db.query<any>(`insert into crm.mining_jobs(organization_id,status,dados) values('${org}','Completed','{}') returning id`)).rows[0].id;
  await db.query(`insert into crm.mining_leads(organization_id,job_id,cnpj_raw,dados) values($1,$2,'12345678000190',$3::jsonb)`,[org,mid,JSON.stringify({tradeName:'Alfa',contactName:'Ana',emailCompany:'ana@alfa.test',phoneCompany:'31999999999',website:'alfa.test'})]);
  assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,1);assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,0);
+ assert.equal((await db.query<any>(`select dados->>'radarJobId' job from crm.leads where organization_id='${org}'`)).rows[0].job,mid);
+ await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${user}',false);`);
+ const selected=(await db.query<any>(`select id from crm.leads where organization_id='${org}'`)).rows[0].id;
+ const scoped=(await db.query<any>('select crm.enroll_radar_list($1,$2,$3,true) result',[sid,mid,[]])).rows[0].result;assert.equal(scoped.inscritos,0);
+ await assert.rejects(db.query('select crm.enroll_radar_list($1,$2,$3,true)',[sid,other,[selected]]));
+ await db.exec('reset role;');
  const q=(await db.query<any>('select crm.claim_sdr_lead() q')).rows[0].q;
  assert.equal(q.lead.empresa,'Alfa');assert.equal((await db.query<any>('select crm.claim_sdr_lead() q')).rows[0].q,null);
  await assert.rejects(db.query(`select crm.finish_sdr_lead($1,$2,'ENROLLED')`,[q.id,other]));

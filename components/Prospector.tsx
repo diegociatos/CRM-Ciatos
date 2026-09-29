@@ -34,6 +34,7 @@ function miningParaLead(m: MiningLead): any {
     notes: (m as any).reason || '',
     enriched: !!(m as any).verificadoReceita,
     inQueue: true,
+    radarJobId: m.jobId,
   };
 }
 
@@ -49,6 +50,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
   const [resultError,setResultError]=useState('');
 
   const [newJob, setNewJob] = useState({
+    listName: '',
     segmentName: '',
     state: '',
     city: '',
@@ -90,7 +92,8 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newJob.segmentName) return alert("Preencha o nome do segmento.");
+    if (!newJob.listName.trim()) return alert("Dê um nome para a lista.");
+    if (!newJob.segmentName.trim()) return alert("Preencha o nome do segmento.");
 
     try {
       await miningEngine.createJob(newJob as any);
@@ -99,7 +102,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
     }
     setShowNewJobModal(false);
     setNewJob({
-      segmentName: '', state: '', city: '', size: 'all',
+      listName: '', segmentName: '', state: '', city: '', size: 'all',
       taxRegime: '',
       fiscalFilter: 'Indiferente', targetCount: 100,
       autoCreateSegment: true, enrich: true
@@ -252,6 +255,10 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
 
              <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-6">
+                   <div>
+                      <label className={labelClass}>Nome da lista *</label>
+                      <input required maxLength={100} className={inputClass} value={newJob.listName} onChange={e => setNewJob({...newJob, listName: e.target.value})} placeholder="Ex.: Parceiros contábeis · Brasil" />
+                   </div>
                    <div>
                       <label className={labelClass}>Segmento Corporativo *</label>
                       <input required className={inputClass} value={newJob.segmentName} onChange={e => setNewJob({...newJob, segmentName: e.target.value})} placeholder="Ex: Metalúrgicas, Atacadistas..." />

@@ -7,11 +7,27 @@ const field = 'w-full rounded-lg border border-slate-300 px-3 py-2 bg-white';
 const button = 'rounded-lg px-3 py-2 bg-slate-100 text-slate-800 hover:bg-slate-200 disabled:opacity-50';
 const labels: Record<string, string> = { ACTIVE: 'Ativa', DRAFT: 'Rascunho', PAUSED: 'Pausada', ARCHIVED: 'Arquivada' };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Only company-owned offerings appear in the selected workspace.
+const serviceByOrg: Record<string, string[]> = {
+  '00000000-0000-4000-8000-000000000001': cadenceLibrary.map(c => c.id),
+  '8345da0f-171a-44c4-ab3b-b5b468487c09': ['tributario','credito'],
+  '97dbf5e9-9ea2-4fb1-9de9-7561a1810567': ['racionaliza'],
+  'd136ff75-88e2-49f0-a57c-34f8ffde2468': ['holding'],
+  '86086314-ad9c-4064-832d-21a0ce9fc4a7': ['log'],
+  '5080f093-3019-4015-b048-3d837aae21ee': ['contabilidade'],
+  '791a8796-503a-4817-b516-f229f54b58af': ['crise','tributario','holding','credito'],
+  'eb2c1641-b38c-4104-b097-f74398c50f54': ['juridico'],
+  '0934f7bb-ceee-4fc1-95fa-92d1267a1d9c': ['bank'],
+};
+
 const passoVazio = () => ({ assunto: '', corpo: '', espera_dias: 3 });
 const msgErro = (e: any) => String(e?.message || e || 'Erro inesperado');
 
 export default function Cadences({ org, admin, policy, sequences, onChanged }: { org: string; admin: boolean; policy?: Row; sequences: Row[]; onChanged: () => Promise<void> | void }) {
   const [leads, setLeads] = useState<Row[]>([]);
+  const [radarJobs, setRadarJobs] = useState<Row[]>([]);
+  const [radarList, setRadarList] = useState('');
+  const companyLibrary = cadenceLibrary.filter(c => (serviceByOrg[org] || []).includes(c.id));
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [aviso, setAviso] = useState('');
   const [nova, setNova] = useState({ titulo: '', publico: 'cliente', espera_final: 5, passos: [passoVazio()] });
   const [sid, setSid] = useState(''); const [real, setReal] = useState(false);
@@ -20,7 +36,9 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
 
   useEffect(() => {
     let ativo = true;
-    supabase.from('leads').select('id,empresa,nome,email,relacao,tags,opt_out,email_verified_at,contact_basis')
+    setLeads([]); setRadarJobs([]); setRadarList('');
+    supabase.from('mining_jobs').select('id,dados').eq('organization_id', org).order('created_at', { ascending: false }).limit(200).then(({ data }) => { if (ativo) setRadarJobs(data || []); });
+    supabase.from('leads').select('id,empresa,nome,email,relacao,tags,opt_out,email_verified_at,contact_basis,dados')
       .eq('organization_id', org).order('empresa').limit(5000)
       .then(({ data }) => { if (ativo) setLeads(data || []); });
     return () => { ativo = false; };
@@ -35,7 +53,8 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
   const elegiveis = useMemo(() => leads.filter(l => !l.opt_out && EMAIL_RE.test(l.email || '')
     && (publico === 'cliente' ? l.relacao === 'cliente' : l.relacao !== 'cliente')
     && (!filtroTag || (l.tags || []).includes(filtroTag))
-    && (!busca || `${l.empresa} ${l.nome} ${l.email}`.toLowerCase().includes(busca.toLowerCase()))), [leads, publico, filtroTag, busca]);
+    && (!radarList || l.dados?.radarJobId === radarList || (l.dados?.radarJobIds || []).includes(radarList))
+    && (!busca || `${l.empresa} ${l.nome} ${l.email}`.toLowerCase().includes(busca.toLowerCase()))), [leads, publico, filtroTag, busca, radarList]);
   const semVerificacao = real ? elegiveis.filter(l => marcados.has(l.id) && !podeReal(l)).length : 0;
 
   const acao = async (fn: () => Promise<void>) => { if (busy) return; setBusy(true); setErro(''); setAviso(''); try { await fn(); } catch (e) { setErro(msgErro(e)); } finally { setBusy(false); } };
@@ -58,7 +77,9 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
     const ids = [...marcados].filter(id => elegiveis.some(l => l.id === id));
     if (!ids.length) throw new Error('Selecione ao menos um contato.');
     if (real && !window.confirm(`Inscrever ${ids.length} contato(s) em "${cadencia?.nome}" com ENVIO REAL?\n\nOs e-mails saem em dias úteis, das 9h às 18h, respeitando o limite diário. A cadência para quando você registrar resposta ou reunião.`)) return;
-    const { data, error } = await supabase.rpc('enroll_leads', { sid, lids: ids, simulate: !real });
+    const { data, error } = radarList
+      ? await supabase.rpc('enroll_radar_list', { sid, job: radarList, lids: ids, simulate: !real })
+      : await supabase.rpc('enroll_leads', { sid, lids: ids, simulate: !real });
     if (error) throw error;
     setAviso(`${data.inscritos} contato(s) inscrito(s)${real ? '' : ' em simulação'}${data.ignorados ? ` · ${data.ignorados} ignorado(s) (já inscritos, sem e-mail ou descadastrados)` : ''}.`);
     setMarcados(new Set()); await onChanged();
@@ -67,9 +88,9 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
   const setPasso = (i: number, patch: Row) => setNova({ ...nova, passos: nova.passos.map((p, j) => j === i ? { ...p, ...patch } : p) });
 
   return <div className="space-y-6">
-    {admin && <section className="bg-[#15343e] text-white p-6 rounded-xl space-y-4"><h2 className="text-2xl">E-mails prontos para iniciar uma conversa</h2><p>Dez serviços, quatro mensagens por cadência. Escolha um modelo para revisar ou instale a biblioteca como rascunhos. Nenhum contato é inscrito automaticamente.</p><div className="flex flex-wrap gap-2">{cadenceLibrary.map(c=><button key={c.id} className="rounded-lg border border-white/40 px-3 py-2 hover:bg-white/10" onClick={()=>{setNova({titulo:c.titulo,publico:c.publico,espera_final:c.espera_final,passos:c.passos.map(p=>({...p}))});setAviso(`Modelo ${c.name} carregado no formulário Nova cadência. Revise e salve.`);}}>{c.name}</button>)}</div><button className="bg-[#e2c18a] text-[#15343e] rounded-lg px-4 py-3 font-bold disabled:opacity-50" disabled={busy} onClick={()=>acao(async()=>{
-      const {data,error}=await supabase.rpc('install_sdr_library',{org,library:cadenceLibrary});if(error)throw error;await onChanged();setAviso(`${data} cadência(s) instalada(s) como rascunho. As já instaladas foram preservadas.`);
-    })}>Instalar biblioteca · 40 e-mails</button></section>}
+    {admin && companyLibrary.length > 0 && <section className="bg-[#15343e] text-white p-6 rounded-xl space-y-4"><h2 className="text-2xl">Modelos para esta empresa</h2><p>Escolha um modelo para revisar ou instale os modelos desta empresa como rascunhos. Nenhum contato é inscrito automaticamente.</p><div className="flex flex-wrap gap-2">{companyLibrary.map(c=><button key={c.id} className="rounded-lg border border-white/40 px-3 py-2 hover:bg-white/10" onClick={()=>{setNova({titulo:c.titulo,publico:c.publico,espera_final:c.espera_final,passos:c.passos.map(p=>({...p}))});setAviso(`Modelo ${c.name} carregado no formulário Nova cadência. Revise e salve.`);}}>{c.name}</button>)}</div><button className="bg-[#e2c18a] text-[#15343e] rounded-lg px-4 py-3 font-bold disabled:opacity-50" disabled={busy} onClick={()=>acao(async()=>{
+      const {data,error}=await supabase.rpc('install_sdr_library',{org,library:companyLibrary});if(error)throw error;await onChanged();setAviso(`${data} cadência(s) instalada(s) como rascunho. As já instaladas foram preservadas.`);
+    })}>Instalar {companyLibrary.length} modelo(s) · {companyLibrary.length * 4} e-mails</button></section>}
     {erro && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{erro}</p>}
     {aviso && <p role="status" className="p-3 bg-green-50 text-green-800 rounded-lg">{aviso}</p>}
     <div className="grid xl:grid-cols-2 gap-6">
@@ -91,10 +112,16 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
           {sequences.filter(s => s.status === 'ACTIVE').map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
         </select>
         {sid && <>
+          {radarJobs.length > 0 && <label className="block text-sm">Lista do Radar
+            <select aria-label="Lista do Radar" className={field} value={radarList} onChange={e => { setRadarList(e.target.value); setMarcados(new Set()); }}>
+              <option value="">Todas as listas e demais contatos</option>
+              {radarJobs.map(j => <option key={j.id} value={j.id}>{j.dados?.name || j.dados?.filters?.segment || 'Busca sem nome'}</option>)}
+            </select></label>}
           <div className="grid md:grid-cols-2 gap-3">
             <input className={field} placeholder="Buscar contato" value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar contato" />
             <select className={field} value={filtroTag} onChange={e => setFiltroTag(e.target.value)} aria-label="Etiqueta"><option value="">Todas as etiquetas</option>{tags.map(t => <option key={t}>{t}</option>)}</select>
           </div>
+          {radarList && <p className="text-sm text-slate-600">Somente contatos desta lista participam da seleção. Verifique os e-mails e a origem antes do envio real.</p>}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={elegiveis.length > 0 && elegiveis.every(l => marcados.has(l.id))}
             onChange={e => setMarcados(e.target.checked ? new Set(elegiveis.map(l => l.id)) : new Set())} /> Selecionar os {elegiveis.length} listados</label>
           <div className="max-h-64 overflow-y-auto border rounded-lg divide-y">{elegiveis.slice(0, 500).map(l => <label key={l.id} className="flex items-center gap-2 p-2 text-sm">

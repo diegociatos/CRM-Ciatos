@@ -59,13 +59,13 @@ export class MiningEngine {
   }
 
   public async createJob(params: {
-    segmentName: string; state: string; city: string; size: CompanySize | 'all';
+    listName: string; segmentName: string; state: string; city: string; size: CompanySize | 'all';
     taxRegime: string; targetCount: number; fiscalFilter: 'Dívida Ativa' | 'Indiferente';
     autoCreateSegment: boolean; enrich: boolean;
   }): Promise<MiningJob> {
     const { data: u } = await supabase.auth.getUser();
     const dados = {
-      name: params.segmentName,
+      name: params.listName.trim(),
       version: 1,
       configPayload: { ...params },
       filters: {
