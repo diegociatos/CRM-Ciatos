@@ -1,4 +1,5 @@
 import TemplateEditorFixture from './TemplateEditorFixture';
+import InboxFixture from './InboxFixture';
 import OnboardingFixture from './OnboardingFixture';
 import {PlatformAdmin} from '../../components/PlatformAdmin';
 import WorkspaceApplication from '../../App';
@@ -34,4 +35,4 @@ function CafeCampaignFixture(){
  const user={id:'qa',name:'Diego Garcia',role:UserRole.ADMIN} as any;
  return <main className="p-5">{view==='dashboard'?<Dashboard leads={[]} tasks={[]} notifications={[]} currentUser={user} companyId={org.id} companyName={org.nome} onOpenCadences={()=>setView('ai_center')} onNavigate={()=>setView('ai_center')}/>:<AiCenter workspace={org}/>}</main>;
 }
-createRoot(document.getElementById('root')!).render(location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
+createRoot(document.getElementById('root')!).render(location.search==='?inbox'?<InboxFixture/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);

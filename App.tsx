@@ -6,6 +6,7 @@ import Header from './components/Header';
 import {useSdrNotifications} from './lib/useSdrNotifications';
 import Dashboard from './components/Dashboard';
 const HelpCenter = lazy(() => import('./components/HelpCenter'));
+const Inbox = lazy(() => import('./components/Inbox'));
 const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'));
 const Prospector = lazy(() => import('./components/Prospector'));
@@ -378,6 +379,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const renderView = () => {
     switch (nav.view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
+      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;

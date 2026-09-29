@@ -45,7 +45,8 @@ export async function processSdrInbox(db:any,env:Env,graph:(method:string,path:s
           decision={kind:'review',confidence:1,summary:'Resposta recebida. A análise automática não foi concluída; confira a caixa de e-mail.'};
         }
       }
-      await rpc(db,'record_sdr_reply',{jid:j.id,event_key,category:decision.kind,summary:decision.summary});
+      const body=replyText(detail.uniqueBody)||'(Mensagem sem texto legível; confira a caixa de e-mail.)';
+      await rpc(db,'capture_sdr_inbox_reply',{jid:j.id,event_key,category:decision.kind,summary:decision.summary,message_body:body,sender_email:String(m.from?.emailAddress?.address||''),reply_subject:String(m.subject||''),received_at:m.receivedDateTime});
       // One AI classification per invocation; replay this page, skipping persisted event IDs.
       await rpc(db,'finish_sdr_mailbox',{address:cursor.mailbox,token:cursor.lease,next_url:cursor.next_path,through_at:cursor.watermark,failure:null});
       return 'reply_processed';
