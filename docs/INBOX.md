@@ -19,3 +19,9 @@ O item **Caixa de entrada** mostra respostas recebidas a cadências do CRM na em
 ## Verificação sem disparos
 
 `npm run typecheck`, `npm test`, `npx playwright test tests/ui/inbox.spec.ts` e `npm run build`. Os testes usam banco descartável e transporte simulado; não confirmam entrega ou leitura da caixa real. Antes de habilitar qualquer envio, confirmar isolamento entre empresas e permissões da conta Microsoft na operação real.
+
+## Publicação de 29/09/2026
+
+Após autorização já concedida para o deploy, a migration foi aplicada exclusivamente ao schema `crm` do projeto vinculado. A versão atualizada de `crm-automation-worker` foi publicada antes da interface. O frontend foi publicado pelo workflow Cloudflare [36623945179](https://github.com/diegociatos/CRM-Ciatos/actions/runs/36623945179), concluído com sucesso no commit `a3578e9`.
+
+Verificação remota: tabelas presentes, função de captura indisponível para o papel `authenticated`, função de notas disponível ao usuário autenticado, zero conversas e zero mensagens. O navegador abriu o Inbox no CafeWorking e exibiu o estado vazio sem erro. Nenhum agente SDR foi ligado nesta implantação; políticas de envio preexistentes não foram alteradas. Nenhuma mensagem de teste foi enviada.
