@@ -20,7 +20,7 @@ O pixel opcional registra somente a primeira **possível abertura**. Não coleta
 
 ## Estado da implantação
 
-A migração remota foi bloqueada pela revisão automática de aprovação, que solicitou autorização específica para alterar tabelas/funções do worker em produção. Nenhuma parte desta atualização do SDR foi aplicada ao banco ou às funções remotas. Frontend e cadências também aguardam essa etapa para publicação conjunta. A implantação anterior do editor de onboarding permanece intacta.
+Em 29/09/2026, após autorização explícita do usuário, a migração foi aplicada exclusivamente ao schema crm e as funções crm-automation-worker, crm-email-open e crm-ms365 foram publicadas. Foram instaladas 22 cadências em rascunho, distribuindo os dez modelos de serviço entre nove empresas. A verificação remota confirmou nove configurações, zero agentes habilitados, zero cadências da biblioteca ativas e fila SDR vazia. O scheduler executou com agente e envios ociosos; reportou corretamente credenciais Snov ausentes e permissão de leitura pendente. A interface é publicada pelo workflow Cloudflare do commit 8616ed2 (execução 36586177222). Nenhum disparo real foi realizado nesta implantação.
 
 ## Implantação e ativação
 
