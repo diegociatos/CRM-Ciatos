@@ -34,15 +34,38 @@ test('CafeWorking mostra somente cadências próprias e seleciona uma lista do R
   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'*'};
   if(req.method()==='OPTIONS')return route.fulfill({status:200,headers});
   if(req.url().includes('/rpc/'))return route.fulfill({headers,json:name==='tenant_member'?true:null});
-  const data:any={organizations:[{id:org,nome:'CafeWorking'}],outreach_sequences:[{id:'seq-cafe',organization_id:org,nome:'CafeWorking — rede nacional de parceiros',status:'ACTIVE',settings:{publico:'prospect'}}],outreach_policy:[{organization_id:org,live_enabled:false}],mining_jobs:[{id:'job-a',organization_id:org,dados:{name:'Parceiros Brasil'}},{id:'job-b',organization_id:org,dados:{name:'Parceiros MG'}}],leads:[{id:'lead-a',organization_id:org,empresa:'Escritório A',nome:'Ana',email:'ana@example.test',relacao:'prospect',tags:[],opt_out:false,dados:{radarJobId:'job-a'}},{id:'lead-b',organization_id:org,empresa:'Escritório B',nome:'Bia',email:'bia@example.test',relacao:'prospect',tags:[],opt_out:false,dados:{radarJobId:'job-b'}}]};
+  const data:any={organizations:[{id:org,nome:'CafeWorking'}],outreach_sequences:[{id:'seq-old',organization_id:org,nome:'CafeWorking — indicação de endereço fiscal',status:'DRAFT',settings:{publico:'prospect'}},{id:'seq-cafe',organization_id:org,nome:'CafeWorking — rede nacional de parceiros',status:'ACTIVE',settings:{publico:'prospect'}}],outreach_policy:[{organization_id:org,live_enabled:false}],outreach_steps:[...Array.from({length:4},(_,i)=>({sequence_id:'seq-old',ordem:i,tipo:'EMAIL',delay_minutes:i*1440,config:{subject:`Indicação ${i+1}`,body:'Mensagem de indicação'}})),...Array.from({length:6},(_,i)=>({sequence_id:'seq-cafe',ordem:i,tipo:'EMAIL',delay_minutes:i*1440,config:{subject:`Parceria ${i+1}`,body:'Mensagem para parceiros'}}))],mining_jobs:[{id:'job-a',organization_id:org,dados:{name:'Parceiros Brasil'}},{id:'job-b',organization_id:org,dados:{name:'Parceiros MG'}}],leads:[{id:'lead-a',organization_id:org,empresa:'Escritório A',nome:'Ana',email:'ana@example.test',relacao:'prospect',tags:[],opt_out:false,dados:{radarJobId:'job-a'}},{id:'lead-b',organization_id:org,empresa:'Escritório B',nome:'Bia',email:'bia@example.test',relacao:'prospect',tags:[],opt_out:false,dados:{radarJobId:'job-b'}}]};
   return route.fulfill({headers,json:data[name!]||[]});
  });
  await page.goto('/tests/ui/');await page.getByRole('button',{name:'Cadências',exact:true}).click();
  await expect(page.getByText('CafeWorking — rede nacional de parceiros').first()).toBeVisible();
+ await expect(page.getByText('CafeWorking — indicação de endereço fiscal')).toBeVisible();
+ await page.getByText('Ler os 6 e-mails').click();
+ await expect(page.getByRole('heading',{name:'Parceria 1'})).toBeVisible();
  await expect(page.getByText('Dez serviços, quatro mensagens por cadência')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Contabilidade',exact:true})).toHaveCount(0);
  await page.getByRole('combobox',{name:'Cadência',exact:true}).selectOption('seq-cafe');
  await page.getByRole('combobox',{name:'Lista do Radar'}).selectOption('job-a');
  await expect(page.getByText('Escritório A')).toBeVisible();
  await expect(page.getByText('Escritório B')).toHaveCount(0);
+});
+
+test('CafeWorking mostra as duas campanhas ao entrar e abre os e-mails',async({page})=>{
+ const org='0d1ee589-5acc-4321-a560-b6f176394a6e';
+ await page.route('**/rest/v1/**',async route=>{
+  const req=route.request();const name=new URL(req.url()).pathname.split('/').pop();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'*'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:200,headers});
+  if(req.url().includes('/rpc/'))return route.fulfill({headers,json:name==='tenant_member'?true:null});
+  const data:any={outreach_sequences:[{id:'old',organization_id:org,nome:'CafeWorking — indicação de endereço fiscal',status:'DRAFT',settings:{publico:'prospect'}},{id:'new',organization_id:org,nome:'CafeWorking — rede nacional de parceiros',status:'DRAFT',settings:{publico:'prospect'}}],outreach_steps:[...Array.from({length:4},(_,i)=>({sequence_id:'old',ordem:i,tipo:'EMAIL',config:{subject:`Indicação ${i+1}`,body:'Texto inicial'}})),...Array.from({length:6},(_,i)=>({sequence_id:'new',ordem:i,tipo:'EMAIL',config:{subject:`Parceria ${i+1}`,body:'Texto nacional'}}))]};
+  return route.fulfill({headers,json:data[name!]||[]});
+ });
+ await page.goto('/tests/ui/?cafeworking');
+ await expect(page.getByRole('heading',{name:'Cadências de CafeWorking'})).toBeVisible();
+ await expect(page.getByRole('button',{name:/CafeWorking — indicação de endereço fiscal/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/CafeWorking — rede nacional de parceiros/})).toBeVisible();
+ await page.getByRole('button',{name:/CafeWorking — rede nacional de parceiros/}).click();
+ await expect(page.getByRole('heading',{name:'Suas cadências · 2'})).toBeVisible();
+ await page.getByText('Ler os 6 e-mails').click();
+ await expect(page.getByRole('heading',{name:'Parceria 1'})).toBeVisible();
 });

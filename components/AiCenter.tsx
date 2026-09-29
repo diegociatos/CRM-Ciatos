@@ -14,7 +14,7 @@ export default function AiCenter({workspace,onOpenLead}:{workspace?:{id:string;n
   const [org, setOrg] = useState(workspace?.id||'');
   const [rows, setRows] = useState<Record<string, Row[]>>({});
   const [rowsOrg, setRowsOrg] = useState('');
-  const [tab, setTab] = useState('attention');
+  const [tab, setTab] = useState(workspace?.id === '0d1ee589-5acc-4321-a560-b6f176394a6e' ? 'cadences' : 'attention');
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);

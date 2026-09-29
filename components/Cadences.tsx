@@ -27,6 +27,10 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
   const [leads, setLeads] = useState<Row[]>([]);
   const [radarJobs, setRadarJobs] = useState<Row[]>([]);
   const [radarList, setRadarList] = useState('');
+  const [steps, setSteps] = useState<Row[]>([]);
+  const [stepsLoading, setStepsLoading] = useState(false);
+  const [stepsError, setStepsError] = useState(false);
+  const sequenceKey = sequences.map(s => s.id).join(',');
   const companyLibrary = cadenceLibrary.filter(c => (serviceByOrg[org] || []).includes(c.id));
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [aviso, setAviso] = useState('');
   const [nova, setNova] = useState({ titulo: '', publico: 'cliente', espera_final: 5, passos: [passoVazio()] });
@@ -43,6 +47,17 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
       .then(({ data }) => { if (ativo) setLeads(data || []); });
     return () => { ativo = false; };
   }, [org, sequences.length]);
+
+  useEffect(() => {
+    let active = true;
+    setSteps([]); setStepsError(false);
+    if (!sequenceKey) { setStepsLoading(false); return () => { active = false; }; }
+    setStepsLoading(true);
+    supabase.from('outreach_steps').select('sequence_id,ordem,tipo,delay_minutes,config')
+      .in('sequence_id', sequenceKey.split(',')).order('ordem')
+      .then(({ data, error }) => { if (!active) return; setSteps(data || []); setStepsError(!!error); setStepsLoading(false); });
+    return () => { active = false; };
+  }, [org, sequenceKey]);
 
   const cadencia = sequences.find(s => s.id === sid);
   const publico = cadencia?.settings?.publico || 'prospect';
@@ -93,16 +108,22 @@ export default function Cadences({ org, admin, policy, sequences, onChanged }: {
     })}>Instalar {companyLibrary.length} modelo(s) · {companyLibrary.length * 4} e-mails</button></section>}
     {erro && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{erro}</p>}
     {aviso && <p role="status" className="p-3 bg-green-50 text-green-800 rounded-lg">{aviso}</p>}
-    <div className="grid xl:grid-cols-2 gap-6">
-      <div className="bg-white p-5 border rounded-xl space-y-4">
-        <h2 className="font-bold text-lg">Cadências da empresa</h2>
+    <div className="space-y-6">
+      <div className="bg-white p-5 border rounded-xl space-y-5">
+        <div><p className="text-sm text-slate-500">{org === '0d1ee589-5acc-4321-a560-b6f176394a6e' ? 'CafeWorking' : 'Empresa selecionada'}</p><h2 className="font-bold text-2xl">Suas cadências · {sequences.length}</h2><p className="text-sm text-slate-600">Abra uma cadência para revisar cada e-mail. Rascunhos não enviam mensagens.</p></div>
         {!sequences.length && <p>Nenhuma cadência criada.</p>}
-        {sequences.map(s => <div className="border-b pb-4" key={s.id}>
-          <strong>{s.nome}</strong><span className="ml-3 text-sm">{labels[s.status]}</span>
-          <span className="ml-3 text-sm text-slate-500">{s.settings?.publico === 'cliente' ? 'Carteira' : 'Prospecção'}</span>
-          {admin && <div className="flex gap-2 mt-2">{['ACTIVE', 'PAUSED'].map(state => <button key={state} className={button} disabled={busy || s.status === state}
-            onClick={() => acao(async () => { const { error } = await supabase.rpc('set_cadence_state', { sid: s.id, new_status: state }); if (error) throw error; await onChanged(); })}>{state === 'ACTIVE' ? 'Ativar' : 'Pausar'}</button>)}</div>}
-        </div>)}
+        {stepsLoading && <p role="status" className="text-sm text-slate-500">Carregando e-mails das cadências…</p>}
+        {stepsError && <p role="alert" className="text-sm text-red-700">Não foi possível carregar os e-mails. Atualize a Central e tente novamente.</p>}
+        <div className="grid lg:grid-cols-2 gap-4">{sequences.map(s => {
+          const emails = steps.filter(step => step.sequence_id === s.id && step.tipo === 'EMAIL');
+          return <article className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3" key={s.id}>
+            <div className="flex flex-wrap justify-between items-start gap-2"><h3 className="text-lg font-bold text-[#15343e]">{s.nome}</h3><span className="rounded-full bg-white border px-3 py-1 text-sm">{labels[s.status]}</span></div>
+            <p className="text-sm text-slate-600">{s.settings?.publico === 'cliente' ? 'Carteira' : 'Prospecção'} · {emails.length} e-mail(s){emails.length ? ` · Primeiro: ${emails[0].config?.subject || 'Sem assunto'}` : ''}</p>
+            {emails.length > 0 && <details className="rounded-lg border bg-white p-3"><summary className="cursor-pointer font-semibold text-[#15343e]">Ler os {emails.length} e-mails</summary><div className="mt-4 space-y-5">{emails.map((step, i) => <div key={step.ordem} className="border-t pt-4"><p className="text-xs uppercase tracking-wide text-slate-500">E-mail {i + 1}{i > 0 ? ` · ${Math.round(step.delay_minutes / 1440)} dias depois` : ''}</p><h4 className="font-bold mt-1">{step.config?.subject}</h4><p className="whitespace-pre-line text-sm leading-relaxed mt-2">{step.config?.body}</p></div>)}</div></details>}
+            {admin && <div className="flex gap-2">{['ACTIVE', 'PAUSED'].map(state => <button key={state} className={button} disabled={busy || s.status === state}
+              onClick={() => acao(async () => { const { error } = await supabase.rpc('set_cadence_state', { sid: s.id, new_status: state }); if (error) throw error; await onChanged(); })}>{state === 'ACTIVE' ? 'Ativar' : 'Pausar'}</button>)}</div>}
+          </article>;
+        })}</div>
       </div>
 
       {admin && <form className="bg-white p-5 border rounded-xl space-y-4" onSubmit={inscrever}>

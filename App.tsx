@@ -376,7 +376,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const renderView = () => {
     switch (nav.view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
-      case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} onNavigate={v => setNav({view:v})} onCreate={() => setShowNewLeadForm(true)} />;
+      case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
