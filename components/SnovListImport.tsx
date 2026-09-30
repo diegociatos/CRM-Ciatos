@@ -8,7 +8,9 @@ export default function SnovListImport({organizationId,onImported}:{organization
   useEffect(()=>{setLists([]);setSelected('');setPage(1);setMessage('');},[organizationId]);
   const call=async(body:Record<string,unknown>)=>{
     const {data,error}=await supabase.functions.invoke('crm-snov-lists',{body:{organization_id:organizationId,...body}});
-    if(error||data?.error)throw new Error(data?.error==='snov_not_configured'?'A conexão Snov.io ainda precisa ser configurada no servidor.':data?.error||'Não foi possível consultar o Snov.io.');
+    let code=data?.error;
+    if(error&&!code){try{code=(await (error as any).context?.json())?.error;}catch{/* gateway unavailable */}}
+    if(error||code)throw new Error(code==='snov_not_configured'?'A conexão Snov.io ainda precisa ser configurada no servidor.':code==='forbidden'?'Sua conta não tem acesso às listas Snov.io nesta empresa.':'Não foi possível consultar o Snov.io.');
     return data;
   };
   const load=async()=>{setBusy(true);setMessage('');try{const data=await call({action:'lists'});setLists(data.lists||[]);setMessage(data.lists?.length?'Selecione uma lista para trazer ao Radar.':'Nenhuma lista disponível na conta Snov.io.');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}};
