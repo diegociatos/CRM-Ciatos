@@ -1,4 +1,20 @@
 import {test,expect} from '@playwright/test';
+test('empresa nova não herda o destinatário SDR da empresa anterior',async({page})=>{
+ const first='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ await page.route('**/rest/v1/**',route=>{
+  const req=route.request(),url=new URL(req.url()),name=url.pathname.split('/').pop();
+  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'*'};
+  if(req.method()==='OPTIONS')return route.fulfill({status:200,headers});
+  if(url.pathname.includes('/rpc/'))return route.fulfill({headers,json:null});
+  const org=url.searchParams.get('organization_id')?.replace('eq.','');
+  return route.fulfill({headers,json:name==='sdr_settings'&&org===first?{organization_id:first,enabled:false,sequence_id:null,simulate:true,contact_basis:'',notify_email:'equipe@empresa-a.test',tracking_enabled:false}:null});
+ });
+ await page.goto('/tests/ui/?sdr-switch');
+ const recipient=page.getByLabel('E-mail para avisos de lead quente');
+ await expect(recipient).toHaveValue('equipe@empresa-a.test');
+ await page.getByRole('button',{name:'Trocar para empresa nova'}).click();
+ await expect(recipient).toHaveValue('');
+});
 for(const width of [1440,390])test(`Agente SDR: biblioteca e configuração sem disparo (${width})`,async({page})=>{
  await page.setViewportSize({width,height:900});const calls:any[]=[];
  await page.route('**/rest/v1/**',async route=>{

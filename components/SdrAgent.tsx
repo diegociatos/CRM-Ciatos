@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 type Row=Record<string,any>;
 const field='w-full rounded-lg border border-slate-300 p-3 bg-white';
+const emptySettings=()=>({enabled:false,sequence_id:'',simulate:true,contact_basis:'',notify_email:'',tracking_enabled:false,radar_job_id:''});
 export default function SdrAgent({org,admin,sequences,policyLive,onChanged,onOpenLead}:{org:string;admin:boolean;sequences:Row[];policyLive:boolean;onChanged:()=>Promise<void>|void;onOpenLead?:(id:string)=>void}) {
- const [settings,setSettings]=useState({enabled:false,sequence_id:'',simulate:true,contact_basis:'',notify_email:'diego.garcia@grupociatos.com.br',tracking_enabled:false,radar_job_id:''});
+ const [settings,setSettings]=useState(emptySettings);
  const [health,setHealth]=useState<Row|null>(null);
  const [radarJobs,setRadarJobs]=useState<Row[]>([]);
  const [queue,setQueue]=useState<Row[]>([]);const [alerts,setAlerts]=useState<Row[]>([]);const [error,setError]=useState('');const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);const [loaded,setLoaded]=useState(false);
- useEffect(()=>{let active=true;setLoaded(false);setError('');setQueue([]);setAlerts([]);
+ useEffect(()=>{let active=true;setLoaded(false);setError('');setNotice('');setSettings(emptySettings());setQueue([]);setAlerts([]);setHealth(null);setRadarJobs([]);
  const load=async()=>{const [s,q,a,h,j]=await Promise.all([supabase.from('sdr_settings').select('*').eq('organization_id',org).maybeSingle(),supabase.from('sdr_queue').select('*,leads(empresa,nome)').eq('organization_id',org).order('created_at',{ascending:false}).limit(100),supabase.from('sdr_alerts').select('kind,mail_status,summary,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(100),supabase.rpc('sdr_health',{org}),supabase.from('mining_jobs').select('id,dados').eq('organization_id',org).order('created_at',{ascending:false}).limit(200)]);
  if(!active)return;if(s.error||q.error||a.error){setError('O agente ainda não está disponível nesta instalação. As funções e a atualização do banco precisam estar publicadas.');return;}
  setHealth(h.error?null:h.data);if(s.data)setSettings({...s.data,radar_job_id:s.data.radar_job_id||''} as any);setRadarJobs(j.data||[]);setQueue(q.data||[]);setAlerts(a.data||[]);setLoaded(true);};void load();return()=>{active=false;};},[org]);
