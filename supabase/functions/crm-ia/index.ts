@@ -1,4 +1,4 @@
-// Edge Function: crm-ia — IA do CRM (Claude) no servidor. A chave nunca vai ao navegador.
+// Edge Function: crm-ia — IA do CRM (OpenAI ou Claude) no servidor. A chave nunca vai ao navegador.
 // Ações:
 //   objecao  → resposta estruturada a uma objeção de venda
 //   email    → personaliza um template de e-mail para um lead
@@ -6,6 +6,7 @@
 //              (BrasilAPI) e grava em crm.mining_leads, deduplicando contra crm.leads
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { AiBillingError, requestOpenAiStructured } from '../_shared/crmIaOpenAi.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -15,10 +16,10 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-const MODELO = Deno.env.get('CRM_CLAUDE_MODEL') || '';
+const PROVIDER = Deno.env.get('CRM_AI_PROVIDER') || 'openai';
+const MODELO = Deno.env.get(PROVIDER === 'openai' ? 'CRM_OPENAI_MODEL' : 'CRM_CLAUDE_MODEL') || '';
 // Chave sem escopo de workspace exige o header anthropic-workspace-id.
 const WORKSPACE = Deno.env.get('CRM_ANTHROPIC_WORKSPACE_ID');
-const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY'), ...(WORKSPACE ? { defaultHeaders: { 'anthropic-workspace-id': WORKSPACE } } : {}) });
 
 const CONTEXTO_CIATOS = `O Grupo Ciatos (Belo Horizonte/MG) vende serviços de contabilidade, planejamento tributário,
 recuperação de créditos, holding familiar/planejamento patrimonial e consultoria empresarial para PMEs.
@@ -26,6 +27,7 @@ Tom: consultivo, direto, sem jargão excessivo, em português do Brasil.`;
 
 /** Chamada com fallback automático do servidor quando o modelo recusa. */
 async function chamarClaude(params: Record<string, unknown>) {
+  const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY'), ...(WORKSPACE ? { defaultHeaders: { 'anthropic-workspace-id': WORKSPACE } } : {}) });
   let msgs = params.messages as any[];
   // pause_turn: turno longo de ferramenta de servidor — reenviar para continuar.
   for (let i = 0; i < 4; i++) {
@@ -43,6 +45,17 @@ async function chamarClaude(params: Record<string, unknown>) {
 
 const textoDe = (resp: any) =>
   (resp.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n').trim();
+
+async function chamarIA(params: Record<string, unknown>, schema: Record<string, unknown>, schemaName: string, radarLocation?: {city?: string;state?: string}) {
+  if (PROVIDER === 'anthropic') {
+    const resp = await chamarClaude(params);
+    const sources = (resp.content || []).filter((b: any) => b.type === 'web_search_tool_result' && Array.isArray(b.content))
+      .flatMap((b: any) => b.content.map((r: any) => r.url)).filter(Boolean);
+    return { text: textoDe(resp), sources };
+  }
+  return requestOpenAiStructured(Deno.env.get('OPENAI_API_KEY')!, MODELO, String(params.system || ''),
+    String((params.messages as any[])?.[0]?.content || ''), schema, schemaName, radarLocation);
+}
 
 // ---------------------------------------------------------------------------
 // Objeção
@@ -68,7 +81,7 @@ const SCHEMA_OBJECAO = {
 
 async function objecao(p: any) {
   const lead = p.lead || {};
-  const resp = await chamarClaude({
+  const resp = await chamarIA({
     max_tokens: 8000,
     output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_OBJECAO } },
     system: `${CONTEXTO_CIATOS}\nVocê é um assistente comercial sênior que ajuda SDRs e closers a contornar objeções com empatia e argumentos concretos. Nunca invente números sobre o cliente.`,
@@ -80,8 +93,8 @@ ${p.script ? `Script base da equipe:\n${String(p.script).slice(0, 4000)}` : ''}
 
 Gere: 3 respostas curtas (quick_lines), 2 roteiros mais longos (long_scripts), uma mensagem de WhatsApp, a sugestão de follow-up, tags da objeção e sua confiança (0-100) com a razão.`,
     }],
-  });
-  return JSON.parse(textoDe(resp));
+  }, SCHEMA_OBJECAO, 'crm_objection');
+  return JSON.parse(resp.text);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +110,7 @@ const SCHEMA_EMAIL = {
 async function email(p: any) {
   const lead = p.lead || {};
   const tpl = p.template || {};
-  const resp = await chamarClaude({
+  const resp = await chamarIA({
     max_tokens: 4000,
     output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_EMAIL } },
     system: `${CONTEXTO_CIATOS}\nVocê personaliza e-mails comerciais B2B. Mantenha a intenção e a estrutura do template, troque os {{campos}} pelos dados do lead, escreva em até 120 palavras, um único pedido claro (ex.: 15 minutos de conversa). Não invente fatos sobre a empresa; se faltar dado, escreva de forma genérica. Texto puro, sem markdown.`,
@@ -111,8 +124,8 @@ Empresa: ${lead.tradeName || lead.company || '—'} | Segmento: ${lead.segment |
 Porte: ${lead.size || '—'} | Regime: ${lead.taxRegime || '—'}
 Dores registradas: ${lead.strategicPains || '—'}`,
     }],
-  });
-  return JSON.parse(textoDe(resp));
+  }, SCHEMA_EMAIL, 'crm_email');
+  return JSON.parse(resp.text);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +162,17 @@ async function consultarReceita(cnpj: string): Promise<any | null> {
   } catch { return null; }
 }
 
+const SCHEMA_RADAR = { type: 'object', additionalProperties: false, required: ['companies'], properties: {
+  companies: { type: 'array', items: { type: 'object', additionalProperties: false,
+    required: ['name','tradeName','cnpj','website','phone','emailCompany','decisionMakerName','decisionMakerRole','icpScore','reason','sourceUrls'],
+    properties: {
+      name:{type:'string'},tradeName:{type:'string'},cnpj:{type:'string'},website:{type:'string'},phone:{type:'string'},
+      emailCompany:{type:'string'},decisionMakerName:{type:'string'},decisionMakerRole:{type:'string'},
+      icpScore:{type:'number'},reason:{type:'string'},sourceUrls:{type:'array',items:{type:'string'}},
+    },
+  } },
+} };
+
 async function radar(p: any, db: SupabaseClient<any, any, any>) {
   const jobId = String(p.jobId || '');
   const { data: job, error: eJob } = await db.from('mining_jobs').select('*').eq('organization_id',p.organization_id).eq('id', jobId).maybeSingle();
@@ -159,7 +183,7 @@ async function radar(p: any, db: SupabaseClient<any, any, any>) {
   const { data: vistos } = await db.from('mining_leads').select('dados->>name').eq('job_id', jobId).limit(300);
   const excluir = ((vistos as any[]) || []).map(v => v.name).filter(Boolean);
 
-  const resp = await chamarClaude({
+  const resp = await chamarIA({
     max_tokens: 16000,
     output_config: { effort: 'medium' },
     tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6, user_location: { type: 'approximate', country: 'BR', city: f.city || undefined, region: f.state || undefined } }],
@@ -171,18 +195,17 @@ Porte desejado: ${f.size && f.size !== 'all' ? f.size : 'indiferente'}. Regime t
 ${excluir.length ? `NÃO repita estas empresas: ${excluir.slice(0, 150).join('; ')}` : ''}
 
 Responda SOMENTE com um JSON, sem texto antes ou depois, no formato:
-{"companies":[{"name":"","tradeName":"","cnpj":"","website":"","phone":"","emailCompany":"","decisionMakerName":"","decisionMakerRole":"","icpScore":3,"reason":""}]}
+{"companies":[{"name":"","tradeName":"","cnpj":"","website":"","phone":"","emailCompany":"","decisionMakerName":"","decisionMakerRole":"","icpScore":3,"reason":"","sourceUrls":["URL da fonte onde viu a empresa e o CNPJ"]}]}
 icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário ela parece; reason = 1 frase justificando.`,
     }],
-  });
+  }, SCHEMA_RADAR, 'crm_radar_companies', { city:f.city,state:f.state });
 
-  const texto = textoDe(resp);
+  const texto = resp.text;
   const m = texto.match(/\{[\s\S]*\}/);
   let candidatas: any[] = [];
   try { candidatas = m ? (JSON.parse(m[0]).companies || []) : []; } catch { candidatas = []; }
-  const fontes = [...new Set((resp.content || [])
-    .filter((b: any) => b.type === 'web_search_tool_result' && Array.isArray(b.content))
-    .flatMap((b: any) => b.content.map((r: any) => r.url)).filter(Boolean))].slice(0, 20);
+  const fontes = [...new Set(resp.sources)].slice(0, 20);
+  const urlBase = (value: unknown) => { try { const u=new URL(String(value)); return u.protocol==='https:' ? `${u.hostname}${u.pathname.replace(/\/$/,'')}` : ''; } catch { return ''; } };
 
   // Dedup contra o CRM e contra o próprio job
   const cnpjs = [...new Set(candidatas.map(c => soDigitos(c.cnpj)).filter(cnpjValido))];
@@ -207,6 +230,8 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
     if (cidadeAlvo && semAcento(String(rf.municipio || '')) !== cidadeAlvo) { descartadas++; continue; }
     const socios: string[] = (rf.qsa || []).map((s: any) => s.nome_socio).filter(Boolean);
     const telefoneRf = fmtTel(String(rf.ddd_telefone_1 || ''));
+    const fontesEmpresa = (Array.isArray(c.sourceUrls) ? c.sourceUrls : [])
+      .filter((u: unknown) => fontes.some(fonte => urlBase(u) && urlBase(u)===urlBase(fonte))).slice(0, 3);
     novos.push({
       organization_id: p.organization_id,
       job_id: jobId,
@@ -238,7 +263,7 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
         simplesNacional: rf.opcao_pelo_simples ?? null,
         debtStatus: 'Regular',
         debtValueEst: '—',
-        sources: fontes.length ? fontes : ['web_search'],
+        sources: fontesEmpresa,
         isGarimpo: true,
         verificadoReceita: true,
       },
@@ -269,8 +294,8 @@ icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
-  if (Deno.env.get('CRM_AI_ENABLED') !== 'true' || !MODELO) return json({ error: 'IA desativada ou modelo não configurado.' }, 503);
-  if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'IA não configurada (ANTHROPIC_API_KEY ausente).' }, 503);
+  if (Deno.env.get('CRM_AI_ENABLED') !== 'true' || !MODELO || !['openai','anthropic'].includes(PROVIDER)) return json({ error: 'IA desativada ou provedor/modelo não configurado.' }, 503);
+  if (!Deno.env.get(PROVIDER === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY')) return json({ error: 'A chave do provedor de IA selecionado não está configurada no servidor.' }, 503);
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -295,14 +320,15 @@ Deno.serve(async (req) => {
   if (quotaError) return json({ error: 'Limite de consultas de IA atingido ou configuração indisponível.' },429);
   try {
     const result = p.action === 'objecao' ? await objecao(p) : p.action === 'email' ? await email(p) : await radar(p,db);
-    const { error: auditError } = await audit.from('ai_runs').update({ provider:'anthropic',model:MODELO,action:p.action,status:'DONE',completed_at:new Date().toISOString() }).eq('id',runId);
+    const { error: auditError } = await audit.from('ai_runs').update({ provider:PROVIDER,model:MODELO,action:p.action,status:'DONE',completed_at:new Date().toISOString() }).eq('id',runId);
     if (auditError) throw new Error('audit_failed');
     return json(result);
   } catch (err) {
     await audit.from('ai_runs').update({status:'FAILED',completed_at:new Date().toISOString()}).eq('id',runId);
     if (err instanceof Anthropic.RateLimitError) return json({ error: 'IA sobrecarregada, tente em instantes.' }, 429);
+    if (err instanceof AiBillingError) return json({ code: 'AI_BILLING_REQUIRED', provider: 'openai', error: 'A consulta foi pausada porque a API OpenAI está sem créditos. Confira o faturamento da conta OpenAI e tente novamente.' }, 402);
     if (err instanceof Anthropic.APIError && /credit balance.*too low|insufficient.*credits|billing/i.test(String(err.message))) {
-      return json({ code: 'AI_BILLING_REQUIRED', error: 'A busca foi pausada porque a API da Anthropic está sem créditos. Confira o saldo em Billing na Console da Anthropic e depois retome esta lista.' }, 402);
+      return json({ code: 'AI_BILLING_REQUIRED', provider: 'anthropic', error: 'A consulta foi pausada porque a API da Anthropic está sem créditos. Confira o saldo em Billing na Console da Anthropic e tente novamente.' }, 402);
     }
     console.error('crm-ia', p.action, err);
     return json({ error: 'Não foi possível concluir a consulta de IA. Tente novamente ou confira a integração.' }, 502);

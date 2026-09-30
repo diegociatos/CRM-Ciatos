@@ -35,7 +35,7 @@ Esta versão é um piloto seguro para homologação. Aplicar migrations não age
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | Envio e validação de eventos |
 | `CRM_AI_ENABLED`, `CRM_AI_PROVIDER` | Ativação e provider `openai` ou `anthropic` |
 | `OPENAI_API_KEY`, `CRM_OPENAI_MODEL` | Modelo escolhido/configurado pelo operador; não existe fallback silencioso |
-| `ANTHROPIC_API_KEY`, `CRM_CLAUDE_MODEL` | Claude; Radar/assistentes legados ainda dependem de Claude |
+| `ANTHROPIC_API_KEY`, `CRM_CLAUDE_MODEL` | Claude; permanece disponível ao selecionar `CRM_AI_PROVIDER=anthropic` |
 | `CRM_SNOV_ENABLED`, `SNOV_CLIENT_ID`, `SNOV_CLIENT_SECRET` | Snov.io opcional; use o API User ID e API Secret da conta Snov.io como secrets do servidor. Não use valores `VITE_`. |
 
 | `CRM_APP_URLS` | Origens permitidas para convites legados |
@@ -43,6 +43,12 @@ Esta versão é um piloto seguro para homologação. Aplicar migrations não age
 O Radar agora pode consultar e importar listas existentes do Snov.io, uma página de até 100 contatos por vez. Publique também a função `crm-snov-lists` e a migração `20260930160000_snov_list_import.sql`. O acesso às listas da conta do grupo exige o dono da plataforma ou o master `diegociatos@gmail.com`, além de permissão administrativa na empresa selecionada. Outros clientes do CRM não têm acesso à conta Snov do grupo. A importação deduplica por ID do contato na lista, mantém cada empresa isolada e não ativa cadências. E-mails vindos da lista não recebem data de verificação: verifique a origem/finalidade do contato e valide o endereço antes de enviar. Listas do Snov não entram automaticamente na fila SDR; o operador faz a triagem pelo Radar. A conta Snov e seus créditos precisam estar habilitados para API; teste primeiro a consulta de listas e uma lista de teste sem envios.
 
 As variáveis internas `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` são do runtime Supabase. Nunca coloque service_role, chaves de IA, Resend, Snov ou secrets em VITE_, tabelas de configuração, logs, commits ou chat.
+
+### Escolher GPT ou Claude para a IA do CRM
+
+O proprietário cadastra as chaves **somente nos Secrets do Supabase**, sem colá-las em formulários públicos, repositório ou conversa. `OPENAI_API_KEY` e `CRM_OPENAI_MODEL` habilitam GPT; `ANTHROPIC_API_KEY` e `CRM_CLAUDE_MODEL` mantêm Claude disponível. `CRM_AI_PROVIDER=openai` ou `anthropic` escolhe **um** provedor para toda a instalação e todas as empresas. `CRM_AI_ENABLED=true` permite as consultas; não ativa cadências ou envios. Não há troca automática de provedor por falha de saldo, para não mudar custos e destino de dados sem decisão do proprietário.
+
+O Radar, a ajuda com objeções, a personalização de e-mails, a supervisão das cadências e a classificação das respostas seguem essa escolha. No Radar com GPT, o servidor usa Responses API com busca web e saída estruturada, guarda somente as fontes e dados validados e não solicita armazenamento da resposta (`store:false`). A função `crm-ia` precisa estar publicada junto com esta versão antes de mudar para GPT. Ao trocar de provedor, confira o estado do worker e teste primeiro com uma consulta sem disparar mensagens. A assinatura do ChatGPT e o faturamento da API são distintos; a chave e a conta da API precisam estar aptas ao uso.
 
 Envio real exige **todos** os controles: flag global, política `outreach_policy.live_enabled`, remetente verificado em formato `email@dominio`, inscrição com `dry_run=false`, cadência ativa, tenant ativo, email verificado há menos de 30 dias, `contact_basis` e `contact_source`, ausência de opt-out/supressão e cotas disponíveis. A tela só cria inscrições simuladas. Não converter simulações em envios: criar outra cadência/inscrição após revisão. As verificações e políticas de envio são alteráveis apenas no servidor.
 

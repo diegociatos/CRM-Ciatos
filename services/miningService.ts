@@ -98,7 +98,7 @@ export class MiningEngine {
     const status = action === 'pause' ? 'Paused' : action === 'resume' ? 'Running' : 'Cancelled';
     const job = this.jobs.find(j => j.id === jobId);
     const { error } = await supabase.from('mining_jobs')
-      .update({ status, dados: { ...(job || {}), status, ...(action === 'resume' ? { lastError: null, lastErrorCode: null } : {}) } }).eq('organization_id',this.organizationId).eq('id', jobId);
+      .update({ status, dados: { ...(job || {}), status, ...(action === 'resume' ? { lastError: null, lastErrorCode: null, lastErrorProvider: null } : {}) } }).eq('organization_id',this.organizationId).eq('id', jobId);
     if (error) return alert(`Atualizar busca: ${error.message}`);
     await this.refresh();
     if (status === 'Running') this.startWorker(jobId);
@@ -135,10 +135,11 @@ export class MiningEngine {
         console.error('[Radar] página falhou:', e);
         const billing = (e as { code?: string }).code === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(String((e as Error).message || e));
         if (billing || falhasSeguidas >= 3) {
+          const provider = (e as { provider?: string }).provider === 'openai' ? 'openai' : 'anthropic';
           const message = billing
-            ? 'A API da Anthropic está sem créditos. Confira o saldo em Billing na Console da Anthropic e depois retome esta lista.'
+            ? `A API ${provider === 'openai' ? 'OpenAI' : 'da Anthropic'} está sem créditos. Confira o faturamento e depois retome esta lista.`
             : 'A busca foi interrompida após três tentativas. Confira a integração e retome esta lista.';
-          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: billing ? 'AI_BILLING_REQUIRED' : 'RADAR_FAILED' } }).eq('organization_id',this.organizationId).eq('id', jobId);
+          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: billing ? 'AI_BILLING_REQUIRED' : 'RADAR_FAILED', lastErrorProvider: billing ? provider : null } }).eq('organization_id',this.organizationId).eq('id', jobId);
           if (updateError) console.error('[Radar] não foi possível registrar a interrupção:', updateError);
           await this.refresh();
           break;

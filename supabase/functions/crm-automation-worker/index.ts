@@ -180,9 +180,14 @@ Deno.serve(async req => {
   const workerLease=await rpc(db,'claim_sdr_worker');
   if(!workerLease)return json({status:'already_running'});
   remetente = null; remetenteTransacional = null;
+  const aiProvider=env('CRM_AI_PROVIDER')||'openai';
+  const aiConfigured=['openai','anthropic'].includes(aiProvider)
+    && !!env(aiProvider==='openai'?'CRM_OPENAI_MODEL':'CRM_CLAUDE_MODEL')
+    && !!env(aiProvider==='openai'?'OPENAI_API_KEY':'ANTHROPIC_API_KEY');
   const status: Record<string, string> = {
     snov:env('SNOV_CLIENT_ID')&&env('SNOV_CLIENT_SECRET')?(env('CRM_SNOV_ENABLED')==='true'?'configured':'disabled'):'credentials_missing',
-    ai:env('CRM_AI_ENABLED')==='true'?'enabled':'disabled',
+    ai:env('CRM_AI_ENABLED')!=='true'?'disabled':aiConfigured?'configured':'credentials_missing',
+    ai_provider:aiProvider,
   };
   // Read replies before sending the next step. A failure is observable and new autonomous
   // enrollments remain behind company settings; unrelated onboarding is not affected.

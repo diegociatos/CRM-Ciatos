@@ -243,7 +243,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
               </div>
               {job.status === 'Failed' && <div role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[#61431b]">
                 {job.lastErrorCode === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(job.lastError || '')
-                  ? <><strong>Busca pausada: saldo da IA insuficiente.</strong><p className="mt-1">Confira os créditos da API na Console da Anthropic. Depois, use “Retomar busca”. Os resultados já encontrados ficam nesta lista.</p><a className="mt-2 inline-block underline" href="https://platform.claude.com/settings/billing" target="_blank" rel="noopener noreferrer">Abrir faturamento da Anthropic ↗</a></>
+                  ? <><strong>Busca pausada: saldo da IA insuficiente.</strong><p className="mt-1">Confira os créditos da API {job.lastErrorProvider === 'openai' ? 'OpenAI' : 'Anthropic'}. Depois, use “Retomar busca”. Os resultados já encontrados ficam nesta lista.</p><a className="mt-2 inline-block underline" href={job.lastErrorProvider === 'openai' ? 'https://platform.openai.com/settings/organization/billing/overview' : 'https://platform.claude.com/settings/billing'} target="_blank" rel="noopener noreferrer">Abrir faturamento {job.lastErrorProvider === 'openai' ? 'da OpenAI' : 'da Anthropic'} ↗</a></>
                   : <><strong>Busca interrompida.</strong><p className="mt-1">Confira a integração e use “Retomar busca”. Os resultados encontrados foram preservados.</p></>}
               </div>}
             </div>
@@ -387,6 +387,10 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                                 {(lead as any).porteReceita && <span className="text-[8px] bg-amber-50 px-1.5 rounded text-amber-600 font-bold uppercase">{(lead as any).porteReceita}</span>}
                                 {(lead as any).simplesNacional != null && <span className="text-[8px] bg-indigo-50 px-1.5 rounded text-indigo-600 font-bold uppercase">{(lead as any).simplesNacional ? 'Simples' : 'Fora do Simples'}</span>}
                                 {(lead as any).verificadoReceita && <span className="text-[8px] bg-emerald-50 px-1.5 rounded text-emerald-600 font-bold uppercase" title="CNPJ ativo confirmado na Receita Federal">✓ Receita</span>}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                                {(lead.sources || []).filter(source => /^https:\/\//i.test(source)).slice(0, 3).map((source, index) =>
+                                  <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="text-[10px] text-sky-700 underline">Fonte {index + 1} ↗</a>) }
                               </div>
                            </td>
                            <td className="px-4 py-6 text-xs font-bold text-slate-600 space-y-1">

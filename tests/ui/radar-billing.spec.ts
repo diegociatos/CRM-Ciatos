@@ -22,3 +22,18 @@ test('Radar informa falta de créditos sem expor o erro técnico e preserva a li
   await expect(page.getByText('provider 400')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Retomar busca' })).toBeVisible();
 });
+
+test('Radar mostra fontes verificáveis dos resultados sem aceitar link inseguro', async ({ page }) => {
+  await page.route('**/rest/v1/**', route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
+    if (name === 'mining_jobs') return route.fulfill({ headers, json: [{ id: 'job-a', status: 'Completed', created_at: '2026-09-30T12:00:00Z', updated_at: '2026-09-30T12:00:00Z', dados: { name: 'Empresas QA', foundCount: 1, targetCount: 10, filters: { segment: 'Consultoria', city: '', state: '', size: 'all', taxRegime: '' } } }] });
+    if (name === 'mining_leads') return route.fulfill({ headers, json: [{ id: 'lead-a', job_id: 'job-a', imported: false, cnpj_raw: '12345678000195', created_at: '2026-09-30T12:00:00Z', dados: { name: 'Empresa QA', tradeName: 'Empresa QA', cnpj: '12.345.678/0001-95', phoneCompany: '', emailCompany: '', partners: [], contactName: '', contactPhone: '', sources: ['https://empresa.example/fonte', 'javascript:alert(1)'] } }] });
+    return route.fulfill({ headers, json: [] });
+  });
+  await page.goto('/tests/ui/?radar-error');
+  await page.getByRole('button', { name: 'Inspecionar Resultados' }).click();
+  await expect(page.getByRole('link', { name: 'Fonte 1' })).toHaveAttribute('href', 'https://empresa.example/fonte');
+  await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
+});
