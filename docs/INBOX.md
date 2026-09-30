@@ -10,6 +10,7 @@ O item **Caixa de entrada** mostra respostas recebidas a cadências do CRM na em
 - A equipe pode escrever uma resposta, revisar a prévia e confirmar um único envio pela caixa Microsoft 365 conectada. O histórico distingue "aceito pela Microsoft" de "envio a conferir"; aceitação não prova entrega. Não há sincronização completa da caixa, WhatsApp ou anexos.
 - Responder exige conversa aberta, membro ativo da empresa, contato sem opt-out/suppression, endereço igual ao remetente da resposta recebida, token de correlação da campanha, política de envio da empresa ativa e interruptor global `CRM_LIVE_SEND_ENABLED=true`. Uma conversa atribuída a outra pessoa só pode ser respondida por um administrador da empresa.
 - A solicitação é reservada no banco com UUID único antes de chamar a Microsoft. Uma repetição da mesma solicitação nunca reenvia. Após erro ou timeout, o resultado fica para conferência manual na caixa Microsoft 365.
+- **Respostas rápidas** são modelos por empresa. A equipe pode criar e revisar textos, arquivar e restaurar; ao escolher um modelo, ele apenas preenche o rascunho, que continua exigindo revisão e confirmação. Quatro sugestões neutras são criadas para cada empresa ativa na implantação.
 
 ## Implantação
 
@@ -33,3 +34,7 @@ Verificação remota: tabelas presentes, função de captura indisponível para 
 A migration `20260930160000_inbox_replies.sql` foi aplicada somente ao schema `crm` e a função `crm-inbox-send` foi publicada. O frontend do commit `928fe91` foi publicado pelo [workflow 36626894138](https://github.com/diegociatos/CRM-Ciatos/actions/runs/36626894138), concluído com sucesso. No navegador, o Inbox do CafeWorking abriu sem erro; não há conversas nessa empresa para exercitar a resposta visualmente em produção. Os três fluxos de interface foram testados localmente com transporte simulado.
 
 Verificação remota: zero respostas manuais registradas, função de reserva negada a `authenticated` e liberada somente a `service_role`. As duas políticas de empresa previamente ativas permaneceram assim; nenhuma flag, agente ou configuração de remetente foi alterada nesta publicação. Nenhum e-mail de teste foi enviado.
+
+## Biblioteca de respostas rápidas
+
+Aplicar `supabase/migrations/20260930170000_inbox_quick_replies.sql` depois das duas migrations acima e publicar o frontend. A tabela tem isolamento por empresa; as funções de edição e arquivamento exigem vínculo ativo, e modelos de outros autores só podem ser alterados por administradores da empresa. Arquivar não apaga o texto; a aba **Arquivadas** permite editá-lo e restaurá-lo. Esta migration não chama Microsoft 365, não altera políticas e não dispara mensagens.

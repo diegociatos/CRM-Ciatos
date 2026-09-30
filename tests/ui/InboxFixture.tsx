@@ -7,7 +7,7 @@ const orgOne='00000000-0000-4000-8000-000000000001';
 const orgTwo='00000000-0000-4000-8000-000000000002';
 const conversation={id:'conversation-1',organization_id:orgOne,lead_id:'lead-1',status:'OPEN',assigned_to:null,subject:'Re: Serviços Ciatos [Ciatos:11111111-1111-4111-8111-111111111111]',last_message_at:'2026-09-29T12:00:00Z',created_at:'2026-09-29T12:00:00Z'};
 const lead={id:'lead-1',organization_id:orgOne,nome:'Ana',empresa:'Empresa Exemplo',email:'ana@example.test',telefone:'(00) 90000-0000',opt_out:false};
-const rows:Record<string,any[]>={inbox_conversations:[conversation],inbox_messages:[{id:'message-1',conversation_id:conversation.id,organization_id:orgOne,direction:'INBOUND',sender:lead.email,recipient:'envio@example.test',subject:'Re: Serviços Ciatos',body:'Gostaria de conversar amanhã.',author_id:null,received_at:'2026-09-29T12:00:00Z'}],inbox_reads:[],leads:[lead]};
+const rows:Record<string,any[]>={inbox_conversations:[conversation],inbox_messages:[{id:'message-1',conversation_id:conversation.id,organization_id:orgOne,direction:'INBOUND',sender:lead.email,recipient:'envio@example.test',subject:'Re: Serviços Ciatos',body:'Gostaria de conversar amanhã.',author_id:null,received_at:'2026-09-29T12:00:00Z'}],inbox_reads:[],inbox_quick_replies:[{id:'quick-1',organization_id:orgOne,title:'Propor conversa',body:'Podemos conversar amanhã? Qual horário é melhor para você?',created_by:null,active:true}],leads:[lead]};
 const fake={
  functions:{async invoke(name:string,{body}:any){if(name!=='crm-inbox-send')return {data:null,error:new Error('Unknown function')};rows.inbox_messages.push({id:`out-${rows.inbox_messages.length}`,conversation_id:body.conversation_id,organization_id:orgOne,direction:'OUTBOUND',sender:'envio@example.test',recipient:lead.email,subject:conversation.subject,body:body.body,author_id:user.id,delivery_status:'ACCEPTED',received_at:new Date().toISOString()});return {data:{status:'ACCEPTED'},error:null};}},
  from(table:string){const clauses:Array<(x:any)=>boolean>=[];let max=Infinity;let orderKey='';let ascending=true;
@@ -16,6 +16,8 @@ const fake={
  async rpc(name:string,args:any){if(name==='mark_inbox_read'){rows.inbox_reads=[{conversation_id:args.cid,organization_id:orgOne,user_id:user.id,read_at:new Date().toISOString()}];}
   if(name==='update_inbox_conversation'){Object.assign(conversation,{status:args.new_status,assigned_to:args.new_assignee});}
   if(name==='add_inbox_note'){rows.inbox_messages.push({id:`note-${rows.inbox_messages.length}`,conversation_id:args.cid,organization_id:orgOne,direction:'INTERNAL',sender:'',recipient:'',subject:'',body:args.note_text,author_id:user.id,received_at:new Date().toISOString()});}
+  if(name==='save_inbox_quick_reply'){if(args.rid){Object.assign(rows.inbox_quick_replies.find(x=>x.id===args.rid),{title:args.reply_title,body:args.reply_body,active:true});}else rows.inbox_quick_replies.push({id:`quick-${rows.inbox_quick_replies.length+1}`,organization_id:args.org,title:args.reply_title,body:args.reply_body,created_by:user.id,active:true});}
+  if(name==='archive_inbox_quick_reply'){Object.assign(rows.inbox_quick_replies.find(x=>x.id===args.rid),{active:false});}
   return {data:null,error:null};}
 };
 

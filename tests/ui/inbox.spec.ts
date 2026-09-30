@@ -41,3 +41,31 @@ test('Inbox requires a preview and explicit confirmation before a reply',async({
  await expect(page.getByText('Resposta aceita pela Microsoft 365. A entrega ainda não foi confirmada.')).toBeVisible();
  await expect(page.getByText('Olá Ana, podemos conversar amanhã às 10h?')).toBeVisible();
 });
+
+test('Quick replies belong to the company and only fill an editable draft',async({page})=>{
+ await page.goto('/tests/ui/?inbox');
+ await page.getByRole('button',{name:/Empresa Exemplo.*Nova/}).click();
+ await page.getByRole('button',{name:'Respostas rápidas'}).click();
+ await expect(page.getByRole('dialog',{name:'Respostas rápidas da empresa'})).toBeVisible();
+ await page.getByRole('button',{name:'Inserir no rascunho'}).click();
+ await expect(page.getByLabel('Responder por e-mail')).toHaveValue('Podemos conversar amanhã? Qual horário é melhor para você?');
+ await expect(page.getByText('E-mail aceito pela Microsoft')).toHaveCount(0);
+ await page.getByRole('button',{name:'Outra empresa'}).click();
+ await page.getByRole('button',{name:'Respostas rápidas'}).click();
+ await expect(page.getByText('Nenhuma resposta cadastrada para esta empresa.')).toBeVisible();
+ await expect(page.getByText('Podemos conversar amanhã? Qual horário é melhor para você?')).toHaveCount(0);
+});
+
+test('Quick replies can be archived and restored without sending',async({page})=>{
+ await page.goto('/tests/ui/?inbox');
+ await page.getByRole('button',{name:'Respostas rápidas'}).click();
+ await page.getByRole('button',{name:'Editar',exact:true}).click();
+ await page.getByRole('button',{name:'Arquivar'}).click();
+ await expect(page.getByText('Nenhuma resposta cadastrada para esta empresa.')).toBeVisible();
+ await page.getByRole('button',{name:'Arquivadas'}).click();
+ await page.getByRole('button',{name:'Editar e restaurar'}).click();
+ await page.getByRole('button',{name:'Salvar resposta'}).click();
+ await page.getByRole('button',{name:'Ativas'}).click();
+ await expect(page.getByRole('heading',{name:'Propor conversa'})).toBeVisible();
+ await expect(page.getByText('E-mail aceito pela Microsoft')).toHaveCount(0);
+});

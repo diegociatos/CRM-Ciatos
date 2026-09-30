@@ -87,6 +87,12 @@ test('agente: biblioteca idempotente, Radar persistente, alertas isolados, abert
  await db.query('select crm.mark_inbox_read($1)',[conversation.id]);
  assert.equal((await db.query('select * from crm.inbox_messages')).rows.length,2);
  assert.equal((await db.query('select * from crm.inbox_reads')).rows.length,1);
+ assert.equal((await db.query<any>('select count(*)::int n from crm.inbox_quick_replies')).rows[0].n,4);
+ const quick=(await db.query<any>('select crm.save_inbox_quick_reply($1,null,$2,$3) id',[org,'Retorno pessoal','Vamos conversar amanhã?'])).rows[0].id;
+ await db.query('select crm.save_inbox_quick_reply($1,$2,$3,$4)',[org,quick,'Retorno pessoal','Qual horário funciona melhor?']);
+ assert.equal((await db.query<any>('select body from crm.inbox_quick_replies where id=$1',[quick])).rows[0].body,'Qual horário funciona melhor?');
+ await db.query('select crm.archive_inbox_quick_reply($1)',[quick]);
+ assert.equal((await db.query<any>('select active from crm.inbox_quick_replies where id=$1',[quick])).rows[0].active,false);
  await assert.rejects(db.query('select crm.reserve_inbox_reply($1,$2,$3,$4)',[conversation.id,user,crypto.randomUUID(),'Oi Ana']));
  await db.exec('reset role;');
  await db.query(`update crm.inbox_conversations set subject=$1 where id=$2`,[`Re: Proposta [Ciatos:${user}]`,conversation.id]);
@@ -114,6 +120,8 @@ test('agente: biblioteca idempotente, Radar persistente, alertas isolados, abert
  assert.equal((await db.query('select * from crm.sdr_alerts')).rows.length,0);assert.equal((await db.query<any>(`select crm.sdr_notifications('${org}') n`)).rows[0].n.length,0);
  assert.equal((await db.query('select * from crm.inbox_conversations')).rows.length,0);
  assert.equal((await db.query('select * from crm.inbox_messages')).rows.length,0);
+ assert.equal((await db.query('select * from crm.inbox_quick_replies')).rows.length,0);
+ await assert.rejects(db.query('select crm.save_inbox_quick_reply($1,null,$2,$3)',[org,'Invasão','Mensagem de fora']));
  await assert.rejects(db.query('select crm.add_inbox_note($1,$2)',[conversation.id,'Não autorizado']));
  await assert.rejects(db.exec(`select crm.record_sdr_reply(${job.id},'evil','hot','evil')`));await assert.rejects(db.exec(`select crm.install_sdr_library('${org}','[]')`));
  await db.exec(`select set_config('request.jwt.claim.sub','${user}',false)`);assert.equal((await db.query<any>(`select crm.sdr_notifications('${org}') n`)).rows[0].n[0].read,false);

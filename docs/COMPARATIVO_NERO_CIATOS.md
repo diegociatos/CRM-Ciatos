@@ -4,10 +4,10 @@ Análise da apresentação `apresentacao-nero.pdf` (22 páginas), em 29/09/2026.
 
 | Área apresentada | Situação no Ciatos CRM | Adaptação recomendada |
 | --- | --- | --- |
-| Inbox multicanal | Primeira etapa implementada: respostas de cadências por Microsoft 365, conversa por empresa/lead, responsável, estado e notas internas. Ainda não há envio pelo Inbox nem captura de mensagens sem token de campanha. | Completar histórico de e-mail, editor de resposta e, depois, WhatsApp oficial conforme credenciais e regras do canal. |
+| Inbox multicanal | Respostas de cadências por Microsoft 365, conversa por empresa/lead, responsável, estado, notas e resposta manual revisada. Mensagens sem token de campanha ainda não são capturadas. | Completar histórico da caixa e, depois, WhatsApp oficial conforme credenciais e regras do canal. |
 | Radar de risco | O Radar atual descobre leads e organiza listas; não mede relacionamento parado. | Preservar a prospecção e adicionar uma visão distinta de risco/continuidade, baseada em última atividade, próximo compromisso e pendências. |
 | Agenda | Calendário, compromissos e vínculo com leads existentes. | Acrescentar visões semana/dia, confirmação, comparecimento e integração bidirecional somente quando o calendário externo estiver autorizado. |
-| Respostas rápidas | Sales Playbook e scripts existentes, mas não há inserção em conversa. | Criar biblioteca por empresa e inserir textos revisáveis no futuro Inbox, com variáveis seguras. |
+| Respostas rápidas | Biblioteca por empresa no Inbox, com criação, edição, arquivo recuperável e inserção em rascunho. Nenhum modelo é enviado automaticamente. | Adicionar variantes por serviço e métricas de uso após haver volume de atendimento. |
 | Funis | Pipeline de etapas por empresa. | Adicionar múltiplos funis por empresa apenas se houver processos realmente distintos; preservar filtros, histórico e motivo de perda. |
 | Contatos | Leads, clientes ativos, importação e timeline. | Unificar busca, duplicidade, origem e histórico de canais na ficha do contato, respeitando opt-out e LGPD. |
 | Tarefas | Agenda e fases de onboarding; faltam pendências gerais com prioridade e estado. | Criar tarefas vinculadas a contato/negócio, responsável, prazo, prioridade e conclusão. |
