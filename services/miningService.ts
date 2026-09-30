@@ -109,9 +109,10 @@ export class MiningEngine {
     return this.controlJob(jobId, 'delete');
   }
 
-  public async markAsImported(jobId: string, cnpjRaw: string) {
-    await supabase.from('mining_leads').update({ imported: true }).eq('organization_id',this.organizationId).eq('job_id', jobId).eq('cnpj_raw', cnpjRaw);
-    if (this.leads[jobId]) this.leads[jobId] = this.leads[jobId].map(l => l.cnpjRaw === cnpjRaw ? { ...l, isImported: true } : l);
+  public async markAsImported(jobId: string, leadId: string) {
+    const {error}=await supabase.from('mining_leads').update({ imported: true }).eq('organization_id',this.organizationId).eq('job_id', jobId).eq('id', leadId);
+    if(error)throw new Error('O contato foi cadastrado, mas não foi possível atualizar a lista.');
+    if (this.leads[jobId]) this.leads[jobId] = this.leads[jobId].map(l => l.id === leadId ? { ...l, isImported: true } : l);
     emitir();
   }
 

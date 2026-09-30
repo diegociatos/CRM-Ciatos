@@ -54,7 +54,9 @@ test('agente: biblioteca idempotente, Radar persistente, alertas isolados, abert
  const excluded=(await db.query<any>(`insert into crm.mining_jobs(organization_id,status,dados) values('${org}','Completed','{}') returning id`)).rows[0].id;
  await db.query(`insert into crm.mining_leads(organization_id,job_id,cnpj_raw,dados) values($1,$2,'99999999000199',$3::jsonb)`,[org,excluded,JSON.stringify({tradeName:'Outra lista',emailCompany:'other@example.test'})]);
  await db.query(`insert into crm.mining_leads(organization_id,job_id,cnpj_raw,dados) values($1,$2,'12345678000190',$3::jsonb)`,[org,mid,JSON.stringify({tradeName:'Alfa',contactName:'Ana',emailCompany:'ana@alfa.test',phoneCompany:'31999999999',website:'alfa.test'})]);
+ await db.query(`insert into crm.mining_leads(organization_id,job_id,snov_prospect_id,dados) values($1,$2,'snov-example-1',$3::jsonb)`,[org,mid,JSON.stringify({tradeName:'Contato Snov',contactName:'Bia',emailCompany:'bia@example.test',sourceProvider:'snov'})]);
  assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,1);assert.equal((await db.query<any>('select crm.prepare_sdr_queue() n')).rows[0].n,0);
+ assert.equal((await db.query<any>(`select imported from crm.mining_leads where snov_prospect_id='snov-example-1'`)).rows[0].imported,false);
  assert.equal((await db.query<any>(`select dados->>'radarJobId' job from crm.leads where organization_id='${org}'`)).rows[0].job,mid);
  await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${user}',false);`);
  const selected=(await db.query<any>(`select id from crm.leads where organization_id='${org}'`)).rows[0].id;

@@ -36,8 +36,11 @@ Esta versão é um piloto seguro para homologação. Aplicar migrations não age
 | `CRM_AI_ENABLED`, `CRM_AI_PROVIDER` | Ativação e provider `openai` ou `anthropic` |
 | `OPENAI_API_KEY`, `CRM_OPENAI_MODEL` | Modelo escolhido/configurado pelo operador; não existe fallback silencioso |
 | `ANTHROPIC_API_KEY`, `CRM_CLAUDE_MODEL` | Claude; Radar/assistentes legados ainda dependem de Claude |
-| `CRM_SNOV_ENABLED`, `SNOV_CLIENT_ID`, `SNOV_CLIENT_SECRET` | Snov.io opcional |
+| `CRM_SNOV_ENABLED`, `SNOV_CLIENT_ID`, `SNOV_CLIENT_SECRET` | Snov.io opcional; use o API User ID e API Secret da conta Snov.io como secrets do servidor. Não use valores `VITE_`. |
+
 | `CRM_APP_URLS` | Origens permitidas para convites legados |
+
+O Radar agora pode consultar e importar listas existentes do Snov.io, uma página de até 100 contatos por vez. Publique também a função `crm-snov-lists` e a migração `20260930160000_snov_list_import.sql`. O acesso às listas da conta do grupo exige administrador da plataforma e permissão administrativa na empresa selecionada. A importação deduplica por ID do contato na lista, mantém cada empresa isolada e não ativa cadências. E-mails vindos da lista não recebem data de verificação: verifique a origem/finalidade do contato e valide o endereço antes de enviar. Listas do Snov não entram automaticamente na fila SDR; o operador faz a triagem pelo Radar. A conta Snov e seus créditos precisam estar habilitados para API; teste primeiro a consulta de listas e uma lista de teste sem envios.
 
 As variáveis internas `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` são do runtime Supabase. Nunca coloque service_role, chaves de IA, Resend, Snov ou secrets em VITE_, tabelas de configuração, logs, commits ou chat.
 

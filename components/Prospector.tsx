@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { MiningEngine } from '../services/miningService';
 import WorkspaceEmpty from './WorkspaceEmpty';
+import SnovListImport from './SnovListImport';
 
 interface ProspectorProps {
   organizationId:string;
@@ -16,10 +17,10 @@ interface ProspectorProps {
 function miningParaLead(m: MiningLead): any {
   return {
     name: m.contactName && m.contactName !== 'Proprietário' ? m.contactName : (m.partners?.[0] || ''),
-    email: '',
+    email: (m as any).sourceProvider === 'snov' ? (m.emailCompany || '') : '',
     phone: m.phone || m.phoneCompany || '',
-    company: m.tradeName || m.name,
-    tradeName: m.tradeName || m.name,
+    company: m.tradeName || m.name || m.contactName,
+    tradeName: m.tradeName || m.name || m.contactName,
     legalName: m.name,
     cnpj: m.cnpj,
     cnpjRaw: m.cnpjRaw,
@@ -86,7 +87,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
     if (inspectingJob) {
       const leads = miningEngine.getLeadsByJob(inspectingJob.id);
       const existingCnpjs = new Set(existingLeads.map(l => l.cnpjRaw));
-      const filtered = leads.filter(l => !existingCnpjs.has(l.cnpjRaw));
+      const filtered = leads.filter(l => !l.cnpjRaw || !existingCnpjs.has(l.cnpjRaw));
       setJobLeads(filtered);
     }
   }, [inspectingJob, versaoLeads, existingLeads]);
@@ -122,7 +123,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
        const r = await onAddAsLead(miningParaLead(lead));
        if (r.success) {
          successCount++;
-         await miningEngine.markAsImported(lead.jobId, lead.cnpjRaw);
+         await miningEngine.markAsImported(lead.jobId, lead.id);
        } else {
          falhas.push(`${lead.tradeName}: ${r.message}`);
        }
@@ -194,6 +195,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
       </div>
 
       <div className="bg-white border rounded-xl p-5 flex flex-wrap gap-4 justify-between"><div><h2 className="text-xl font-bold">Seu próximo passo pode ser automático</h2><p>Configure o Agente SDR para preparar os resultados pendentes, verificar e-mails no Snov.io e iniciar a cadência da empresa.</p><p className="text-sm text-slate-600 mt-2">Busca interrompida não apaga os resultados já encontrados. Você pode inspecionar ou retomar.</p></div>{onGoAgent&&<button className="btn-navy" onClick={onGoAgent}>Configurar agente</button>}</div>
+      {canImport&&<SnovListImport organizationId={organizationId} onImported={()=>miningEngine.refresh()}/>}
       {activeJobs.length === 0 && <WorkspaceEmpty eyebrow="NENHUMA LISTA CRIADA" title="Comece por uma busca com objetivo claro." description="Dê um nome à lista, informe o segmento e escolha os filtros que realmente importam. Cidade, estado, porte e regime tributário são opcionais." steps={['Nomeie a lista e informe o público que quer alcançar.', 'Confira os resultados encontrados antes de importar.', 'Prepare os contatos e a cadência na Central da IA.']} action={{label:'Criar primeira lista',onClick:()=>setShowNewJobModal(true)}} secondary={onGoAgent?{label:'Conhecer o Agente SDR',onClick:onGoAgent}:undefined}/>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {activeJobs.map(job => (
@@ -403,7 +405,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                                 onClick={async () => {
                                    const r = await onAddAsLead(miningParaLead(lead));
                                    if (r.success) {
-                                      await miningEngine.markAsImported(lead.jobId, lead.cnpjRaw);
+                                      await miningEngine.markAsImported(lead.jobId, lead.id);
                                    } else {
                                       alert(r.message);
                                    }
