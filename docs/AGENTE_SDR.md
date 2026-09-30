@@ -2,6 +2,10 @@
 
 ## Fluxo implementado nesta entrega
 
+O fluxo desejado começa com uma lista nomeada do Radar da empresa selecionada. Com o agente dessa empresa ligado e uma cadência ativa escolhida, o worker prepara os resultados persistidos, usa o Snov.io para descobrir/verificar o e-mail quando necessário, e só inscreve contatos elegíveis. A leitura da resposta pausa a cadência antes da classificação por IA. Somente interesse explícito com confiança suficiente gera lead quente, aviso no sininho e e-mail ao destinatário configurado para aquela empresa. Uma possível abertura não é sinal de interesse. Importar uma lista pronta do Snov.io é um caminho de triagem separado e não a coloca automaticamente no SDR.
+
+Em 30/09/2026, os nomes das credenciais Claude e Snov.io foram confirmados no servidor sem expor valores. `CRM_AI_ENABLED=true` e `CRM_AI_PROVIDER=anthropic` foram configurados para permitir classificar futuras respostas; isso não liga nenhum agente nem inicia envios. A interface agora exige que o status de IA esteja habilitado, além de Snov.io, leitura de respostas e política da empresa, antes de aceitar o modo real. Ainda é preciso revisar e ativar a cadência e a política de cada empresa, escolher uma lista, registrar a base de contato e conferir o destinatário de alertas. Não foi feito teste com resposta real de lead.
+
 Central da IA → Cadências contém dez modelos com quatro e-mails cada. A instalação cria rascunhos idempotentes, sem inscrever contatos. A provisão do Grupo Ciatos distribui os serviços conforme a empresa; o workspace Grupo Ciatos contém a biblioteca completa. A ausência de resposta encerra as cadências da biblioteca sem chamar o contato de lead quente.
 
 Central da IA → Agente SDR configura cadência, simulação, finalidade/base de contato avaliada, destinatário de alertas e acompanhamento de possíveis aberturas. Cada empresa tem sua política. A configuração não substitui as flags globais, a caixa conectada, permissões de leitura ou verificação do endereço.

@@ -45,6 +45,7 @@ for(const width of [1440,390])test(`Agente SDR: biblioteca e configuração sem 
  await page.getByLabel('Agente ligado para os resultados pendentes do Radar').check();
  await page.getByRole('button',{name:'Salvar operação',exact:true}).click();
  await expect(page.getByRole('alert')).toContainText('Snov.io pronto no servidor');
+ await expect(page.getByRole('alert')).toContainText('Análise de respostas por IA disponível');
  expect(calls.filter(c=>c.name==='save_sdr_settings'&&c.body.active)).toHaveLength(0);
 });
 
