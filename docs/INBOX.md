@@ -38,3 +38,5 @@ Verificação remota: zero respostas manuais registradas, função de reserva ne
 ## Biblioteca de respostas rápidas
 
 Aplicar `supabase/migrations/20260930170000_inbox_quick_replies.sql` depois das duas migrations acima e publicar o frontend. A tabela tem isolamento por empresa; as funções de edição e arquivamento exigem vínculo ativo, e modelos de outros autores só podem ser alterados por administradores da empresa. Arquivar não apaga o texto; a aba **Arquivadas** permite editá-lo e restaurá-lo. Esta migration não chama Microsoft 365, não altera políticas e não dispara mensagens.
+
+Publicada em 30/09/2026: migration aplicada somente ao schema `crm`, 40 sugestões em dez empresas; frontend publicado pelo [workflow 36719393547](https://github.com/diegociatos/CRM-Ciatos/actions/runs/36719393547). No CafeWorking, a biblioteca foi aberta no navegador e exibiu quatro modelos e o formulário de edição sem erro. A função de gravação está indisponível a anônimos, e o banco continua com zero respostas manuais enviadas. Nenhum modelo foi editado em produção durante a verificação.

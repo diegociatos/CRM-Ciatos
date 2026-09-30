@@ -37,3 +37,7 @@ Análise da apresentação `apresentacao-nero.pdf` (22 páginas), em 29/09/2026.
 - Credenciais ficam no servidor. Nenhuma tela deve implicar canal conectado ou mensagem entregue sem confirmação do provedor.
 - Opt-out, supressão, idempotência, limites de envio, revisão humana e registro de origem dos dados valem também para os módulos novos.
 - A aparência pode aproveitar a clareza e a hierarquia da apresentação, mantendo a marca e a fonte Book Antiqua solicitadas para o Ciatos CRM.
+
+## Pré-requisitos para WhatsApp
+
+A [política oficial do WhatsApp Business](https://whatsappbusiness.com/policy/) exige permissão prévia do destinatário para contato, modelos aprovados para iniciar conversas e limita respostas livres à janela de 24 horas aberta por mensagem do usuário. A integração deve ser feita por empresa e número oficial, com credenciais no servidor, registro do opt-in, templates aprovados, supressão, limites, custos e transferência humana. Nenhuma cadência de WhatsApp foi ativada nesta etapa.
