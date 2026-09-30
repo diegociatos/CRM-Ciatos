@@ -50,7 +50,7 @@ Inspeção da navegação em produção, na Ciatos Contabilidade. A carteira est
 | Clientes Ativos | Pesquisa e tabela vazia disponíveis. Importação/contratos testados localmente. |
 | Pipeline Comercial | Etapas carregam. Cadastro, seleção e movimentação cobertos pelo fluxo local. |
 | Minha Agenda | Troca de mês, abertura e cancelamento verificados. Corrigida mutação da data que podia pular mês em dias 29–31; controles receberam nomes acessíveis. |
-| Radar Inteligente | Duas buscas interrompidas, uma com 47 resultados preservados. Rótulos em português, retomada, ligação à Central e estado de carregamento corrigidos. Não reiniciada busca paga. A busca web original ainda processa páginas a partir do navegador; o agente assume a lista persistida independentemente do navegador. |
+| Radar Inteligente | As listas anteriores preservam resultados. Novas páginas usam a Database Search API do Snov.io sem tokens de IA; o navegador aciona as páginas enquanto aberto. Retomar lista antiga muda as próximas páginas para Snov.io. O agente assume resultados persistidos independentemente do navegador. |
 | Fila de Qualificação | Filtros e cadastro disponíveis; aprovação e cadastro com falha/repetição testados localmente. |
 | Comunicados | Formulário/público/importação testados com mocks. Conexão Microsoft foi confirmada no banco; corrigida a mensagem de erro que confundia indisponibilidade da consulta com caixa desconectada. Nenhum comunicado enviado. |
 | Sales Playbook | Biblioteca e busca carregam; sem scripts cadastrados na empresa. |

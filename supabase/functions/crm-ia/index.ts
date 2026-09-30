@@ -2,10 +2,9 @@
 // Ações:
 //   objecao  → resposta estruturada a uma objeção de venda
 //   email    → personaliza um template de e-mail para um lead
-//   radar    → busca empresas reais na web (web search), valida CNPJ na Receita
-//              (BrasilAPI) e grava em crm.mining_leads, deduplicando contra crm.leads
+//   O Radar usa crm-snov-search; descoberta de empresas não consome tokens de IA.
 import Anthropic from 'npm:@anthropic-ai/sdk';
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { AiBillingError, requestOpenAiStructured } from '../_shared/crmIaOpenAi.ts';
 
 const cors = {
@@ -40,21 +39,19 @@ async function chamarClaude(params: Record<string, unknown>) {
     if (resp.stop_reason !== 'pause_turn') return resp;
     msgs = [...msgs, { role: 'assistant', content: resp.content }];
   }
-  throw new Error('A IA não concluiu a busca a tempo.');
+  throw new Error('A IA não concluiu a tarefa a tempo.');
 }
 
 const textoDe = (resp: any) =>
   (resp.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n').trim();
 
-async function chamarIA(params: Record<string, unknown>, schema: Record<string, unknown>, schemaName: string, radarLocation?: {city?: string;state?: string}) {
+async function chamarIA(params: Record<string, unknown>, schema: Record<string, unknown>, schemaName: string) {
   if (PROVIDER === 'anthropic') {
     const resp = await chamarClaude(params);
-    const sources = (resp.content || []).filter((b: any) => b.type === 'web_search_tool_result' && Array.isArray(b.content))
-      .flatMap((b: any) => b.content.map((r: any) => r.url)).filter(Boolean);
-    return { text: textoDe(resp), sources };
+    return { text: textoDe(resp) };
   }
   return requestOpenAiStructured(Deno.env.get('OPENAI_API_KEY')!, MODELO, String(params.system || ''),
-    String((params.messages as any[])?.[0]?.content || ''), schema, schemaName, radarLocation);
+    String((params.messages as any[])?.[0]?.content || ''), schema, schemaName);
 }
 
 // ---------------------------------------------------------------------------
@@ -128,169 +125,6 @@ Dores registradas: ${lead.strategicPains || '—'}`,
   return JSON.parse(resp.text);
 }
 
-// ---------------------------------------------------------------------------
-// Radar
-// ---------------------------------------------------------------------------
-const soDigitos = (s: unknown) => String(s ?? '').replace(/\D/g, '');
-
-function cnpjValido(c: string): boolean {
-  if (!/^\d{14}$/.test(c) || /^(\d)\1{13}$/.test(c)) return false;
-  const calc = (base: string, pesos: number[]) => {
-    const s = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
-    const r = s % 11;
-    return r < 2 ? 0 : 11 - r;
-  };
-  const d1 = calc(c.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  const d2 = calc(c.slice(0, 12) + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  return c.endsWith(`${d1}${d2}`);
-}
-
-const fmtCnpj = (c: string) => c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-const fmtTel = (t: string) => {
-  const d = soDigitos(t);
-  if (d.length === 10) return d.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
-  if (d.length === 11) return d.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
-  return t || '';
-};
-const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
-
-async function consultarReceita(cnpj: string): Promise<any | null> {
-  try {
-    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { headers: { 'User-Agent': 'CRM-Ciatos/1.0' } });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
-}
-
-const SCHEMA_RADAR = { type: 'object', additionalProperties: false, required: ['companies'], properties: {
-  companies: { type: 'array', items: { type: 'object', additionalProperties: false,
-    required: ['name','tradeName','cnpj','website','phone','emailCompany','decisionMakerName','decisionMakerRole','icpScore','reason','sourceUrls'],
-    properties: {
-      name:{type:'string'},tradeName:{type:'string'},cnpj:{type:'string'},website:{type:'string'},phone:{type:'string'},
-      emailCompany:{type:'string'},decisionMakerName:{type:'string'},decisionMakerRole:{type:'string'},
-      icpScore:{type:'number'},reason:{type:'string'},sourceUrls:{type:'array',items:{type:'string'}},
-    },
-  } },
-} };
-
-async function radar(p: any, db: SupabaseClient<any, any, any>) {
-  const jobId = String(p.jobId || '');
-  const { data: job, error: eJob } = await db.from('mining_jobs').select('*').eq('organization_id',p.organization_id).eq('id', jobId).maybeSingle();
-  if (eJob || !job) throw new Error('Busca do Radar não encontrada.');
-  const f = (job.dados?.filters || {}) as Record<string, string>;
-
-  // Empresas já vistas neste job: pedimos para a IA não repetir.
-  const { data: vistos } = await db.from('mining_leads').select('dados->>name').eq('job_id', jobId).limit(300);
-  const excluir = ((vistos as any[]) || []).map(v => v.name).filter(Boolean);
-
-  const resp = await chamarIA({
-    max_tokens: 16000,
-    output_config: { effort: 'medium' },
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6, user_location: { type: 'approximate', country: 'BR', city: f.city || undefined, region: f.state || undefined } }],
-    system: `Você é um pesquisador de prospecção B2B no Brasil. Encontre empresas REAIS e ATIVAS usando a busca na web. Para cada uma, o CNPJ é obrigatório e precisa ter sido visto numa fonte (site da empresa, cnpj.biz, casadosdados, econodata, Receita etc.). Não invente CNPJ, telefone nem pessoa — deixe vazio o que não encontrar.`,
-    messages: [{
-      role: 'user',
-      content: `Encontre até 10 empresas do segmento "${f.segment || ''}" em ${f.city?.trim() ? [f.city.trim(), f.state?.trim()].filter(Boolean).join(' / ') : f.state?.trim() ? 'todo o estado de ' + f.state.trim() : 'todo o Brasil'}. Não restrinja a uma cidade quando nenhuma cidade foi informada.
-Porte desejado: ${f.size && f.size !== 'all' ? f.size : 'indiferente'}. Regime tributário desejado: ${f.taxRegime?.trim() || 'todos os regimes, sem restrição tributária'}.
-${excluir.length ? `NÃO repita estas empresas: ${excluir.slice(0, 150).join('; ')}` : ''}
-
-Responda SOMENTE com um JSON, sem texto antes ou depois, no formato:
-{"companies":[{"name":"","tradeName":"","cnpj":"","website":"","phone":"","emailCompany":"","decisionMakerName":"","decisionMakerRole":"","icpScore":3,"reason":"","sourceUrls":["URL da fonte onde viu a empresa e o CNPJ"]}]}
-icpScore de 1 a 5 = quão bom cliente de contabilidade/planejamento tributário ela parece; reason = 1 frase justificando.`,
-    }],
-  }, SCHEMA_RADAR, 'crm_radar_companies', { city:f.city,state:f.state });
-
-  const texto = resp.text;
-  const m = texto.match(/\{[\s\S]*\}/);
-  let candidatas: any[] = [];
-  try { candidatas = m ? (JSON.parse(m[0]).companies || []) : []; } catch { candidatas = []; }
-  const fontes = [...new Set(resp.sources)].slice(0, 20);
-  const urlBase = (value: unknown) => { try { const u=new URL(String(value)); return u.protocol==='https:' ? `${u.hostname}${u.pathname.replace(/\/$/,'')}` : ''; } catch { return ''; } };
-
-  // Dedup contra o CRM e contra o próprio job
-  const cnpjs = [...new Set(candidatas.map(c => soDigitos(c.cnpj)).filter(cnpjValido))];
-  const jaNoCrm = new Set<string>();
-  const jaNoJob = new Set<string>();
-  if (cnpjs.length) {
-    const { data: l1 } = await db.from('leads').select('cnpj_raw').eq('organization_id',p.organization_id).in('cnpj_raw', cnpjs);
-    (l1 || []).forEach((r: any) => jaNoCrm.add(r.cnpj_raw));
-    const { data: l2 } = await db.from('mining_leads').select('cnpj_raw').eq('job_id', jobId).in('cnpj_raw', cnpjs);
-    (l2 || []).forEach((r: any) => jaNoJob.add(r.cnpj_raw));
-  }
-
-  const cidadeAlvo = f.city ? semAcento(f.city) : '';
-  const novos: any[] = [];
-  let descartadas = 0;
-  for (const c of candidatas) {
-    const cnpj = soDigitos(c.cnpj);
-    if (!cnpjValido(cnpj) || jaNoCrm.has(cnpj) || jaNoJob.has(cnpj)) { descartadas++; continue; }
-    const rf = await consultarReceita(cnpj);
-    // Só entra empresa com cadastro ATIVO na Receita e na cidade pedida.
-    if (!rf || semAcento(String(rf.descricao_situacao_cadastral || '')) !== 'ATIVA') { descartadas++; continue; }
-    if (cidadeAlvo && semAcento(String(rf.municipio || '')) !== cidadeAlvo) { descartadas++; continue; }
-    const socios: string[] = (rf.qsa || []).map((s: any) => s.nome_socio).filter(Boolean);
-    const telefoneRf = fmtTel(String(rf.ddd_telefone_1 || ''));
-    const fontesEmpresa = (Array.isArray(c.sourceUrls) ? c.sourceUrls : [])
-      .filter((u: unknown) => fontes.some(fonte => urlBase(u) && urlBase(u)===urlBase(fonte))).slice(0, 3);
-    novos.push({
-      organization_id: p.organization_id,
-      job_id: jobId,
-      cnpj_raw: cnpj,
-      dados: {
-        name: rf.razao_social || c.name,
-        tradeName: rf.nome_fantasia || c.tradeName || c.name || rf.razao_social,
-        cnpj: fmtCnpj(cnpj),
-        cnpjRaw: cnpj,
-        segment: f.segment,
-        city: rf.municipio || f.city,
-        state: rf.uf || f.state,
-        phone: c.phone || telefoneRf,
-        phoneCompany: telefoneRf || c.phone || 'Não localizado',
-        emailCompany: rf.email || c.emailCompany || 'Não localizado',
-        website: c.website || '',
-        partners: socios.length ? socios : ['Não informado'],
-        contactName: c.decisionMakerName || socios[0] || 'Proprietário',
-        contactPhone: '—',
-        contactEmail: '—',
-        decisionMakerName: c.decisionMakerName || socios[0] || '',
-        scoreIa: Math.min(5, Math.max(1, Number(c.icpScore) || 3)),
-        icpScore: Math.min(5, Math.max(1, Number(c.icpScore) || 3)),
-        reason: c.reason || '',
-        porteReceita: rf.porte || '',
-        cnaePrincipal: rf.cnae_fiscal_descricao || '',
-        capitalSocial: rf.capital_social ?? null,
-        abertura: rf.data_inicio_atividade || '',
-        simplesNacional: rf.opcao_pelo_simples ?? null,
-        debtStatus: 'Regular',
-        debtValueEst: '—',
-        sources: fontesEmpresa,
-        isGarimpo: true,
-        verificadoReceita: true,
-      },
-    });
-    jaNoJob.add(cnpj);
-  }
-
-  if (novos.length) {
-    const { error } = await db.from('mining_leads').insert(novos);
-    if (error) throw error;
-  }
-
-  const dados = job.dados || {};
-  const encontrados = (dados.foundCount || 0) + novos.length;
-  const paginas = (dados.pagesFetched || 0) + 1;
-  const semNada = novos.length === 0 ? (dados.paginasVazias || 0) + 1 : 0;
-  const concluido = encontrados >= (dados.targetCount || 50) || semNada >= 3;
-  const status = concluido ? 'Completed' : job.status;
-  await db.from('mining_jobs').update({
-    status,
-    dados: { ...dados, status, foundCount: encontrados, pagesFetched: paginas, paginasVazias: semNada, updatedAt: new Date().toISOString() },
-  }).eq('id', jobId);
-
-  return { adicionadas: novos.length, descartadas, status, foundCount: encontrados };
-}
-
-// ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
@@ -310,16 +144,14 @@ Deno.serve(async (req) => {
   try { p = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
   const {data:membro,error:memberError}=await db.rpc('tenant_member',{org:p.organization_id,admin_only:false});
   if(memberError||!membro)return json({error:'Sem acesso à empresa.'},403);
-  if(p.action!=='radar'){
-    const {data:lead,error}=await db.from('leads').select('id').eq('organization_id',p.organization_id).eq('id',p.lead?.id).maybeSingle();
-    if(error||!lead)return json({error:'Lead fora desta empresa.'},403);
-  }
-  if (!['objecao','email','radar'].includes(p.action)) return json({ error: 'Ação desconhecida' },400);
+  if (!['objecao','email'].includes(p.action)) return json({ error: 'O Radar usa a busca do Snov.io, sem IA.' },410);
+  const {data:lead,error}=await db.from('leads').select('id').eq('organization_id',p.organization_id).eq('id',p.lead?.id).maybeSingle();
+  if(error||!lead)return json({error:'Lead fora desta empresa.'},403);
   const audit = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'crm' } });
   const { data: runId, error: quotaError } = await audit.rpc('reserve_ai_run', { org: p.organization_id, lid: null });
   if (quotaError) return json({ error: 'Limite de consultas de IA atingido ou configuração indisponível.' },429);
   try {
-    const result = p.action === 'objecao' ? await objecao(p) : p.action === 'email' ? await email(p) : await radar(p,db);
+    const result = p.action === 'objecao' ? await objecao(p) : await email(p);
     const { error: auditError } = await audit.from('ai_runs').update({ provider:PROVIDER,model:MODELO,action:p.action,status:'DONE',completed_at:new Date().toISOString() }).eq('id',runId);
     if (auditError) throw new Error('audit_failed');
     return json(result);

@@ -14,12 +14,12 @@ interface ProspectorProps {
   existingLeads: Lead[];
 }
 
-/** Converte um achado do Radar (dados da Receita + web) no formato de Lead do CRM. */
+/** Converte um achado do Radar no formato de Lead do CRM. */
 function miningParaLead(m: MiningLead): any {
   return {
-    name: m.contactName && m.contactName !== 'Proprietário' ? m.contactName : (m.partners?.[0] || ''),
+    name: m.contactName && m.contactName !== 'Proprietário' ? m.contactName : (m.partners?.[0] || m.tradeName || m.name || ''),
     email: (m as any).sourceProvider === 'snov' ? (m.emailCompany || '') : '',
-    phone: m.phone || m.phoneCompany || '',
+    phone: m.phone && m.phone !== 'Não localizado' ? m.phone : m.phoneCompany && m.phoneCompany !== 'Não localizado' ? m.phoneCompany : '',
     company: m.tradeName || m.name || m.contactName,
     tradeName: m.tradeName || m.name || m.contactName,
     legalName: m.name,
@@ -88,7 +88,9 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
     if (inspectingJob) {
       const leads = miningEngine.getLeadsByJob(inspectingJob.id);
       const existingCnpjs = new Set(existingLeads.map(l => l.cnpjRaw));
-      const filtered = leads.filter(l => !l.cnpjRaw || !existingCnpjs.has(l.cnpjRaw));
+      const domain = (value:string) => value.toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'').replace(/^www\./,'');
+      const existingDomains = new Set(existingLeads.map(l => domain(l.website || '')).filter(Boolean));
+      const filtered = leads.filter(l => (!l.cnpjRaw || !existingCnpjs.has(l.cnpjRaw)) && (!l.website || !existingDomains.has(domain(l.website))));
       setJobLeads(filtered);
     }
   }, [inspectingJob, versaoLeads, existingLeads]);
@@ -183,21 +185,21 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
       <div className="flex justify-between items-end border-b border-slate-200 pb-8">
         <div>
           <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Radar de Inteligência</h1>
-          <p className="text-slate-500 text-lg font-medium">Crie listas de empresas por segmento e escolha a abrangência: cidade, estado ou Brasil inteiro.</p>
+          <p className="text-slate-500 text-lg font-medium">Encontre empresas no Snov.io por setor e localização, sem gastar tokens de IA.</p>
         </div>
         <div className="flex gap-4">
           <button
-            onClick={() => setShowNewJobModal(true)}
+            onClick={() => setShowNewJobModal(true)} disabled={!canSnov}
             className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 transition-all"
           >
-            🚀 Configurar Varredura
+            Configurar busca
           </button>
         </div>
       </div>
 
-      <div className="bg-white border rounded-xl p-5 flex flex-wrap gap-4 justify-between"><div><h2 className="text-xl font-bold">Seu próximo passo pode ser automático</h2><p>Configure o Agente SDR para preparar os resultados pendentes, verificar e-mails no Snov.io e iniciar a cadência da empresa.</p><p className="text-sm text-slate-600 mt-2">Busca interrompida não apaga os resultados já encontrados. Você pode inspecionar ou retomar.</p></div>{onGoAgent&&<button className="btn-navy" onClick={onGoAgent}>Configurar agente</button>}</div>
+      <div className="bg-white border rounded-xl p-5 flex flex-wrap gap-4 justify-between"><div><h2 className="text-xl font-bold">Do Snov.io para a sua lista</h2><p>O Radar busca empresas no Snov.io. Uma página com resultados pode consumir créditos Snov; nenhuma busca consome tokens de GPT ou Claude.</p><p className="text-sm text-slate-600 mt-2">A busca não revela e-mails nem comprova CNPJ ou regime tributário. Revise os resultados antes de importar; a IA continua disponível para mensagens e análise das respostas.</p>{!canSnov&&<p role="status" className="mt-2 text-sm text-amber-800">A busca usa a conta Snov.io do Grupo Ciatos e está disponível ao administrador da plataforma ou usuário master.</p>}</div>{onGoAgent&&<button className="btn-navy" onClick={onGoAgent}>Configurar agente</button>}</div>
       {canImport&&canSnov&&<SnovListImport organizationId={organizationId} onImported={()=>miningEngine.refresh()}/>}
-      {activeJobs.length === 0 && <WorkspaceEmpty eyebrow="NENHUMA LISTA CRIADA" title="Comece por uma busca com objetivo claro." description="Dê um nome à lista, informe o segmento e escolha os filtros que realmente importam. Cidade, estado, porte e regime tributário são opcionais." steps={['Nomeie a lista e informe o público que quer alcançar.', 'Confira os resultados encontrados antes de importar.', 'Prepare os contatos e a cadência na Central da IA.']} action={{label:'Criar primeira lista',onClick:()=>setShowNewJobModal(true)}} secondary={onGoAgent?{label:'Conhecer o Agente SDR',onClick:onGoAgent}:undefined}/>}
+      {activeJobs.length === 0 && <WorkspaceEmpty eyebrow="NENHUMA LISTA CRIADA" title="Comece por uma busca com objetivo claro." description="Dê um nome à lista, informe o setor e escolha a localização. O Snov.io não informa CNPJ nem regime tributário na busca de empresas." steps={['Nomeie a lista e informe o público que quer alcançar.', 'Confira os resultados encontrados antes de importar.', 'Prepare os contatos e a cadência na Central da IA.']} action={canSnov?{label:'Criar primeira lista',onClick:()=>setShowNewJobModal(true)}:undefined} secondary={onGoAgent?{label:'Conhecer o Agente SDR',onClick:onGoAgent}:undefined}/>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {activeJobs.map(job => (
           <div key={job.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[380px] hover:shadow-xl transition-all">
@@ -214,7 +216,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                    {job.status === 'Running' ? (
                      <button onClick={() => miningEngine.controlJob(job.id, 'pause')} aria-label="Pausar busca" className="p-2 bg-slate-50 rounded-lg text-xs">⏸️</button>
                    ) : ['Paused','Failed'].includes(job.status) ? (
-                     <button onClick={() => miningEngine.controlJob(job.id, 'resume')} aria-label="Retomar busca" className="p-2 bg-slate-50 rounded-lg text-xs">▶️</button>
+                     <button onClick={() => miningEngine.controlJob(job.id, 'resume')} disabled={!canSnov} aria-label="Retomar busca" className="p-2 bg-slate-50 rounded-lg text-xs disabled:opacity-40">▶️</button>
                    ) : null}
                    <button onClick={() => {
                      if(confirm("Deseja excluir este radar e todos os seus resultados?")) {
@@ -228,8 +230,8 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                 {[job.filters.city, job.filters.state].filter(Boolean).join(' / ') || 'Brasil inteiro'}
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
-                <span className="bg-amber-50 text-[#c5a059] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">{job.filters.size}</span>
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-indigo-100">{job.filters.taxRegime || 'Todos os regimes'}</span>
+                <span className="bg-amber-50 text-[#9b6c22] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">{(job as any).sourceProvider==='snov_database'?'Busca Snov.io':(job as any).sourceProvider==='snov'?'Lista Snov.io':'Busca anterior'}</span>
+                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-indigo-100">{job.filters.segment || 'Sem setor'}</span>
               </div>
 
               <div className="space-y-4">
@@ -242,10 +244,9 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                  </div>
               </div>
               {job.status === 'Failed' && <div role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[#61431b]">
-                {job.lastErrorCode === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(job.lastError || '')
-                  ? <><strong>Busca pausada: saldo da IA insuficiente.</strong><p className="mt-1">Confira os créditos da API {job.lastErrorProvider === 'openai' ? 'OpenAI' : 'Anthropic'}. Depois, use “Retomar busca”. Os resultados já encontrados ficam nesta lista.</p><a className="mt-2 inline-block underline" href={job.lastErrorProvider === 'openai' ? 'https://platform.openai.com/settings/organization/billing/overview' : 'https://platform.claude.com/settings/billing'} target="_blank" rel="noopener noreferrer">Abrir faturamento {job.lastErrorProvider === 'openai' ? 'da OpenAI' : 'da Anthropic'} ↗</a></>
-                  : <><strong>Busca interrompida.</strong><p className="mt-1">Confira a integração e use “Retomar busca”. Os resultados encontrados foram preservados.</p></>}
+                <strong>Busca interrompida.</strong><p className="mt-1">{job.lastErrorCode==='AI_BILLING_REQUIRED'?'Esta lista veio da busca anterior com IA. Ao retomar, a próxima página será consultada no Snov.io.':job.lastError||'Confira a conexão Snov.io e use “Retomar busca”. Os resultados encontrados foram preservados.'}</p>
               </div>}
+              {job.status === 'Paused' && job.sourceProvider !== 'snov_database' && <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Busca antiga pausada. Ao retomar, as próximas páginas usam créditos Snov.io e não tokens de IA.</p>}
             </div>
             <button onClick={() => setInspectingJob(job)} className="w-full mt-10 py-4 bg-slate-50 text-[#0a192f] rounded-2xl font-black uppercase text-[10px] tracking-widest border border-slate-100 hover:bg-[#0a192f] hover:text-white transition-all">
               Inspecionar Resultados
@@ -260,7 +261,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
           <form onSubmit={handleCreateJob} className="relative bg-white w-full max-w-3xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
              <div className="p-10 bg-slate-50 border-b border-slate-100">
                 <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight">Definir busca de empresas</h2>
-                <p className="text-slate-500 font-medium mt-2">Escolha o segmento. Estado, cidade e regime são opcionais.</p>
+                <p className="text-slate-500 font-medium mt-2">Escolha o setor. Estado e cidade são opcionais; o Snov.io não informa CNPJ nem regime tributário.</p>
              </div>
 
              <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -271,7 +272,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                    </div>
                    <div>
                       <label className={labelClass}>Segmento Corporativo *</label>
-                      <input required className={inputClass} value={newJob.segmentName} onChange={e => setNewJob({...newJob, segmentName: e.target.value})} placeholder="Ex: Metalúrgicas, Atacadistas..." />
+                      <input required className={inputClass} value={newJob.segmentName} onChange={e => setNewJob({...newJob, segmentName: e.target.value})} placeholder="Ex.: Contabilidade, Advocacia, Transporte" />
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -286,31 +287,11 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                 </div>
 
                 <div className="space-y-6">
-                   <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelClass}>Porte Estrito</label>
-                        <select className={inputClass} value={newJob.size} onChange={e => setNewJob({...newJob, size: e.target.value as any})}>
-                           <option value="all">Indiferente</option>
-                           <option value={CompanySize.ME}>ME</option>
-                           <option value={CompanySize.EPP}>EPP</option>
-                           <option value={CompanySize.MEDIUM}>Médio</option>
-                           <option value={CompanySize.LARGE}>Grande</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Regime de Tributação</label>
-                        <select aria-label="Regime de tributação" className={inputClass} value={newJob.taxRegime} onChange={e => setNewJob({...newJob, taxRegime: e.target.value})}>
-                           <option value="">Todos os regimes</option>
-                           <option>Simples Nacional</option>
-                           <option>Lucro Presumido</option>
-                           <option>Lucro Real</option>
-                        </select>
-                      </div>
-                   </div>
                    <div>
                       <label className={labelClass}>Meta de Captura</label>
                       <input type="number" min="10" max="500" className={inputClass} value={newJob.targetCount} onChange={e => setNewJob({...newJob, targetCount: parseInt(e.target.value)})} />
                    </div>
+                   <p className="text-sm text-slate-600">O Snov.io cobra créditos quando uma consulta de empresas retorna resultados. Esta busca não revela e-mails e não inicia cadências.</p>
                 </div>
              </div>
 
@@ -383,14 +364,15 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                            <td className="px-4 py-6">
                               <p className="text-sm font-bold text-[#0a192f] serif-authority leading-tight">{lead.tradeName}</p>
                               <div className="flex gap-2 mt-1">
-                                <span className="text-[9px] font-mono text-slate-400 uppercase">{lead.cnpj}</span>
+                                <span className="text-[9px] font-mono text-slate-400 uppercase">{lead.cnpj || 'CNPJ não fornecido'}</span>
+                                {(lead as any).snovEmployeeRange&&<span className="text-[8px] bg-sky-50 px-1.5 rounded text-sky-700 font-bold">{(lead as any).snovEmployeeRange} funcionários</span>}
                                 {(lead as any).porteReceita && <span className="text-[8px] bg-amber-50 px-1.5 rounded text-amber-600 font-bold uppercase">{(lead as any).porteReceita}</span>}
                                 {(lead as any).simplesNacional != null && <span className="text-[8px] bg-indigo-50 px-1.5 rounded text-indigo-600 font-bold uppercase">{(lead as any).simplesNacional ? 'Simples' : 'Fora do Simples'}</span>}
                                 {(lead as any).verificadoReceita && <span className="text-[8px] bg-emerald-50 px-1.5 rounded text-emerald-600 font-bold uppercase" title="CNPJ ativo confirmado na Receita Federal">✓ Receita</span>}
                               </div>
                               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                                 {(lead.sources || []).filter(source => /^https:\/\//i.test(source)).slice(0, 3).map((source, index) =>
-                                  <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="text-[10px] text-sky-700 underline">Fonte {index + 1} ↗</a>) }
+                                  <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="text-[10px] text-sky-700 underline">{(lead as any).sourceProvider==='snov_database'?'Site da empresa':`Fonte ${index + 1}`} ↗</a>) }
                               </div>
                            </td>
                            <td className="px-4 py-6 text-xs font-bold text-slate-600 space-y-1">
@@ -399,6 +381,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                            </td>
                            <td className="px-4 py-6">
                               <div className="flex flex-wrap gap-1 max-w-[300px]">
+                                {!lead.partners?.length&&<span className="text-[10px] text-slate-500">Não informado pelo Snov.io</span>}
                                 {lead.partners.map((p, i) => (
                                   <span key={i} className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold">{p}</span>
                                 ))}
@@ -406,7 +389,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                            </td>
                            <td className="px-4 py-6">
                               <div className="bg-white p-2.5 rounded-xl border border-slate-100">
-                                 <p className="text-[11px] font-black text-[#0a192f]">{lead.contactName}</p>
+                                 <p className="text-[11px] font-black text-[#0a192f]">{lead.contactName||'Ainda não localizado'}</p>
                                  <p className="text-[9px] font-black text-emerald-600 mt-0.5">{lead.contactPhone}</p>
                               </div>
                            </td>

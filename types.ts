@@ -325,6 +325,7 @@ export interface CalendarConfig {
 
 export interface MiningJob {
   id: string;
+  sourceProvider?: 'snov_database' | 'snov';
   name: string;
   status: 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed';
   version: number;

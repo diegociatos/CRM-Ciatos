@@ -22,6 +22,24 @@ export class SnovAdapter {
     if (!response.ok) throw new Error(`snov_${response.status}`);
     return await response.json();
   }
+  async startCompanySearch(filters: Record<string, unknown>, page: number) {
+    if (!Number.isSafeInteger(page) || page < 1 || page > 25) throw new Error('invalid_page');
+    const token = await this.accessToken();
+    const response = await this.request('https://api.snov.io/v2/database-search/companies/start', {
+      method:'POST', redirect:'error', signal:AbortSignal.timeout(15000),
+      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body:JSON.stringify({filters,page}),
+    });
+    if (!response.ok) throw new Error(`snov_${response.status}`);
+    const data = await response.json();
+    const hash = String(data?.meta?.task_hash || '');
+    if (!/^[a-zA-Z0-9_-]{8,200}$/.test(hash)) throw new Error('snov_invalid_search');
+    return hash;
+  }
+  async companySearchResult(hash: string) {
+    if (!/^[a-zA-Z0-9_-]{8,200}$/.test(hash)) throw new Error('invalid_task');
+    return this.call(`/v2/database-search/companies/result/${hash}`);
+  }
   async start(kind: string, value: string) {
     if (kind === 'reveal') {
       if (!/^[a-zA-Z0-9_-]{1,200}$/.test(value)) throw new Error('invalid_task');

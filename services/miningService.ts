@@ -1,6 +1,6 @@
 // Radar: buscas e resultados ficam em crm.mining_jobs / crm.mining_leads.
-// Cada "página" é processada no servidor (Edge Function crm-ia → Claude + web
-// search + validação na Receita). O navegador só dispara as páginas em série
+// Cada página é processada no servidor pela Database Search do Snov.io.
+// O navegador só dispara as páginas em série
 // enquanto a busca estiver "Running" e mantém um cache para as telas.
 
 import { MiningJob, MiningLead, CompanySize } from '../types';
@@ -31,7 +31,14 @@ export class MiningEngine {
     await this.refresh();
     if (this.iniciado||this.disposed) return;
     this.iniciado = true;
-    this.jobs.filter(j => j.status === 'Running').forEach(j => this.startWorker(j.id));
+    // Jobs created by the old IA search must not silently spend Snov credits
+    // merely because someone opened the Radar after this release.
+    for (const job of this.jobs.filter(j => j.status === 'Running' && j.sourceProvider !== 'snov_database')) {
+      await supabase.from('mining_jobs').update({status:'Paused',dados:{...job,status:'Paused',lastError:'Busca anterior pausada. Revise e retome para pesquisar pelo Snov.io.'}})
+        .eq('organization_id',this.organizationId).eq('id',job.id).eq('status','Running');
+    }
+    await this.refresh();
+    this.jobs.filter(j => j.status === 'Running' && j.sourceProvider === 'snov_database').forEach(j => this.startWorker(j.id));
   }
 
   public getJobs(): MiningJob[] {
@@ -66,6 +73,7 @@ export class MiningEngine {
     const { data: u } = await supabase.auth.getUser();
     const dados = {
       name: params.listName.trim(),
+      sourceProvider: 'snov_database',
       version: 1,
       configPayload: { ...params },
       filters: {
@@ -133,13 +141,10 @@ export class MiningEngine {
       } catch (e) {
         falhasSeguidas++;
         console.error('[Radar] página falhou:', e);
-        const billing = (e as { code?: string }).code === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(String((e as Error).message || e));
-        if (billing || falhasSeguidas >= 3) {
-          const provider = (e as { provider?: string }).provider === 'openai' ? 'openai' : 'anthropic';
-          const message = billing
-            ? `A API ${provider === 'openai' ? 'OpenAI' : 'da Anthropic'} está sem créditos. Confira o faturamento e depois retome esta lista.`
-            : 'A busca foi interrompida após três tentativas. Confira a integração e retome esta lista.';
-          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: billing ? 'AI_BILLING_REQUIRED' : 'RADAR_FAILED', lastErrorProvider: billing ? provider : null } }).eq('organization_id',this.organizationId).eq('id', jobId);
+        const status=(e as {status?:number}).status||0;
+        if (falhasSeguidas >= 3 || status===503 || status>=400 && status<500) {
+          const message = status ? String((e as Error).message).slice(0,300) : 'A busca foi interrompida após três tentativas. Confira a conexão Snov.io e retome esta lista.';
+          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: 'SNOV_SEARCH_FAILED', lastErrorProvider: 'snov' } }).eq('organization_id',this.organizationId).eq('id', jobId);
           if (updateError) console.error('[Radar] não foi possível registrar a interrupção:', updateError);
           await this.refresh();
           break;
