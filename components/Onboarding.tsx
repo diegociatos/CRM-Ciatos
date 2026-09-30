@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import './Onboarding.css';
 import { supabase } from '../lib/supabase';
 import { Lead, LeadStatus, OnboardingTemplate, User } from '../types';
 
@@ -25,44 +26,47 @@ function prazoInfo(s: Row) {
   return { txt: `Até ${dataBr(s.prazo)}`, cls: 'bg-slate-50 text-slate-600 border-slate-200' };
 }
 
-function Iniciar({ lead, templates, users, onDone }: { lead: Lead; templates: OnboardingTemplate[]; users: User[]; onDone: () => void }) {
-  const sugerido = templates.find(t => t.serviceType && t.serviceType === lead.serviceType) || templates[0];
+function Iniciar({ lead, templates, users, onDone, onCancel, onTemplates, guardRef }: { lead: Lead; templates: OnboardingTemplate[]; users: User[]; onDone: () => void; onCancel: () => void; onTemplates?: () => void; guardRef: React.MutableRefObject<()=>boolean> }) {
+  const modelosCompativeis = templates.filter(t => !t.serviceType || t.serviceType.toLocaleLowerCase('pt-BR') === (lead.serviceType || '').toLocaleLowerCase('pt-BR'));
+  const sugerido = modelosCompativeis[0];
   const [tpl, setTpl] = useState(sugerido?.id || '');
   const [inicio, setInicio] = useState((lead.contractStart || hojeIso()).slice(0, 10));
-  const [resp, setResp] = useState(lead.ownerId || users[0]?.id || '');
+  const [resp, setResp] = useState(users.some(u=>u.id===lead.ownerId)?lead.ownerId:users[0]?.id || '');
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState('');
-  const modelo = templates.find(t => t.id === tpl);
+  const initial=useRef(JSON.stringify([tpl,inicio,resp]));
+  useEffect(()=>{guardRef.current=()=>!busy&&(initial.current===JSON.stringify([tpl,inicio,resp])||window.confirm('Descartar a configuração ainda não iniciada?'));return()=>{guardRef.current=()=>true;};},[tpl,inicio,resp,busy,guardRef]);
+  const modelo = modelosCompativeis.find(t => t.id === tpl);
   const previa = useMemo(() => {
-    if (!modelo) return [];
+    if (!modelo || !inicio || !Number.isFinite(Date.parse(inicio))) return [];
     let d = new Date(`${inicio}T12:00:00Z`);
     return [...modelo.phases].sort((a, b) => a.order - b.order).map(f => {
-      d = new Date(d.getTime() + Math.max(0, f.defaultDueDays || 1) * 864e5); d = diaUtil(d);
+      d = new Date(d.getTime() + Math.max(0, f.defaultDueDays ?? 1) * 864e5); d = diaUtil(d);
       return { nome: f.name, prazo: d.toISOString().slice(0, 10), executor: (f as any).executor === 'cliente' ? 'Cliente' : 'Equipe' };
     });
   }, [modelo, inicio]);
   const iniciar = async () => {
+    if (busy || !inicio || !modelo?.phases.length || !resp) return;
     setBusy(true); setErro('');
-    const { error } = await supabase.rpc('start_onboarding', { lid: lead.id, tpl_id: tpl, inicio, resp: resp || null });
-    setBusy(false);
-    if (error) return setErro(msgErro(error));
-    onDone();
+    try { const { error } = await supabase.rpc('start_onboarding', { lid: lead.id, tpl_id: tpl, inicio, resp: resp || null });
+    if (error) throw error;
+    onDone(); } catch(e) { setErro(msgErro(e)); } finally { setBusy(false); }
   };
-  if (!templates.length) return <div className={`${card} p-6`}><h3 className="font-bold text-lg">Nenhum modelo de onboarding</h3><p className="text-sm text-slate-500 mt-1">Crie um modelo em Configurações → Jornadas de onboarding (fases, prazos e quem executa cada uma).</p></div>;
-  return <div className={`${card} p-6 space-y-4`}>
+  if (!modelosCompativeis.length) return <div className={`${card} p-6`}><h3 className="font-bold text-lg">Nenhum modelo para este serviço</h3><p className="text-sm text-slate-500 mt-1">Crie uma jornada para {lead.serviceType || 'o serviço do cliente'} antes de iniciar a implantação. Modelos de outros serviços não serão usados por engano.</p><button className={btnMain} onClick={onTemplates}>Configurar jornadas</button><button className={btn} onClick={()=>{if(guardRef.current())onCancel();}}>Voltar aos clientes</button></div>;
+  return <div className={`${card} ob-start p-6 space-y-4`}>
     <div><h3 className="font-bold text-lg">Iniciar onboarding de {lead.tradeName || lead.company || lead.name}</h3>
-      <p className="text-sm text-slate-500">As fases, os prazos e os responsáveis são criados a partir do modelo. Cada responsável recebe e-mail e convite no Outlook.</p></div>
+      <p className="text-sm text-slate-500">Revise o modelo, os prazos e o responsável antes de criar a jornada. Avisos e calendário dependem das integrações configuradas.</p></div>
     {erro && <p role="alert" className="text-sm text-red-700">{erro}</p>}
     <div className="grid md:grid-cols-3 gap-3">
-      <label className="text-sm">Modelo<select className={field} value={tpl} onChange={e => setTpl(e.target.value)}>{templates.map(t => <option key={t.id} value={t.id}>{t.name}{t.serviceType ? ` · ${t.serviceType}` : ''}</option>)}</select></label>
-      <label className="text-sm">Início<input type="date" className={field} value={inicio} onChange={e => setInicio(e.target.value)} /></label>
-      <label className="text-sm">Responsável padrão<select className={field} value={resp} onChange={e => setResp(e.target.value)}>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
+      <label className="text-sm">Modelo<select className={field} disabled={busy} value={tpl} onChange={e => setTpl(e.target.value)}>{modelosCompativeis.map(t => <option key={t.id} value={t.id}>{t.name}{t.serviceType ? ` · ${t.serviceType}` : ''}</option>)}</select></label>
+      <label className="text-sm">Início<input type="date" className={field} disabled={busy} value={inicio} onChange={e => setInicio(e.target.value)} /></label>
+      <label className="text-sm">Responsável padrão<select className={field} disabled={busy} value={resp} onChange={e => setResp(e.target.value)}><option value="">Selecione um responsável</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
     </div>
     {previa.length > 0 && <ol className="text-sm border border-slate-200 rounded-lg divide-y">{previa.map((p, i) => <li key={i} className="flex justify-between gap-3 px-3 py-2"><span><span className="text-slate-400 mr-2">{i + 1}.</span>{p.nome} <span className="text-xs text-slate-500">· {p.executor}</span></span><span className="text-slate-600">até {dataBr(p.prazo)}</span></li>)}</ol>}
-    <button className={btnMain} disabled={busy || !tpl} onClick={() => void iniciar()}>{busy ? 'Criando…' : 'Iniciar onboarding'}</button>
+    <div className="ob-savebar"><button className={btn} disabled={busy} onClick={()=>{if(guardRef.current())onCancel();}}>Voltar aos clientes</button><button className={btnMain} disabled={busy || !tpl || !inicio || !resp || !previa.length} onClick={() => void iniciar()}>{busy ? 'Criando…' : 'Confirmar e iniciar jornada'}</button></div>
   </div>;
 }
 
-function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Row; lead?: Lead; users: User[]; admin: boolean; onChanged: () => Promise<void>; onClose: () => void }) {
+function PainelFase({ step, lead, users, admin, onChanged, onClose, guardRef }: { step: Row; lead?: Lead; users: User[]; admin: boolean; onChanged: () => Promise<void>; onClose: () => void; guardRef: React.MutableRefObject<()=>boolean> }) {
   const [comentarios, setComentarios] = useState<Row[]>([]);
   const [arquivos, setArquivos] = useState<Row[]>([]);
   const [avisos, setAvisos] = useState<Row[]>([]);
@@ -71,12 +75,16 @@ function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Ro
   const [email, setEmail] = useState(step.cliente_email || '');
   const [busy, setBusy] = useState(false); const [erro, setErro] = useState(''); const [ok, setOk] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const panelRef=useRef<HTMLElement>(null);
+  useEffect(()=>{panelRef.current?.focus({preventScroll:true});panelRef.current?.scrollIntoView({behavior:'smooth',block:'start'});},[]);
+  useEffect(()=>{guardRef.current=()=>!busy&&(!(texto.trim()||prazo!==(step.prazo||'')||email!==(step.cliente_email||''))||window.confirm('Descartar as alterações não salvas desta fase?'));return()=>{guardRef.current=()=>true;};},[texto,prazo,email,step.prazo,step.cliente_email,busy,guardRef]);
   const carregar = useCallback(async () => {
     const [c, f, a] = await Promise.all([
       supabase.from('onboarding_comments').select('*').eq('step_id', step.id).order('created_at'),
       supabase.from('onboarding_files').select('*').eq('step_id', step.id).order('created_at'),
       supabase.from('onboarding_notifications').select('tipo,destinatario,status,sent_at,created_at').eq('step_id', step.id).order('created_at', { ascending: false }).limit(20),
     ]);
+    if(c.error||f.error||a.error){setErro('Não foi possível carregar todos os detalhes desta fase.');return;}
     setComentarios(c.data || []); setArquivos(f.data || []); setAvisos(a.data || []);
   }, [step.id]);
   useEffect(() => { setPrazo(step.prazo || ''); setEmail(step.cliente_email || ''); setErro(''); setOk(''); void carregar(); }, [step.id, step.prazo, step.cliente_email, carregar]);
@@ -104,21 +112,21 @@ function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Ro
   };
   const pi = prazoInfo(step);
   const resp = users.find(u => u.id === step.responsavel_id);
-  return <aside className={`${card} p-5 space-y-5`} aria-label="Detalhes da fase">
+  return <aside ref={panelRef} tabIndex={-1} className={`${card} ob-phase-detail p-5 space-y-5`} aria-label="Detalhes da fase">
     <div className="flex justify-between gap-3">
       <div><p className="text-xs uppercase tracking-wider text-slate-500">Fase {step.ordem + 1} · {step.executor === 'cliente' ? 'Executada pelo cliente' : 'Executada pela equipe'}</p>
         <h3 className="text-lg font-bold mt-1">{step.titulo}</h3>{lead && <p className="text-sm text-slate-500">{lead.tradeName || lead.company || lead.name}</p>}</div>
-      <button className="text-slate-400 hover:text-slate-700" aria-label="Fechar detalhes" onClick={onClose}>✕</button>
+      <button className="text-slate-400 hover:text-slate-700" aria-label="Fechar detalhes" disabled={busy} onClick={()=>{if(guardRef.current())onClose();}}>✕</button>
     </div>
     {step.descricao && <p className="text-sm text-slate-600 whitespace-pre-line">{step.descricao}</p>}
     <div className="flex flex-wrap gap-2 items-center"><span className={`text-xs border rounded-full px-2 py-1 ${pi.cls}`}>{pi.txt}</span>
       <span className="text-xs border rounded-full px-2 py-1 bg-slate-50 border-slate-200">{STATUS_LABEL[step.status]}</span>
-      <span className="text-xs text-slate-500" title={step.calendar_error || ''}>{step.calendar_event_id ? '📅 No Outlook do responsável' : step.calendar_error ? '📅 Convite com falha' : step.status !== 'Concluido' ? '📅 Convite a caminho' : ''}</span></div>
+      <span className="text-xs text-slate-500" title={step.calendar_error || ''}>{step.calendar_event_id ? '📅 No Outlook do responsável' : step.calendar_error ? '📅 Convite com falha' : step.status !== 'Concluido' ? 'Calendário ainda não sincronizado' : ''}</span></div>
     {erro && <p role="alert" className="text-sm text-red-700">{erro}</p>}{ok && <p role="status" className="text-sm text-emerald-700">{ok}</p>}
 
     <div className="flex flex-wrap gap-2">
       {step.status !== 'Concluido'
-        ? <button className="rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50" disabled={busy} onClick={() => void atualizar({ novo_status: 'Concluido' }, 'Fase concluída. A próxima foi liberada e o responsável avisado.')}>✓ Concluir fase</button>
+        ? <button className="rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50" disabled={busy} onClick={() => void atualizar({ novo_status: 'Concluido' }, 'Fase concluída. A jornada foi atualizada.')}>✓ Concluir fase</button>
         : <button className={btn} disabled={busy} onClick={() => void atualizar({ novo_status: 'Em Andamento' }, 'Fase reaberta.')}>Reabrir fase</button>}
       <select aria-label="Status da fase" className={`${field} w-auto`} value={step.status} disabled={busy} onChange={e => void atualizar({ novo_status: e.target.value }, 'Status atualizado.')}>
         {STATUS.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
@@ -127,13 +135,13 @@ function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Ro
 
     <div className="grid grid-cols-1 gap-3">
       <label className="text-sm">Responsável na equipe
-        <select className={field} value={step.responsavel_id || ''} disabled={busy} onChange={e => void atualizar({ novo_resp: e.target.value }, 'Responsável alterado e avisado por e-mail.')}>
+        <select className={field} value={step.responsavel_id || ''} disabled={busy} onChange={e => void atualizar({ novo_resp: e.target.value }, 'Responsável atualizado.')}>
           {!resp && <option value="">Sem responsável</option>}{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select></label>
       <div className="flex gap-2 items-end"><label className="text-sm flex-1">Prazo<input type="date" className={field} value={prazo} disabled={busy} onChange={e => setPrazo(e.target.value)} /></label>
-        <button className={btn} disabled={busy || !prazo || prazo === step.prazo} onClick={() => void atualizar({ novo_prazo: prazo }, 'Prazo atualizado (o convite do Outlook também).')}>Salvar</button></div>
+        <button className={btn} disabled={busy || !prazo || prazo === step.prazo} onClick={() => void atualizar({ novo_prazo: prazo }, 'Prazo atualizado.')}>Salvar</button></div>
       {step.executor === 'cliente' && <div className="flex gap-2 items-end"><label className="text-sm flex-1">E-mail do cliente para esta fase<input type="email" className={field} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} placeholder="contato@cliente.com.br" /></label>
-        <button className={btn} disabled={busy || email === (step.cliente_email || '')} onClick={() => void atualizar({ novo_cliente_email: email }, 'E-mail do cliente salvo; ele recebe o pedido desta fase.')}>Salvar</button></div>}
+        <button className={btn} disabled={busy || email === (step.cliente_email || '')} onClick={() => void atualizar({ novo_cliente_email: email }, 'E-mail do cliente salvo.')}>Salvar</button></div>}
     </div>
 
     <section className="space-y-2"><div className="flex justify-between items-center"><h4 className="font-bold text-sm">Anexos</h4>
@@ -150,7 +158,7 @@ function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Ro
     <section className="space-y-2"><h4 className="font-bold text-sm">Comentários</h4>
       {!comentarios.length && <p className="text-sm text-slate-500">Nenhum comentário.</p>}
       {comentarios.map(c => <div key={c.id} className="text-sm bg-slate-50 rounded-lg px-3 py-2"><p className="text-xs text-slate-500">{c.autor_nome} · {new Date(c.created_at).toLocaleString('pt-BR')}</p><p className="whitespace-pre-line">{c.texto}</p></div>)}
-      <textarea className={field} rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Registrar andamento…" />
+      <textarea className={field} aria-label="Comentário da fase" disabled={busy} rows={2} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Registrar andamento…" />
       <button className={btn} disabled={busy || !texto.trim()} onClick={() => void acao(async () => { const { error } = await supabase.rpc('add_onboarding_comment', { sid: step.id, texto }); if (error) throw error; setTexto(''); })}>Comentar</button>
     </section>
 
@@ -161,8 +169,9 @@ function PainelFase({ step, lead, users, admin, onChanged, onClose }: { step: Ro
   </aside>;
 }
 
-export default function Onboarding({ organizationId: org, companyName, leads, users, currentUser, templates, admin, abrirLeadId, onClearDeepLink }:
-  { organizationId: string; companyName: string; leads: Lead[]; users: User[]; currentUser: User; templates: OnboardingTemplate[]; admin: boolean; abrirLeadId?: string | null; onClearDeepLink?: () => void }) {
+export default function Onboarding({ organizationId: org, companyName, leads, users, currentUser, templates, admin, abrirLeadId, onClearDeepLink, onImport, onTemplates, onCustomers }:
+  { organizationId: string; companyName: string; leads: Lead[]; users: User[]; currentUser: User; templates: OnboardingTemplate[]; admin: boolean; abrirLeadId?: string | null; onClearDeepLink?: () => void; onImport?: () => void; onTemplates?: () => void; onCustomers?: () => void }) {
+  const guardRef=useRef<()=>boolean>(()=>true);
   const [steps, setSteps] = useState<Row[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
@@ -170,14 +179,17 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
   const [leadId, setLeadId] = useState<string | null>(abrirLeadId && abrirLeadId !== 'minhas' ? abrirLeadId : null);
   const [stepId, setStepId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState<'todos' | 'atrasados' | 'sem'>('todos');
+  const [filtro, setFiltro] = useState<'todos' | 'atrasados' | 'sem' | 'ativas' | 'aguardando' | 'proximas'>('todos');
 
+  const requestVersion=useRef(0);
   const carregar = useCallback(async () => {
-    const { data, error } = await supabase.from('onboarding_steps').select('*').eq('organization_id', org).order('ordem').limit(5000);
-    if (error) setErro('Não foi possível carregar o onboarding.'); else { setSteps(data || []); setErro(''); }
-    setCarregando(false);
+    const version=++requestVersion.current;
+    try { const { data, error } = await supabase.from('onboarding_steps').select('*').eq('organization_id', org).order('ordem').limit(5000);
+      if(error)throw error;if(version===requestVersion.current){setSteps(data||[]);setErro('');}
+    }catch(e){if(version===requestVersion.current)setErro('Não foi possível carregar o onboarding. Tente novamente.');}
+    finally{if(version===requestVersion.current)setCarregando(false);}
   }, [org]);
-  useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => {setCarregando(true);setSteps([]);void carregar();return()=>{requestVersion.current++;};}, [carregar]);
   useEffect(() => { if (abrirLeadId) onClearDeepLink?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clientes = useMemo(() => leads.filter(l => l.status === LeadStatus.WON || l.relacao === 'cliente' || steps.some(s => s.lead_id === l.id)), [leads, steps]);
@@ -194,9 +206,12 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
     const r = resumoLead(l.id);
     if (filtro === 'atrasados' && !r.atrasadas) return false;
     if (filtro === 'sem' && r.total) return false;
+    if (filtro === 'ativas' && (!r.total || r.feitas===r.total)) return false;
+    if (filtro === 'aguardando' && !(porLead.get(l.id)||[]).some(s=>s.status==='Aguardando Cliente')) return false;
+    if (filtro === 'proximas' && !(porLead.get(l.id)||[]).some(s=>s.status!=='Concluido'&&s.prazo>=h&&Date.parse(s.prazo)-Date.parse(h)<=7*864e5)) return false;
     return !busca || `${l.tradeName} ${l.company} ${l.name}`.toLowerCase().includes(busca.toLowerCase());
   }).sort((a, b) => resumoLead(b.id).atrasadas - resumoLead(a.id).atrasadas);
-  useEffect(() => { if (!leadId && listados.length && aba === 'clientes') setLeadId(listados[0].id); }, [listados, leadId, aba]);
+  useEffect(() => { if(aba==='clientes'&&!listados.some(l=>l.id===leadId)){setLeadId(listados[0]?.id||null);setStepId(null);} }, [listados, leadId, aba]);
 
   const abertos = steps.filter(s => s.status !== 'Concluido');
   const kpis = [
@@ -206,7 +221,7 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
     ['Aguardando cliente', abertos.filter(s => s.status === 'Aguardando Cliente').length],
   ] as const;
 
-  const lead = leads.find(l => l.id === leadId);
+  const lead = clientes.find(l => l.id === leadId);
   const fasesLead = leadId ? porLead.get(leadId) || [] : [];
   const stepSel = steps.find(s => s.id === stepId);
   const minhas = abertos.filter(s => s.responsavel_id === currentUser.id).sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999'));
@@ -215,39 +230,45 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
     ['Próximos 7 dias', minhas.filter(s => s.prazo && s.prazo > h && Date.parse(s.prazo) - Date.parse(h) <= 7 * 864e5)],
     ['Depois', minhas.filter(s => !s.prazo || Date.parse(s.prazo) - Date.parse(h) > 7 * 864e5)],
   ];
+  const temaEmpresa = /cafe/i.test(companyName) ? /cafe|cowork|endereço fiscal/i : /contab/i.test(companyName) ? /contab/i : /garcia|advog/i.test(companyName) ? /juríd|jurid|advog/i : /planejar|patrim/i.test(companyName) ? /holding|patrim/i : /log/i.test(companyName) ? /log/i : /bank/i.test(companyName) ? /bank|financ/i : /racionaliza/i.test(companyName) ? /racional/i : /reduza/i.test(companyName) ? /tribut|crédito|credito/i : /soluções|solucoes/i.test(companyName) ? /crise|consult|tribut|crédito|credito/i : /./;
+  const previewModel=templates.find(t=>temaEmpresa.test(`${t.serviceType} ${t.name}`));
   const nomeLead = (id: string) => { const l = leads.find(x => x.id === id); return l?.tradeName || l?.company || l?.name || 'Cliente'; };
   const nomeUser = (id?: string) => users.find(u => u.id === id)?.name || 'Sem responsável';
 
-  return <section className="space-y-6 text-slate-800">
-    <div className="flex flex-wrap justify-between items-end gap-4">
+  return <section className="onboarding-workspace space-y-6 text-slate-800">
+    <div className="ob-page-heading flex flex-wrap justify-between items-end gap-4">
       <div><p className="text-sm text-slate-500">{companyName}</p><h1 className="text-3xl font-bold">Onboarding do cliente</h1>
-        <p className="text-slate-500 mt-1">Cada fase com responsável, prazo, e-mail de aviso e convite no Outlook — ninguém esquece a sua parte.</p></div>
-      <div className="flex gap-2" role="tablist">{([['clientes', 'Clientes'], ['minhas', `Minhas fases${minhas.length ? ` (${minhas.length})` : ''}`]] as const).map(([id, t]) =>
-        <button key={id} role="tab" aria-selected={aba === id} className={aba === id ? btnMain : btn} onClick={() => { setAba(id); setStepId(null); }}>{t}</button>)}</div>
+        <p className="text-slate-500 mt-1">Da chegada do cliente à operação organizada. Cada etapa, um responsável e um próximo passo.</p></div>
+      <div className="ob-view-tabs flex gap-2" role="tablist" aria-label="Visão do onboarding">{([['clientes', 'Clientes'], ['minhas', `Minhas fases${minhas.length ? ` (${minhas.length})` : ''}`]] as const).map(([id, t]) =>
+        <button key={id} role="tab" aria-selected={aba === id} className={aba === id ? btnMain : btn} onClick={() => {if(!guardRef.current())return; setAba(id); setStepId(null); }}>{t}</button>)}</div>
     </div>
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">{kpis.map(([t, v]) => <div key={t} className={`${card} p-4`}><p className="text-sm text-slate-500">{t}</p><p className={`text-3xl font-bold mt-1 ${t === 'Fases atrasadas' && v ? 'text-red-700' : ''}`}>{v}</p></div>)}</div>
-    {erro && <p role="alert" className="p-3 bg-red-50 text-red-800 rounded-lg">{erro}</p>}
-    {carregando && <p role="status">Carregando…</p>}
+    {clientes.length>0&&<div className="ob-metrics grid grid-cols-2 xl:grid-cols-4 gap-4">{kpis.map(([t, v],i) => <button key={t} aria-label={`${t}: ${v}. Filtrar clientes`} onClick={()=>{if(!guardRef.current())return;setAba('clientes');setBusca('');setFiltro((['ativas','atrasados','proximas','aguardando'] as const)[i]);setStepId(null);}} className={`${card} p-4 text-left`}><p className="text-sm text-slate-500">{t}</p><p className={`text-3xl font-bold mt-1 ${t === 'Fases atrasadas' && v ? 'text-red-700' : ''}`}>{v}</p><span className="ob-metric-link">Ver clientes →</span></button>)}</div>}
+    {erro && <p role="alert" className="p-3 bg-red-50 text-red-800 rounded-lg">{erro} <button className={btn} onClick={()=>void carregar()}>Tentar novamente</button></p>}
+    {carregando && <p role="status" className="ob-loading">Carregando as jornadas de {companyName}…</p>}
 
-    {!carregando && aba === 'minhas' && <div className="grid xl:grid-cols-[1fr_380px] gap-6">
-      <div className="space-y-5">{!minhas.length && <div className={`${card} p-8 text-center`}><p className="text-lg font-bold">Tudo em dia ✓</p><p className="text-sm text-slate-500">Nenhuma fase aberta com você.</p></div>}
+    {!carregando && !erro && !clientes.length && aba==='clientes' && <div className="ob-welcome">
+      <div className="ob-welcome-main"><span className="ob-eyebrow">BOAS-VINDAS À OPERAÇÃO</span><h2>Uma boa parceria começa<br/>com uma chegada bem cuidada.</h2><p>Organize a entrada dos clientes da <strong>{companyName}</strong>: documentos, responsáveis e prazos em uma jornada que sua equipe consegue acompanhar.</p><div className="ob-welcome-actions"><button className={btnMain} onClick={onImport}>Importar carteira de clientes <span aria-hidden="true">↗</span></button><button className={btn} onClick={onCustomers}>Abrir base de clientes</button></div><p className="ob-footnote">Ao importar, escolha a relação “Cliente”. Negócios ganhos também aparecem aqui automaticamente.</p><div className="ob-getting-started">{[['01','Traga sua carteira','Cadastre os clientes na empresa em que você está trabalhando.'],['02','Prepare a jornada','Escolha o modelo, revise os prazos e defina quem acompanha.'],['03','Acompanhe a entrega','Registre documentos e avanços até concluir a implantação.']].map(([n,title,body])=><div key={n}><span>{n}</span><h3>{title}</h3><p>{body}</p></div>)}</div></div>
+      <aside className="ob-model-preview"><span className="ob-eyebrow">ANTES DE COMEÇAR</span><h2>{previewModel ? 'Sua jornada, preparada' : 'Uma jornada para sua operação'}</h2><p>{previewModel ? 'Revise o modelo usado pela equipe antes de receber o primeiro cliente.' : `Ainda não há um modelo específico para ${companyName}. Defina as fases que fazem sentido para este serviço.`}</p>{previewModel ? <><strong>{previewModel.name}</strong><ol>{previewModel.phases.slice().sort((a,b)=>a.order-b.order).slice(0,5).map((p,i)=><li key={p.id}><span>{i+1}</span><div><strong>{p.name}</strong><small>{p.executor==='cliente'?'Participação do cliente':'Responsabilidade da equipe'}</small></div></li>)}</ol><p className="ob-footnote">Prévia do modelo. Nenhuma implantação foi iniciada.</p></>:<p className="ob-footnote">A jornada será aplicada somente após sua revisão.</p>}{admin?<button className={btn} onClick={onTemplates}>{previewModel ? 'Revisar modelos de jornada' : 'Criar modelo de jornada'} →</button>:<p>Peça ao administrador para revisar os modelos da empresa.</p>}</aside>
+    </div>}
+    {!carregando && !erro && aba === 'minhas' && <div className="ob-mine-layout">
+      <div className="space-y-5">{!minhas.length && <div className={`${card} p-8 text-center`}><p className="text-lg font-bold">Nenhuma fase atribuída a você</p><p className="text-sm text-slate-500">As etapas sob sua responsabilidade aparecerão aqui, organizadas por prazo.</p></div>}
         {grupos.filter(([, fs]) => fs.length).map(([titulo, fs]) => <div key={titulo} className="space-y-2">
           <h2 className={`text-sm font-bold uppercase tracking-wider ${titulo === 'Atrasadas' ? 'text-red-700' : 'text-slate-500'}`}>{titulo} · {fs.length}</h2>
-          {fs.map(s => { const pi = prazoInfo(s); return <button key={s.id} onClick={() => { setStepId(s.id); setLeadId(s.lead_id); }} className={`${card} w-full text-left p-4 flex flex-wrap justify-between gap-3 hover:border-[#c5a059] ${stepId === s.id ? 'ring-2 ring-[#c5a059]' : ''}`}>
+          {fs.map(s => { const pi = prazoInfo(s); return <button key={s.id} onClick={() => {if(!guardRef.current())return; setStepId(s.id); setLeadId(s.lead_id); }} className={`${card} w-full text-left p-4 flex flex-wrap justify-between gap-3 hover:border-[#c5a059] ${stepId === s.id ? 'ring-2 ring-[#c5a059]' : ''}`}>
             <div><p className="font-semibold">{s.titulo}</p><p className="text-sm text-slate-500">{nomeLead(s.lead_id)} · {s.executor === 'cliente' ? 'aguardando o cliente' : STATUS_LABEL[s.status]}</p></div>
             <span className={`text-xs border rounded-full px-2 py-1 self-center ${pi.cls}`}>{pi.txt}</span></button>; })}
         </div>)}</div>
-      {stepSel && <PainelFase step={stepSel} lead={leads.find(l => l.id === stepSel.lead_id)} users={users} admin={admin} onChanged={carregar} onClose={() => setStepId(null)} />}
+      {stepSel && <PainelFase guardRef={guardRef} key={stepSel.id} step={stepSel} lead={leads.find(l => l.id === stepSel.lead_id)} users={users} admin={admin} onChanged={carregar} onClose={() => setStepId(null)} />}
     </div>}
 
-    {!carregando && aba === 'clientes' && <div className="grid lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_380px] gap-6 items-start">
-      <div className={`${card} p-3 space-y-3`}>
-        <input className={field} placeholder="Buscar cliente" value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar cliente" />
-        <div className="flex gap-1 flex-wrap">{([['todos', 'Todos'], ['atrasados', 'Com atraso'], ['sem', 'Sem onboarding']] as const).map(([id, t]) =>
-          <button key={id} aria-pressed={filtro === id} onClick={() => setFiltro(id)} className={`text-xs rounded-full px-3 py-1 border ${filtro === id ? 'bg-[#0a192f] text-white border-[#0a192f]' : 'bg-white border-slate-300'}`}>{t}</button>)}</div>
+    {!carregando && !erro && clientes.length>0 && aba === 'clientes' && <div className="ob-client-layout">
+      <div className={`${card} ob-client-picker p-3 space-y-3`}><h2 className="ob-section-label">Sua carteira · {clientes.length}</h2>
+        <input className={field} placeholder="Buscar cliente" value={busca} onChange={e => {if(guardRef.current())setBusca(e.target.value);}} aria-label="Buscar cliente" />
+        <div className="flex gap-1 flex-wrap">{([['todos', 'Todos'], ['ativas','Em implantação'], ['atrasados', 'Com atraso'], ['sem', 'Não iniciados'], ['aguardando','Aguardando cliente'], ['proximas','Próximos 7 dias']] as const).map(([id, t]) =>
+          <button key={id} aria-pressed={filtro === id} onClick={() => {if(guardRef.current())setFiltro(id);}} className={`text-xs rounded-full px-3 py-1 border ${filtro === id ? 'bg-[#0a192f] text-white border-[#0a192f]' : 'bg-white border-slate-300'}`}>{t}</button>)}</div>
         <div className="max-h-[65vh] overflow-y-auto space-y-2">
-          {!listados.length && <p className="text-sm text-slate-500 p-2">Nenhum cliente. Clientes aparecem aqui ao fechar contrato ou ao importar a carteira.</p>}
-          {listados.map(l => { const r = resumoLead(l.id); return <button key={l.id} onClick={() => { setLeadId(l.id); setStepId(null); }}
+          {!listados.length && <div className="ob-no-results"><p>Nenhum cliente corresponde à busca ou ao filtro.</p><button className={btn} onClick={()=>{setBusca('');setFiltro('todos');}}>Limpar filtros</button></div>}
+          {listados.map(l => { const r = resumoLead(l.id); return <button key={l.id} onClick={() => {if(!guardRef.current())return; setLeadId(l.id); setStepId(null); }}
             className={`w-full text-left rounded-lg border p-3 ${leadId === l.id ? 'border-[#c5a059] bg-amber-50/40' : 'border-slate-200 hover:bg-slate-50'}`}>
             <div className="flex justify-between gap-2"><p className="font-semibold truncate">{l.tradeName || l.company || l.name}</p>{r.atrasadas > 0 && <span className="text-xs text-red-700 font-bold whitespace-nowrap">{r.atrasadas} atrasada(s)</span>}</div>
             {r.total ? <>
@@ -259,16 +280,16 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
       </div>
 
       <div className="space-y-4 min-w-0">
-        {!lead && <div className={`${card} p-8 text-center text-slate-500`}>Selecione um cliente.</div>}
-        {lead && !fasesLead.length && <Iniciar lead={lead} templates={templates} users={users} onDone={() => void carregar()} />}
-        {lead && fasesLead.length > 0 && <div className={`${card} p-5`}>
+        {!lead && <div className={`${card} ob-no-results`}><h2>Nenhuma jornada nesta seleção</h2><p>Ajuste os filtros para encontrar o cliente que deseja acompanhar.</p></div>}
+        {lead && !fasesLead.length && <Iniciar guardRef={guardRef} key={lead.id} onCancel={()=>onCustomers?.()} onTemplates={onTemplates} lead={lead} templates={templates} users={users} onDone={() => void carregar()} />}
+        {lead && fasesLead.length > 0 && <div className={`${card} ob-journey p-5`}>
           <div className="flex flex-wrap justify-between gap-3 mb-4">
             <div><h2 className="text-xl font-bold">{lead.tradeName || lead.company || lead.name}</h2><p className="text-sm text-slate-500">{lead.serviceType || 'Serviço não informado'} · {resumoLead(lead.id).feitas} de {fasesLead.length} fases concluídas</p></div>
             {admin && <button className={btn} onClick={async () => { if (!window.confirm('Reiniciar o onboarding deste cliente? As fases, comentários e anexos serão apagados e os convites do Outlook cancelados.')) return; const { error } = await supabase.rpc('reset_onboarding', { lid: lead.id }); if (error) return setErro(msgErro(error)); setStepId(null); await carregar(); }}>Reiniciar</button>}
           </div>
-          <ol className="relative space-y-3">
+          <div className="ob-progress-summary"><strong>{resumoLead(lead.id).pct}% concluído</strong><span>{resumoLead(lead.id).proxima ? `Próximo passo: ${resumoLead(lead.id).proxima.titulo}` : 'Implantação concluída'}</span><progress max="100" value={resumoLead(lead.id).pct} aria-label="Progresso da implantação"/></div><ol className="ob-timeline relative space-y-3">
             {fasesLead.map((s, i) => { const pi = prazoInfo(s); const feito = s.status === 'Concluido'; const liberada = fasesLead.slice(0, i).every(a => !a.obrigatoria || a.status === 'Concluido');
-              return <li key={s.id}><button onClick={() => setStepId(s.id)} className={`w-full text-left flex gap-4 rounded-xl border p-4 transition ${stepId === s.id ? 'border-[#c5a059] ring-2 ring-[#c5a059]/30' : 'border-slate-200 hover:border-slate-300'} ${!liberada && !feito ? 'opacity-70' : ''}`}>
+              return <li key={s.id}><button onClick={() => {if(guardRef.current())setStepId(s.id);}} className={`w-full text-left flex gap-4 rounded-xl border p-4 transition ${stepId === s.id ? 'border-[#c5a059] ring-2 ring-[#c5a059]/30' : 'border-slate-200 hover:border-slate-300'} ${!liberada && !feito ? 'opacity-70' : ''}`}>
                 <span className={`shrink-0 w-9 h-9 rounded-full grid place-items-center text-sm font-bold ${feito ? 'bg-emerald-600 text-white' : liberada ? 'bg-[#0a192f] text-white' : 'bg-slate-100 text-slate-500'}`}>{feito ? '✓' : i + 1}</span>
                 <span className="flex-1 min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="font-semibold">{s.titulo}</span>
                   <span className={`text-xs rounded-full px-2 py-0.5 ${s.executor === 'cliente' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>{s.executor === 'cliente' ? 'Cliente' : 'Equipe'}</span>
@@ -279,7 +300,7 @@ export default function Onboarding({ organizationId: org, companyName, leads, us
           </ol>
         </div>}
       </div>
-      {stepSel && lead && stepSel.lead_id === lead.id && <div className="lg:col-span-2 xl:col-span-1"><PainelFase step={stepSel} lead={lead} users={users} admin={admin} onChanged={carregar} onClose={() => setStepId(null)} /></div>}
+      {stepSel && lead && stepSel.lead_id === lead.id && <div className="ob-detail-row"><PainelFase guardRef={guardRef} key={stepSel.id} step={stepSel} lead={lead} users={users} admin={admin} onChanged={carregar} onClose={() => setStepId(null)} /></div>}
     </div>}
   </section>;
 }

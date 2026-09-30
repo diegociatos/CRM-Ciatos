@@ -2,6 +2,8 @@ import { env, service, rpc, json } from '../_shared/runtime.ts';
 import { renderMessage, renderBroadcast, decide } from '../_shared/outreach.ts';
 import { abrirRemetente, GraphError } from '../_shared/ms365.ts';
 import { renderAviso, eventoFase, eventoAgenda } from '../_shared/onboarding.ts';
+import { processSdr, cadenceHtml, hotAlertText } from '../_shared/sdr.ts';
+import { processSdrInbox } from '../_shared/sdrInbox.ts';
 
 const appUrl = () => (env('CRM_APP_URLS') || 'https://crm.grupociatos.com.br').split(',')[0].trim();
 
@@ -12,7 +14,7 @@ const obterTransacional = (db: Db) => (remetenteTransacional ??= abrirRemetente(
 
 async function processOnboarding(db: Db): Promise<string> {
   await rpc(db, 'enqueue_onboarding_reminders');
-  const lote = await rpc(db, 'claim_onboarding_notifications', { max_n: 10 });
+  const lote = await rpc(db, 'claim_onboarding_notifications', { max_n: 5 });
   if (!lote) return 'idle';
   let envio: Remetente | null = null;
   try { envio = await obterTransacional(db); } catch { /* falha abaixo, com nova tentativa */ }
@@ -119,7 +121,11 @@ async function processOutreach(db: Db): Promise<string> {
       if (job.dry_run) outcome = 'simulated';
       else {
         const r = await obterRemetente(db);
-        await r.enviar({ from: gate.sender, fromName: gate.sender_name, replyTo: gate.reply_to, to: job.lead.email, subject: message!.subject, text: message!.text });
+        const {data:identity,error:identityError}=await db.from('automation_jobs').select('reply_token,tracking_token').eq('id',job.id).single();
+        const {data:settings,error:settingsError}=await db.from('sdr_settings').select('tracking_enabled').eq('organization_id',job.organization_id).maybeSingle();
+        if(identityError||settingsError)throw new Error('tracking_configuration_failed');
+        const pixel=settings?.tracking_enabled?`${env('SUPABASE_URL')}/functions/v1/crm-email-open?t=${identity.tracking_token}`:undefined;
+        await r.enviar({ from: gate.sender, fromName: gate.sender_name, replyTo: gate.reply_to, to: job.lead.email, subject: `${message!.subject} [Ciatos:${identity.reply_token}]`, html:cadenceHtml(message!.text,pixel) });
         outcome = 'sent';
       }
     } else if (job.kind === 'AI_DECISION') {
@@ -171,11 +177,38 @@ Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   if (!env('CRM_WORKER_SECRET') || req.headers.get('Authorization') !== `Bearer ${env('CRM_WORKER_SECRET')}`) return json({ error: 'unauthorized' }, 401);
   const db = service();
+  const workerLease=await rpc(db,'claim_sdr_worker');
+  if(!workerLease)return json({status:'already_running'});
   remetente = null; remetenteTransacional = null;
-  const status: Record<string, string> = {};
+  const aiProvider=env('CRM_AI_PROVIDER')||'openai';
+  const aiConfigured=['openai','anthropic'].includes(aiProvider)
+    && !!env(aiProvider==='openai'?'CRM_OPENAI_MODEL':'CRM_CLAUDE_MODEL')
+    && !!env(aiProvider==='openai'?'OPENAI_API_KEY':'ANTHROPIC_API_KEY');
+  const status: Record<string, string> = {
+    snov:env('SNOV_CLIENT_ID')&&env('SNOV_CLIENT_SECRET')?(env('CRM_SNOV_ENABLED')==='true'?'configured':'disabled'):'credentials_missing',
+    ai:env('CRM_AI_ENABLED')!=='true'?'disabled':aiConfigured?'configured':'credentials_missing',
+    ai_provider:aiProvider,
+  };
+  // Read replies before sending the next step. A failure is observable and new autonomous
+  // enrollments remain behind company settings; unrelated onboarding is not affected.
+  try {
+    if(env('CRM_REPLY_READ_ENABLED')==='true'){
+      const r=await abrirRemetente(env,db,{ignorarInterruptor:true,readReplies:true});status.inbox=await processSdrInbox(db,env,r.graph);
+    }else status.inbox='read_permission_required';
+  }catch{status.inbox='needs_configuration';}
+  try { status.agent=await processSdr(db,env); }catch{status.agent='error';}
   try { status.outreach = await processOutreach(db); } catch { status.outreach = 'error'; }
   try { status.broadcast = await processBroadcast(db); } catch { status.broadcast = 'error'; }
   try { status.onboarding = await processOnboarding(db); } catch { status.onboarding = 'error'; }
   try { status.calendar = await processCalendar(db); } catch { status.calendar = 'error'; }
+  try {
+    const alert=await rpc(db,'claim_sdr_alert');
+    if(alert){
+      let ok=false;
+      try{const r=await obterTransacional(db);await r.enviar({from:alert.sender||r.enviaComoPadrao,to:alert.recipient,subject:'Ciatos CRM · lead quente para atendimento',text:hotAlertText(alert,appUrl())});ok=true;}catch{ /* Uncertain sends are reviewed, never blindly retried. */ }
+      await rpc(db,'finish_sdr_alert',{aid:alert.id,token:alert.mail_lease,ok});status.hot_alert=ok?'sent':'review';
+    }
+  }catch{status.hot_alert='error';}
+  await rpc(db,'finish_sdr_worker',{token:workerLease,report:status});
   return json({ status });
 });

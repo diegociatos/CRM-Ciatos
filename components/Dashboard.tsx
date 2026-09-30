@@ -1,11 +1,14 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
+import {supabase} from '../lib/supabase';
 import { Lead, LeadStatus, Notification, User, AgendaEvent, NavigationState } from '../types';
 interface DashboardProps {
   leads: Lead[]; tasks: any[]; notifications: Notification[]; currentUser: User;
-  agendaEvents?: AgendaEvent[]; onNavigate?: (view: NavigationState['view']) => void; onCreate?: () => void;
+  agendaEvents?: AgendaEvent[]; onNavigate?: (view: NavigationState['view']) => void; onCreate?: () => void; companyId?:string; companyName?:string; onOpenCadences?:()=>void;
 }
 const Arrow = () => <span aria-hidden="true">↗</span>;
-export default function Dashboard({leads,currentUser,agendaEvents=[],onNavigate,onCreate}:DashboardProps) {
+export default function Dashboard({leads,currentUser,agendaEvents=[],onNavigate,onCreate,companyId,companyName,onOpenCadences}:DashboardProps) {
+  const [campaigns,setCampaigns]=useState<Array<{id:string;nome:string;status:string}>>([]);
+  useEffect(()=>{let active=true;setCampaigns([]);if(!companyId)return;supabase.from('outreach_sequences').select('id,nome,status').eq('organization_id',companyId).order('created_at',{ascending:false}).limit(12).then(({data})=>{if(active)setCampaigns(data||[])});return()=>{active=false;};},[companyId]);
   const active = leads.filter(l => !l.inQueue && l.status!==LeadStatus.WON && l.status!==LeadStatus.LOST);
   const clients = leads.filter(l => l.status===LeadStatus.WON);
   const queued = leads.filter(l => l.inQueue && l.status!==LeadStatus.LOST && l.status!==LeadStatus.WON);
@@ -17,8 +20,15 @@ export default function Dashboard({leads,currentUser,agendaEvents=[],onNavigate,
     {label:'Clientes conquistados',count:clients.length,color:'#193b40'},
   ];
   const max = Math.max(1,...stages.map(s=>s.count));
+  const today = new Date();
+  const localDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const drafts = campaigns.filter(c=>c.status==='DRAFT').length;
+  const statusLabel=(status:string)=>status==='DRAFT'?'Rascunho':status==='ACTIVE'?'Ativa':status==='PAUSED'?'Pausada':status;
+  const campaignDescription=(status:string)=>status==='DRAFT'?'Leia as mensagens e ajuste o público antes de ativar.':status==='ACTIVE'?'Acompanhe a sequência e os próximos contatos.':'Revise a sequência antes de retomar os contatos.';
+  const shortCampaignName=(name:string)=>companyName&&name.toLocaleLowerCase('pt-BR').startsWith(`${companyName} — `.toLocaleLowerCase('pt-BR'))?name.slice(companyName.length+3):name;
   return <div className="overview">
-    <div className="page-heading"><div><p className="eyebrow">VISÃO GERAL</p><h1>Seu próximo negócio começa aqui<span>.</span></h1><p>Olá, {currentUser.name.split(' ')[0]}. Um lugar para cuidar de cada relacionamento.</p></div><time className="date-chip">{new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}</time></div>
+    <div className="page-heading overview-welcome"><div><p className="eyebrow">VISÃO GERAL <span aria-hidden="true">/</span> {companyName||'Grupo Ciatos'}</p><h1>Seu próximo negócio começa aqui<span>.</span></h1><p>Olá, {currentUser.name.split(' ')[0]}. Um lugar para cuidar de cada relacionamento.</p></div><div className="overview-date"><span>HOJE</span><time dateTime={localDate}>{today.toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}</time></div></div>
+    {campaigns.length>0 && <section className="campaign-showcase" aria-label="Cadências da empresa"><div className="campaign-showcase-heading"><div><p className="campaign-kicker"><span aria-hidden="true"/> PLANEJAMENTO DE CONTATO</p><h2>Cadências de {companyName||'sua empresa'}</h2><p>{drafts>0?`${drafts} ${drafts===1?'campanha aguarda':'campanhas aguardam'} sua revisão. Leia cada sequência antes de ativar.`:'Acompanhe as campanhas e mantenha cada conversa no caminho certo.'}</p></div><div className="campaign-total"><strong>{String(campaigns.length).padStart(2,'0')}</strong><span>{campaigns.length===1?'cadência nesta empresa':'cadências nesta empresa'}</span></div></div><div className="campaign-cards">{campaigns.map((c,i)=><button key={c.id} type="button" onClick={onOpenCadences} className="campaign-card" aria-label={`${c.nome}, ${statusLabel(c.status)}, ver e-mails`}><span className="campaign-card-top"><span className="campaign-index">{String(i+1).padStart(2,'0')}</span><span className={`campaign-status ${c.status.toLowerCase()}`}>{statusLabel(c.status)}</span></span><strong>{shortCampaignName(c.nome)}</strong><span className="campaign-card-description">{campaignDescription(c.status)}</span><span className="campaign-card-action">Ler os e-mails <span aria-hidden="true">↗</span></span></button>)}</div><div className="campaign-showcase-footer"><span>Conteúdo, público e horário merecem uma última revisão.</span><button type="button" onClick={onOpenCadences}>Abrir cadências <Arrow/></button></div></section>}
     <section className="overview-hero" aria-label="Central de relacionamento"><div className="hero-copy"><span className="hero-kicker"><span className="gold-dot"/> INTELIGÊNCIA COMERCIAL CIATOS</span><h2>Mais conexões.<br/><em>Novas possibilidades.</em></h2><p>Organize sua carteira, acompanhe as cadências e entre na conversa quando sua atenção fizer a diferença.</p><div className="hero-actions"><button className="btn-gold" onClick={()=>onNavigate?.('ai_center')}>Abrir Central da IA <Arrow/></button><button className="hero-link" onClick={()=>onNavigate?.('customers')}>Ver clientes da empresa →</button></div></div><div className="hero-journey" aria-label="Etapas do relacionamento"><div className="journey-line"/>{[['01','Conhecer','Clientes e suas necessidades'],['02','Conectar','Oportunidades entre serviços'],['03','Conversar','Sua experiência no momento certo']].map(([n,title,sub])=><div className="journey-step" key={n}><span>{n}</span><div><strong>{title}</strong><p>{sub}</p></div></div>)}</div></section>
     <div className="overview-metrics">{[
       {label:'Relacionamentos na base',value:leads.length,note:'Todos os contatos cadastrados',view:'qualification',symbol:'◎'},

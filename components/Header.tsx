@@ -74,27 +74,27 @@ const Header: React.FC<HeaderProps> = ({
           {showDropdown && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)}></div>
-              <div className="absolute right-0 mt-4 w-96 bg-white border border-slate-100 rounded-[2rem] shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="absolute right-0 mt-4 w-96 max-w-[90vw] bg-white border border-slate-100 rounded-2xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="p-6 bg-[#0a192f] text-white flex justify-between items-center">
                   <div>
                     <h3 className="font-bold text-lg serif-authority">Central de Alertas</h3>
                     <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Notificações da conta</p>
                   </div>
-                  <button onClick={onClearAll} className="text-[10px] font-bold text-[#c5a059] hover:text-white uppercase tracking-tighter transition">Limpar Tudo</button>
+                  <button onClick={onClearAll} className="text-xs font-bold text-[#e2c18a] hover:text-white transition">Marcar todas como lidas</button>
                 </div>
                 <div className="max-h-[450px] overflow-y-auto divide-y divide-slate-50">
                   {notifications.length === 0 ? (
                     <div className="p-12 text-center text-slate-400 italic text-sm">Nenhum evento pendente.</div>
                   ) : (
                     notifications.map(note => (
-                      <div key={note.id} onClick={() => onMarkRead(note.id)} className="p-5 hover:bg-slate-50 transition cursor-pointer flex gap-4">
+                      <button type="button" key={note.id} onClick={() => {onMarkRead(note.id);if(note.leadId){onSelectLead(note.leadId);setShowDropdown(false);}}} className="w-full text-left p-5 hover:bg-slate-50 transition cursor-pointer flex gap-4">
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-800 leading-snug">{note.title}</p>
                           <p className="text-xs text-slate-500 mt-1">{note.message}</p>
                           <p className="text-[9px] font-black text-slate-300 uppercase mt-2">{note.timestamp}</p>
                         </div>
                         {!note.read && <div className="w-2 h-2 rounded-full bg-[#c5a059] self-center"></div>}
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>

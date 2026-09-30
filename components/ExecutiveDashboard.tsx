@@ -11,9 +11,10 @@ interface ExecutiveDashboardProps {
   users: User[];
   config: SystemConfig;
   userGoals: UserGoal[];
+  companyName?: string;
 }
 
-const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, config, userGoals }) => {
+const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, config, userGoals, companyName }) => {
   
   // --- HELPERS DE PROCESSAMENTO ---
   const parseCurrency = (val?: string) => {
@@ -98,17 +99,17 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
   const labelHeader = "text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 block";
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-1000 bg-[#050a15] rounded-2xl p-5 md:p-8 min-h-screen text-slate-300">
+    <div className="executive-dashboard space-y-8 animate-in fade-in duration-1000 bg-[#050a15] rounded-2xl p-5 md:p-8 min-h-screen text-slate-300">
       
       {/* HEADER EXECUTIVO */}
       <div className="flex flex-wrap gap-4 justify-between items-end border-b border-white/10 pb-10">
         <div>
            <div className="flex items-center gap-3 mb-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]"></div>
-              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Dados da sessão atual</span>
+              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Dados desta empresa</span>
            </div>
-           <h1 className="text-5xl font-black text-white serif-authority tracking-tighter">BI Executivo <span className={goldText}>Ciatos</span></h1>
-           <p className="text-slate-500 font-medium text-lg">Visão macro estratégica de performance e governança.</p>
+           <h1 className="text-4xl font-bold text-white serif-authority tracking-tight">Visão estratégica <span className={goldText}>{companyName || 'Ciatos'}</span></h1>
+           <p className="text-slate-300 text-base">Indicadores de desempenho e acompanhamento da operação comercial.</p>
         </div>
         
         <div className="flex gap-4">
@@ -119,18 +120,20 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ leads, users, c
         </div>
       </div>
 
+      {leads.length === 0 && <div className="rounded-xl border border-[#c5a059]/30 bg-[#c5a059]/10 px-5 py-4 text-sm text-slate-200">Esta empresa ainda não tem contatos no CRM. Os indicadores abaixo começarão a mostrar resultados quando houver leads e contratos registrados.</div>}
+
       {/* LINHA 1: KPIs FINANCEIROS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
          <div className={cardClass}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-[#c5a059]/5 rounded-full blur-3xl group-hover:scale-150 transition-all"></div>
             <label className={labelHeader}>Pipeline Total</label>
-            <p className="text-4xl font-black text-white serif-authority">R$ {(biData.totalPipelineValue / 1000000).toFixed(1)}M</p>
+            <p className="text-4xl font-black text-white serif-authority">{biData.totalPipelineValue ? `R$ ${(biData.totalPipelineValue / 1000000).toFixed(1)}M` : 'R$ 0'}</p>
             <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase">Volume Prospectado</p>
          </div>
 
          <div className={cardClass}>
             <label className={labelHeader}>Receita Mensal (WON)</label>
-            <p className="text-4xl font-black text-emerald-400 serif-authority">R$ {(biData.monthlyRevenue / 1000).toFixed(0)}k</p>
+            <p className="text-4xl font-black text-emerald-400 serif-authority">{biData.monthlyRevenue ? `R$ ${(biData.monthlyRevenue / 1000).toFixed(0)}k` : 'R$ 0'}</p>
             <div className="mt-4 flex items-center gap-2">
                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
                   <div className="h-full bg-emerald-500" style={{ width: `${biData.goalReach}%` }}></div>

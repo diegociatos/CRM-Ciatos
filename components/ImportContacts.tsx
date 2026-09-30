@@ -178,7 +178,7 @@ export default function ImportContacts({ organizationId, companyName, onImported
         <h2 className="font-bold text-lg">2. Escolha a planilha</h2>
         <button type="button" className="ux-secondary" onClick={modeloCsv}>Baixar planilha modelo</button>
       </div>
-      <input type="file" accept=".csv,.txt,.xlsx,.xls" onChange={escolher} disabled={lendo || importando} aria-label="Arquivo da planilha" />
+      <div className="import-file-zone"><p>Escolha um arquivo Excel ou CSV</p><span>Até aqui os dados não foram importados. Você poderá conferir as colunas antes de salvar.</span><input className="import-file-input" type="file" accept=".csv,.txt,.xlsx,.xls" onChange={escolher} disabled={lendo || importando} aria-label="Arquivo da planilha" /></div>
       {lendo && <p role="status">Lendo planilha…</p>}
       {arquivo && <p className="text-sm">Arquivo: <strong>{arquivo}</strong> · {resumo.total} linha(s)</p>}
     </div>

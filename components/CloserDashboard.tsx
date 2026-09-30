@@ -67,7 +67,7 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
   const labelClass = "text-[10px] font-black text-[#c5a059] uppercase tracking-[0.2em] mb-2 block";
 
   return (
-    <div className="flex gap-8 animate-in fade-in duration-700">
+    <div className="performance-dashboard flex gap-8 animate-in fade-in duration-700">
       <div className="flex-1 space-y-10">
         {/* HEADER EXECUTIVO */}
         <div className="flex justify-between items-start">
@@ -106,7 +106,7 @@ const CloserDashboard: React.FC<CloserDashboardProps> = ({ currentUser, allUsers
                     </div>
                  </div>
                  <div className="text-right">
-                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyProgress}%</p>
+                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyGoal > 0 ? `${metrics.dailyProgress}%` : '—'}</p>
                     <p className="text-[8px] font-black uppercase text-slate-500">Atingimento Dia</p>
                  </div>
               </div>

@@ -1,6 +1,6 @@
 // Radar: buscas e resultados ficam em crm.mining_jobs / crm.mining_leads.
-// Cada "página" é processada no servidor (Edge Function crm-ia → Claude + web
-// search + validação na Receita). O navegador só dispara as páginas em série
+// Cada página é processada no servidor pela Database Search do Snov.io.
+// O navegador só dispara as páginas em série
 // enquanto a busca estiver "Running" e mantém um cache para as telas.
 
 import { MiningJob, MiningLead, CompanySize } from '../types';
@@ -31,7 +31,14 @@ export class MiningEngine {
     await this.refresh();
     if (this.iniciado||this.disposed) return;
     this.iniciado = true;
-    this.jobs.filter(j => j.status === 'Running').forEach(j => this.startWorker(j.id));
+    // Jobs created by the old IA search must not silently spend Snov credits
+    // merely because someone opened the Radar after this release.
+    for (const job of this.jobs.filter(j => j.status === 'Running' && j.sourceProvider !== 'snov_database')) {
+      await supabase.from('mining_jobs').update({status:'Paused',dados:{...job,status:'Paused',lastError:'Busca anterior pausada. Revise e retome para pesquisar pelo Snov.io.'}})
+        .eq('organization_id',this.organizationId).eq('id',job.id).eq('status','Running');
+    }
+    await this.refresh();
+    this.jobs.filter(j => j.status === 'Running' && j.sourceProvider === 'snov_database').forEach(j => this.startWorker(j.id));
   }
 
   public getJobs(): MiningJob[] {
@@ -53,19 +60,20 @@ export class MiningEngine {
   public async loadLeads(jobId: string) {
     const { data, error } = await supabase.from('mining_leads').select('*')
       .eq('organization_id',this.organizationId).eq('job_id', jobId).eq('imported', false).order('created_at', { ascending: false }).limit(1000);
-    if (error) { console.error('[Radar]', error.message); return; }
+    if (error) throw new Error('Não foi possível carregar os resultados do Radar.');
     this.leads[jobId] = (data as MLeadRow[]).map(leadDeRow);
     emitir();
   }
 
   public async createJob(params: {
-    segmentName: string; state: string; city: string; size: CompanySize | 'all';
+    listName: string; segmentName: string; state: string; city: string; size: CompanySize | 'all';
     taxRegime: string; targetCount: number; fiscalFilter: 'Dívida Ativa' | 'Indiferente';
     autoCreateSegment: boolean; enrich: boolean;
   }): Promise<MiningJob> {
     const { data: u } = await supabase.auth.getUser();
     const dados = {
-      name: params.segmentName,
+      name: params.listName.trim(),
+      sourceProvider: 'snov_database',
       version: 1,
       configPayload: { ...params },
       filters: {
@@ -98,7 +106,7 @@ export class MiningEngine {
     const status = action === 'pause' ? 'Paused' : action === 'resume' ? 'Running' : 'Cancelled';
     const job = this.jobs.find(j => j.id === jobId);
     const { error } = await supabase.from('mining_jobs')
-      .update({ status, dados: { ...(job || {}), status } }).eq('organization_id',this.organizationId).eq('id', jobId);
+      .update({ status, dados: { ...(job || {}), status, ...(action === 'resume' ? { lastError: null, lastErrorCode: null, lastErrorProvider: null } : {}) } }).eq('organization_id',this.organizationId).eq('id', jobId);
     if (error) return alert(`Atualizar busca: ${error.message}`);
     await this.refresh();
     if (status === 'Running') this.startWorker(jobId);
@@ -109,9 +117,10 @@ export class MiningEngine {
     return this.controlJob(jobId, 'delete');
   }
 
-  public async markAsImported(jobId: string, cnpjRaw: string) {
-    await supabase.from('mining_leads').update({ imported: true }).eq('organization_id',this.organizationId).eq('job_id', jobId).eq('cnpj_raw', cnpjRaw);
-    if (this.leads[jobId]) this.leads[jobId] = this.leads[jobId].map(l => l.cnpjRaw === cnpjRaw ? { ...l, isImported: true } : l);
+  public async markAsImported(jobId: string, leadId: string) {
+    const {error}=await supabase.from('mining_leads').update({ imported: true }).eq('organization_id',this.organizationId).eq('job_id', jobId).eq('id', leadId);
+    if(error)throw new Error('O contato foi cadastrado, mas não foi possível atualizar a lista.');
+    if (this.leads[jobId]) this.leads[jobId] = this.leads[jobId].map(l => l.id === leadId ? { ...l, isImported: true } : l);
     emitir();
   }
 
@@ -132,10 +141,12 @@ export class MiningEngine {
       } catch (e) {
         falhasSeguidas++;
         console.error('[Radar] página falhou:', e);
-        if (falhasSeguidas >= 3) {
-          await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: String((e as Error).message || e) } }).eq('organization_id',this.organizationId).eq('id', jobId);
+        const status=(e as {status?:number}).status||0;
+        if (falhasSeguidas >= 3 || status===503 || status>=400 && status<500) {
+          const message = status ? String((e as Error).message).slice(0,300) : 'A busca foi interrompida após três tentativas. Confira a conexão Snov.io e retome esta lista.';
+          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: 'SNOV_SEARCH_FAILED', lastErrorProvider: 'snov' } }).eq('organization_id',this.organizationId).eq('id', jobId);
+          if (updateError) console.error('[Radar] não foi possível registrar a interrupção:', updateError);
           await this.refresh();
-          alert(`A busca "${job.name}" foi interrompida: ${(e as Error).message}`);
           break;
         }
         await esperar(10000);

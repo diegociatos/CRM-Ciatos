@@ -1,3 +1,6 @@
+import TemplateEditorFixture from './TemplateEditorFixture';
+import InboxFixture from './InboxFixture';
+import OnboardingFixture from './OnboardingFixture';
 import {PlatformAdmin} from '../../components/PlatformAdmin';
 import WorkspaceApplication from '../../App';
 import FlowFixture from './FlowFixture';
@@ -7,6 +10,8 @@ import Sidebar from '../../components/Sidebar';
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AiCenter from '../../components/AiCenter';
+import SdrAgent from '../../components/SdrAgent';
+import Prospector from '../../components/Prospector';
 import Header from '../../components/Header';
 import CloserDashboard from '../../components/CloserDashboard';
 import SdrDashboard from '../../components/SdrDashboard';
@@ -26,4 +31,15 @@ function DesignFixture() {
   const user = {id:'qa',name:'Diego',role:UserRole.ADMIN} as any;
   return <div className="crm-app"><Sidebar mobileOpen={mobile} onClose={()=>setMobile(false)} currentView={view} setView={v=>{setView(v);setMobile(false);}} role={UserRole.ADMIN} onOpenNewLead={()=>setCreated(true)} canCreate/><Header leads={[]} onSelectLead={()=>{}} onToggleMenu={()=>setMobile(true)} notifications={[]} onMarkRead={()=>{}} onClearAll={()=>{}} onOpenNewLead={()=>setCreated(true)} currentUser={user} onSwitchRole={()=>{}} canSwitchRole={false} canCreate onOpenUserProfile={()=>{}} onLogout={()=>{}}/><main className="crm-main ml-0 md:ml-64 p-4 md:p-8">{created && <p role="status">Cadastro solicitado</p>}{view==='dashboard' ? <Dashboard leads={[]} tasks={[]} notifications={[]} currentUser={user} onNavigate={setView} onCreate={()=>setCreated(true)}/> : view==='ai_center' ? <AiCenter/> : <h1>{view}</h1>}</main></div>;
 }
-createRoot(document.getElementById('root')!).render(location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
+function CafeCampaignFixture(){
+ const [view,setView]=useState<'dashboard'|'ai_center'>('dashboard');
+ const org={id:'0d1ee589-5acc-4321-a560-b6f176394a6e',nome:'CafeWorking'};
+ const user={id:'qa',name:'Diego Garcia',role:UserRole.ADMIN} as any;
+ return <main className="p-5">{view==='dashboard'?<Dashboard leads={[]} tasks={[]} notifications={[]} currentUser={user} companyId={org.id} companyName={org.nome} onOpenCadences={()=>setView('ai_center')} onNavigate={()=>setView('ai_center')}/>:<AiCenter workspace={org}/>}</main>;
+}
+function SdrSwitchFixture(){
+ const [org,setOrg]=useState('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+ return <main><button onClick={()=>setOrg('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')}>Trocar para empresa nova</button><SdrAgent org={org} admin sequences={[]} policyLive={false} onChanged={()=>{}}/></main>;
+}
+function RadarErrorFixture(){return <main className="p-5"><Prospector organizationId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" onAddAsLead={async()=>({success:false,message:'Teste'})} canImport={false} canSnov={true} existingLeads={[]}/></main>;}
+createRoot(document.getElementById('root')!).render(location.search==='?inbox'?<InboxFixture/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?sdr-switch' ? <SdrSwitchFixture/> : location.search === '?radar-error' ? <RadarErrorFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);

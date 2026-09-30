@@ -24,6 +24,12 @@ Leads/clientes, interações, agenda, scripts, configurações, onboarding, meta
 
 RLS exige vínculo ativo na empresa. IDs de empresa são imutáveis, vínculos de lead/agenda/interação e busca/resultado têm chaves compostas, e responsáveis devem pertencer à empresa. O CNPJ de um cliente pode existir em operações distintas, mas não se repete na mesma empresa. Perfil de identidade e permissões operacionais são separados. Central da IA segue a seleção global. Cadastro de empresa não altera flags de envio, IA ou Snov.
 
+### Operação comercial de cada empresa
+
+Cada empresa nova começa com política de envio desligada e sem agente SDR configurado. No espaço da empresa selecionada, o administrador deve criar ou revisar uma cadência de prospecção, definir remetente e endereço de resposta em **Comunicados**, registrar a finalidade e base de contato, escolher a lista do Radar e configurar o destinatário dos alertas em **Central da IA → Agente SDR**. O endereço de avisos não é herdado de outra empresa. Trocar de empresa limpa o formulário e carrega somente suas configurações, fila e alertas.
+
+A conexão Microsoft 365 atual é única para esta instalação. Empresas do grupo podem usar essa caixa somente com um remetente autorizado para **Enviar como** e endereço de resposta atendido por ela. Isso não cria uma conexão de e-mail independente para cada cliente futuro da plataforma. Antes de habilitar envio para clientes externos, é necessário implementar e testar credenciais, OAuth, leitura de respostas e segregação da caixa por empresa. A conta Snov.io do grupo também não é compartilhada automaticamente com clientes externos.
+
 ## Implantação
 
 1. Fazer backup de schema e dados **crm**. Não alterar `public`. A autenticação compartilhada somente recebe novas contas explicitamente autorizadas pela API oficial; nunca redefinir senhas existentes.
