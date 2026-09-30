@@ -346,6 +346,8 @@ export interface MiningJob {
   createdAt: string;
   updatedAt: string;
   lastNotificationMilestone: number;
+  lastError?: string | null;
+  lastErrorCode?: string | null;
 }
 
 export interface MiningLead extends ProspectCompany {

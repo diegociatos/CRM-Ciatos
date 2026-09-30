@@ -241,6 +241,11 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                     <div className="h-full bg-[#0a192f] transition-all duration-1000" style={{ width: `${Math.min(100, (job.foundCount/job.targetCount)*100)}%` }}></div>
                  </div>
               </div>
+              {job.status === 'Failed' && <div role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[#61431b]">
+                {job.lastErrorCode === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(job.lastError || '')
+                  ? <><strong>Busca pausada: saldo da IA insuficiente.</strong><p className="mt-1">Confira os créditos da API na Console da Anthropic. Depois, use “Retomar busca”. Os resultados já encontrados ficam nesta lista.</p><a className="mt-2 inline-block underline" href="https://platform.claude.com/settings/billing" target="_blank" rel="noopener noreferrer">Abrir faturamento da Anthropic ↗</a></>
+                  : <><strong>Busca interrompida.</strong><p className="mt-1">Confira a integração e use “Retomar busca”. Os resultados encontrados foram preservados.</p></>}
+              </div>}
             </div>
             <button onClick={() => setInspectingJob(job)} className="w-full mt-10 py-4 bg-slate-50 text-[#0a192f] rounded-2xl font-black uppercase text-[10px] tracking-widest border border-slate-100 hover:bg-[#0a192f] hover:text-white transition-all">
               Inspecionar Resultados

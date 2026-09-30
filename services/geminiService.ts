@@ -7,10 +7,11 @@ async function chamarIA<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('crm-ia', { body });
   if (error) {
     let msg = error.message;
-    try { msg = (await (error as any).context.json()).error || msg; } catch { /* sem corpo */ }
-    throw new Error(msg);
+    let code = '';
+    try { const body = await (error as any).context.json(); msg = body.error || msg; code = body.code || ''; } catch { /* sem corpo */ }
+    throw Object.assign(new Error(msg), { code });
   }
-  if (data?.error) throw new Error(data.error);
+  if (data?.error) throw Object.assign(new Error(data.error), { code: data.code || '' });
   return data as T;
 }
 

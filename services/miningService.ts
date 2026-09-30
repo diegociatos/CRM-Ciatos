@@ -98,7 +98,7 @@ export class MiningEngine {
     const status = action === 'pause' ? 'Paused' : action === 'resume' ? 'Running' : 'Cancelled';
     const job = this.jobs.find(j => j.id === jobId);
     const { error } = await supabase.from('mining_jobs')
-      .update({ status, dados: { ...(job || {}), status } }).eq('organization_id',this.organizationId).eq('id', jobId);
+      .update({ status, dados: { ...(job || {}), status, ...(action === 'resume' ? { lastError: null, lastErrorCode: null } : {}) } }).eq('organization_id',this.organizationId).eq('id', jobId);
     if (error) return alert(`Atualizar busca: ${error.message}`);
     await this.refresh();
     if (status === 'Running') this.startWorker(jobId);
@@ -133,10 +133,14 @@ export class MiningEngine {
       } catch (e) {
         falhasSeguidas++;
         console.error('[Radar] página falhou:', e);
-        if (falhasSeguidas >= 3) {
-          await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: String((e as Error).message || e) } }).eq('organization_id',this.organizationId).eq('id', jobId);
+        const billing = (e as { code?: string }).code === 'AI_BILLING_REQUIRED' || /credit balance.*too low|insufficient.*credits/i.test(String((e as Error).message || e));
+        if (billing || falhasSeguidas >= 3) {
+          const message = billing
+            ? 'A API da Anthropic está sem créditos. Confira o saldo em Billing na Console da Anthropic e depois retome esta lista.'
+            : 'A busca foi interrompida após três tentativas. Confira a integração e retome esta lista.';
+          const { error: updateError } = await supabase.from('mining_jobs').update({ status: 'Failed', dados: { ...job, status: 'Failed', lastError: message, lastErrorCode: billing ? 'AI_BILLING_REQUIRED' : 'RADAR_FAILED' } }).eq('organization_id',this.organizationId).eq('id', jobId);
+          if (updateError) console.error('[Radar] não foi possível registrar a interrupção:', updateError);
           await this.refresh();
-          alert(`A busca "${job.name}" foi interrompida: ${(e as Error).message}`);
           break;
         }
         await esperar(10000);

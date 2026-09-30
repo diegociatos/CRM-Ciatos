@@ -11,6 +11,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AiCenter from '../../components/AiCenter';
 import SdrAgent from '../../components/SdrAgent';
+import Prospector from '../../components/Prospector';
 import Header from '../../components/Header';
 import CloserDashboard from '../../components/CloserDashboard';
 import SdrDashboard from '../../components/SdrDashboard';
@@ -40,4 +41,5 @@ function SdrSwitchFixture(){
  const [org,setOrg]=useState('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
  return <main><button onClick={()=>setOrg('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')}>Trocar para empresa nova</button><SdrAgent org={org} admin sequences={[]} policyLive={false} onChanged={()=>{}}/></main>;
 }
-createRoot(document.getElementById('root')!).render(location.search==='?inbox'?<InboxFixture/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?sdr-switch' ? <SdrSwitchFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
+function RadarErrorFixture(){return <main className="p-5"><Prospector organizationId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" onAddAsLead={async()=>({success:false,message:'Teste'})} canImport={false} canSnov={false} existingLeads={[]}/></main>;}
+createRoot(document.getElementById('root')!).render(location.search==='?inbox'?<InboxFixture/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?sdr-switch' ? <SdrSwitchFixture/> : location.search === '?radar-error' ? <RadarErrorFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
