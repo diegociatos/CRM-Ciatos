@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 type Row=Record<string,any>;
 const field='w-full rounded-lg border border-slate-300 p-3 bg-white';
-export default function SdrAgent({org,admin,sequences,onChanged,onOpenLead}:{org:string;admin:boolean;sequences:Row[];onChanged:()=>Promise<void>|void;onOpenLead?:(id:string)=>void}) {
+export default function SdrAgent({org,admin,sequences,policyLive,onChanged,onOpenLead}:{org:string;admin:boolean;sequences:Row[];policyLive:boolean;onChanged:()=>Promise<void>|void;onOpenLead?:(id:string)=>void}) {
  const [settings,setSettings]=useState({enabled:false,sequence_id:'',simulate:true,contact_basis:'',notify_email:'diego.garcia@grupociatos.com.br',tracking_enabled:false,radar_job_id:''});
  const [health,setHealth]=useState<Row|null>(null);
  const [radarJobs,setRadarJobs]=useState<Row[]>([]);
@@ -12,13 +12,29 @@ export default function SdrAgent({org,admin,sequences,onChanged,onOpenLead}:{org
  if(!active)return;if(s.error||q.error||a.error){setError('O agente ainda não está disponível nesta instalação. As funções e a atualização do banco precisam estar publicadas.');return;}
  setHealth(h.error?null:h.data);if(s.data)setSettings({...s.data,radar_job_id:s.data.radar_job_id||''} as any);setRadarJobs(j.data||[]);setQueue(q.data||[]);setAlerts(a.data||[]);setLoaded(true);};void load();return()=>{active=false;};},[org]);
  const action=async(fn:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');setNotice('');try{await fn();}catch(e:any){setError(e.message||'Não foi possível salvar.');}finally{setBusy(false);}};
+ const sequenceReady=sequences.some(s=>s.id===settings.sequence_id&&s.status==='ACTIVE'&&s.settings?.publico==='prospect');
+ const emailReady=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.notify_email.trim());
+ const inboxReady=['synced','reply_processed','idle'].includes(health?.status?.inbox);
+ const checks=[
+  {label:'Cadência de prospecção ativa e selecionada',ok:sequenceReady,detail:'Revise os e-mails na aba Cadências, ative um modelo e selecione-o abaixo.'},
+  {label:'Finalidade e base de contato avaliadas',ok:settings.contact_basis.trim().length>=10,detail:'Registre por que este público pode ser contatado.'},
+  {label:'Destinatário dos avisos válido',ok:emailReady,detail:'Confira o endereço que receberá os alertas de lead quente.'},
+  ...(!settings.simulate?[
+   {label:'Snov.io pronto no servidor',ok:health?.status?.snov==='configured',detail:'Configure as credenciais e habilite o Snov.io no servidor.'},
+   {label:'Leitura de respostas disponível',ok:inboxReady,detail:'Habilite Mail.Read e Mail.Read.Shared e reconecte a caixa Microsoft 365.'},
+   {label:'Política de envio desta empresa ligada',ok:policyLive,detail:'Revise remetente, resposta e limite diário em Comunicados.'},
+  ]:[]),
+ ];
+ const blockers=checks.filter(item=>!item.ok);
  return <div className="space-y-6">
   <div className="bg-[#15343e] text-white rounded-2xl p-6 md:p-8"><p className="text-[#e2c18a] text-sm">SEU ASSISTENTE COMERCIAL</p><h2 className="text-3xl mt-2">Do Radar à conversa certa.</h2><p className="mt-3 max-w-3xl">O agente recebe resultados do Radar, busca e verifica contatos no Snov.io, acompanha a cadência e separa respostas com interesse para você.</p><ol className="grid sm:grid-cols-4 gap-3 mt-6">{['Encontrar contatos','Verificar e enriquecer','Enviar e acompanhar','Avisar o lead quente'].map((s,i)=><li key={s} className="border border-white/20 rounded-lg p-3"><span className="text-[#e2c18a]">0{i+1}</span><p>{s}</p></li>)}</ol></div>
   {error&&<p role="alert" className="bg-red-50 text-red-800 p-4 rounded-lg">{error}</p>}{notice&&<p role="status" className="bg-green-50 text-green-800 p-4 rounded-lg">{notice}</p>}
   <section className="bg-white border rounded-xl p-5 space-y-2"><h2 className="text-xl font-bold">Conexões e execução</h2><p>Última execução: {health?.finished_at?new Date(health.finished_at).toLocaleString('pt-BR'):'aguardando confirmação do servidor'}</p><p>Snov.io: {health?.status?.snov==='configured'?'configurado':health?.status?.snov==='credentials_missing'?'faltam Client ID e Client Secret no servidor':health?.status?.snov==='disabled'?'desativado':'a verificar'}</p><p>Leitura de respostas: {['synced','reply_processed','idle'].includes(health?.status?.inbox)?'monitor disponível':health?.status?.inbox==='read_permission_required'?'aguardando habilitação e reconexão da caixa':'a verificar — confira a integração Microsoft 365'}</p><p className="text-sm text-slate-600">Nenhuma chave de integração é exibida no navegador.</p></section>
+  {admin&&<section className="sdr-readiness" aria-label="Preparação da operação"><div><p className="sdr-readiness-kicker">ANTES DE LIGAR O AGENTE</p><h2>{blockers.length?`${blockers.length} ${blockers.length===1?'etapa pendente':'etapas pendentes'}`:settings.simulate?'Pronto para simular':'Preparação da empresa concluída'}</h2><p>{settings.simulate?'A simulação não envia e-mails nem consulta o Snov.io.':'Esta verificação cobre a empresa e as conexões visíveis. O servidor ainda precisa permitir envios reais.'}</p></div><ul>{checks.map(item=><li key={item.label} className={item.ok?'is-ready':'is-pending'}><span aria-hidden="true">{item.ok?'✓':'!'}</span><div><strong>{item.label}</strong>{!item.ok&&<small>{item.detail}</small>}</div></li>)}</ul></section>}
   <div className="grid md:grid-cols-3 gap-4">{[['Na preparação',queue.filter(q=>['PENDING','RUNNING'].includes(q.status)).length],['Em cadência',queue.filter(q=>q.status==='ENROLLED').length],['Para revisar',queue.filter(q=>q.status==='REVIEW').length]].map(([label,value])=><div key={label} className="border rounded-xl bg-white p-5"><p>{label}</p><strong className="text-3xl">{value}</strong></div>)}</div>
   <p className="text-sm text-slate-600">Indicadores dos últimos 100 contatos preparados. Aberturas são estimativas: bloqueio de imagens e robôs podem alterar os números. Somente resposta com interesse explícito gera “lead quente”.</p>
   {admin&&<form className="bg-white border rounded-xl p-5 space-y-4" onSubmit={e=>{e.preventDefault();void action(async()=>{
+   if(settings.enabled&&blockers.length){setError(`Antes de ligar o agente, conclua: ${blockers.map(item=>item.label).join('; ')}.`);return;}
    if(settings.enabled&&!settings.simulate&&!window.confirm('Ligar o agente com envio real para resultados pendentes do Radar desta empresa? Contatos elegíveis entrarão na cadência selecionada e consultas ao Snov.io podem consumir créditos.'))return;
    const {error}=await supabase.rpc('save_sdr_settings',{org,active:settings.enabled,sid:settings.sequence_id||null,simulation:settings.simulate,basis:settings.contact_basis,recipient:settings.notify_email,tracking:settings.tracking_enabled,job:settings.radar_job_id||null});if(error)throw error;setNotice('Configuração salva. O servidor processa a fila; você pode fechar o navegador. Pausar o agente não retoma cadências interrompidas.');
   });}}>

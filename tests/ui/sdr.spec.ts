@@ -25,6 +25,11 @@ for(const width of [1440,390])test(`Agente SDR: biblioteca e configuração sem 
  expect(calls.some(c=>c.name==='enroll_leads')).toBe(false);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:`test-results/sdr-${width}.png`,fullPage:true});
+ await page.getByLabel('Simulação — não envia e não consome créditos do Snov.io').uncheck();
+ await page.getByLabel('Agente ligado para os resultados pendentes do Radar').check();
+ await page.getByRole('button',{name:'Salvar operação',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Snov.io pronto no servidor');
+ expect(calls.filter(c=>c.name==='save_sdr_settings'&&c.body.active)).toHaveLength(0);
 });
 
 test('CafeWorking mostra somente cadências próprias e seleciona uma lista do Radar',async({page})=>{
