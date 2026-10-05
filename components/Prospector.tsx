@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { MiningEngine } from '../services/miningService';
 
@@ -298,19 +299,19 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
         </div>
       )}
 
-      {inspectingJob && (
-        <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4">
+      {inspectingJob && createPortal(
+        <div className="fixed inset-0 z-[1600] flex items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={inspectingJob.name}>
           <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm" onClick={() => !isProcessing && setInspectingJob(null)}></div>
-          <div className="relative bg-white w-full max-w-[98vw] h-[95vh] rounded-[4rem] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-12">
-             <div className="p-10 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <div>
-                   <h2 className="text-3xl font-black text-[#0a192f] serif-authority">{inspectingJob.name}</h2>
+          <div className="relative bg-white w-full max-w-[1500px] h-full max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+             <div className="px-5 py-4 sm:px-8 sm:py-5 border-b border-slate-100 bg-slate-50 flex flex-wrap justify-between items-center gap-3">
+                <div className="min-w-0">
+                   <h2 className="text-xl sm:text-2xl font-black text-[#0a192f] serif-authority truncate">{inspectingJob.name}</h2>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualizando novos leads localizados.</p>
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-2">
                     <button 
                       onClick={handleExportCSV}
-                      className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+                      className="px-4 py-3 bg-white border-2 border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
                     >
                       <span>📊</span> EXPORTAR CSV
                     </button>
@@ -318,33 +319,33 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                     <button 
                       disabled={isProcessing}
                       onClick={handleBulkImport} 
-                      className="px-10 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl disabled:opacity-50"
+                      className="px-5 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow disabled:opacity-50"
                     >
                       {isProcessing ? '⏳ TRANSMITINDO...' : `📥 MOVER ${selectedLeads.size} PARA QUALIFICAÇÃO`}
                     </button>
                    )}
-                   <button onClick={() => setInspectingJob(null)} className="p-4 bg-slate-200 text-slate-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest">FECHAR</button>
+                   <button onClick={() => setInspectingJob(null)} className="px-4 py-3 bg-slate-200 text-slate-600 rounded-xl font-bold uppercase text-[10px] tracking-widest">FECHAR</button>
                 </div>
              </div>
 
-             <div className="flex-1 overflow-auto">
-                <table className="w-full text-left border-collapse min-w-[1600px]">
+             <div className="flex-1 min-h-0 overflow-auto">
+                <table className="w-full text-left border-collapse min-w-[860px]">
                    <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-20">
                       <tr>
-                         <th className="px-8 py-6 w-12 text-center">
+                         <th className="px-4 py-4 w-12 text-center">
                            <input type="checkbox" checked={selectedLeads.size === jobLeads.length && jobLeads.length > 0} onChange={toggleAll} className="w-5 h-5 rounded" />
                          </th>
-                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa / Porte / Regime</th>
-                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Contatos Sede</th>
-                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">QSA / Sócios</th>
-                         <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Decisor Direto</th>
-                         <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ação</th>
+                         <th className="px-3 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa / Porte / Regime</th>
+                         <th className="px-3 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Contatos Sede</th>
+                         <th className="px-3 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">QSA / Sócios</th>
+                         <th className="px-3 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Decisor Direto</th>
+                         <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right sticky right-0 bg-slate-50">Ação</th>
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-50">
                       {jobLeads.map(lead => (
-                        <tr key={lead.id} className="hover:bg-slate-50 transition-colors">
-                           <td className="px-8 py-6 text-center">
+                        <tr key={lead.id} className="group hover:bg-slate-50 transition-colors">
+                           <td className="px-4 py-4 text-center">
                              <input 
                               type="checkbox" 
                               checked={selectedLeads.has(lead.id)} 
@@ -356,33 +357,33 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                               className="w-5 h-5 rounded" 
                              />
                            </td>
-                           <td className="px-4 py-6">
+                           <td className="px-3 py-4">
                               <p className="text-sm font-bold text-[#0a192f] serif-authority leading-tight">{lead.tradeName}</p>
-                              <div className="flex gap-2 mt-1">
+                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
                                 <span className="text-[9px] font-mono text-slate-400 uppercase">{lead.cnpj}</span>
                                 {(lead as any).porteReceita && <span className="text-[8px] bg-amber-50 px-1.5 rounded text-amber-600 font-bold uppercase">{(lead as any).porteReceita}</span>}
                                 {(lead as any).simplesNacional != null && <span className="text-[8px] bg-indigo-50 px-1.5 rounded text-indigo-600 font-bold uppercase">{(lead as any).simplesNacional ? 'Simples' : 'Fora do Simples'}</span>}
                                 {(lead as any).verificadoReceita && <span className="text-[8px] bg-emerald-50 px-1.5 rounded text-emerald-600 font-bold uppercase" title="CNPJ ativo confirmado na Receita Federal">✓ Receita</span>}
                               </div>
                            </td>
-                           <td className="px-4 py-6 text-xs font-bold text-slate-600 space-y-1">
-                              <p>📞 {lead.phoneCompany}</p>
-                              <p className="text-slate-400 text-[10px]">📧 {lead.emailCompany}</p>
+                           <td className="px-3 py-4 text-xs font-bold text-slate-600 space-y-1">
+                              <p className="whitespace-nowrap">📞 {lead.phoneCompany}</p>
+                              <p className="text-slate-400 text-[10px] break-all">📧 {lead.emailCompany}</p>
                            </td>
-                           <td className="px-4 py-6">
+                           <td className="px-3 py-4">
                               <div className="flex flex-wrap gap-1 max-w-[300px]">
                                 {lead.partners.map((p, i) => (
                                   <span key={i} className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold">{p}</span>
                                 ))}
                               </div>
                            </td>
-                           <td className="px-4 py-6">
+                           <td className="px-3 py-4">
                               <div className="bg-white p-2.5 rounded-xl border border-slate-100">
                                  <p className="text-[11px] font-black text-[#0a192f]">{lead.contactName}</p>
                                  <p className="text-[9px] font-black text-emerald-600 mt-0.5">{lead.contactPhone}</p>
                               </div>
                            </td>
-                           <td className="px-8 py-6 text-right">
+                           <td className="px-4 py-4 text-right sticky right-0 bg-white group-hover:bg-slate-50">
                               <button 
                                 onClick={async () => {
                                    const r = await onAddAsLead(miningParaLead(lead));
@@ -392,7 +393,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                                       alert(r.message);
                                    }
                                 }} 
-                                className="px-6 py-2 bg-[#0a192f] text-white rounded-xl text-[9px] font-black uppercase hover:scale-105 transition-all"
+                                className="px-4 py-2 bg-[#0a192f] text-white rounded-lg text-[9px] font-black uppercase whitespace-nowrap hover:bg-[#16304f] transition-colors"
                               >
                                 Triagem
                               </button>
@@ -409,7 +410,8 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onAddAsLead, canI
                 )}
              </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
