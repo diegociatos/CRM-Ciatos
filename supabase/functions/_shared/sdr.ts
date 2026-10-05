@@ -1,7 +1,7 @@
 import type { Env, Requester } from './outreach.ts';
 import { SnovAdapter, snovCandidates, verifiedResult } from './snov.ts';
 
-const call = async (db: any, name: string, args: any = {}) => { const r = await db.rpc(name,args); if(r.error) throw new Error(name); return r.data; };
+const call = async (db: any, name: string, args: any = {}) => { const r = await db.rpc(name,args); if(r.error) throw new Error(/quota exceeded/i.test(String(r.error.message||''))?'quota_exceeded':name); return r.data; };
 const save = async (query: any) => { const r=await query; if(r.error) throw new Error('save_failed'); return r.data; };
 export const escapeHtml = (s: unknown) => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export function cadenceHtml(text: string, pixel?: string) {
@@ -137,7 +137,15 @@ export async function processSdr(db: any, env: Env, http: Requester = fetch) {
       await finish('PENDING','Contato encontrado; aguardando verificação do e-mail.');
     }
     return 'processed';
-  } catch {await finish('REVIEW','Enriquecimento não concluído. Verifique integração e limites antes de repetir.');return 'review';}
+  } catch(e) {
+    // Teto diário de consultas pagas: o contato espera na fila e retoma sozinho, sem gastar tentativa.
+    if((e as Error)?.message==='quota_exceeded'){
+      await finish('PENDING','Limite diário de consultas ao Snov.io atingido. Continua automaticamente.');
+      await save(db.from('sdr_queue').update({next_at:new Date(Date.now()+3600e3).toISOString(),attempts:Math.max(0,(q.attempts||1)-1)}).eq('id',q.id).eq('status','PENDING'));
+      return 'snov_quota';
+    }
+    await finish('REVIEW','Enriquecimento não concluído. Verifique integração e limites antes de repetir.');return 'review';
+  }
 }
 
 export type ReplyDecision = {kind:'hot'|'review'|'opt_out'|'automatic'; confidence:number; summary:string};

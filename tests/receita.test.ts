@@ -67,3 +67,12 @@ test('agente consulta a Receita antes do Snov.io e não envia para empresa baixa
   await processSdr(ja.db, () => undefined, (() => { throw new Error('não deveria chamar'); }) as any);
   assert.equal(ja.feito.updates.length, 0);
 });
+
+test('teto diário do Snov.io: o contato espera na fila em vez de ir para revisão', async () => {
+  const f = fila({ ...lead, dados: { receita: { status: 'ok' } } }, false);
+  const rpc = f.db.rpc;
+  f.db.rpc = async (name: string, args: any) => name === 'reserve_enrichment' ? { data: null, error: { message: 'Enrichment quota exceeded' } } : rpc(name, args);
+  assert.equal(await processSdr(f.db, (n: string) => n === 'CRM_SNOV_ENABLED' ? 'true' : undefined), 'snov_quota');
+  assert.equal(f.feito.finish.outcome, 'PENDING');
+  assert.ok(Date.parse(f.feito.updates[0].next_at) > Date.now() + 3000e3);
+});
