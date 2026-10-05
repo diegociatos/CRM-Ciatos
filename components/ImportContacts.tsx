@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 // Campos que o banco entende (crm.import_leads) e os nomes de coluna que
@@ -70,11 +70,38 @@ function modeloCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-interface Resultado { inseridos: number; atualizados: number; ignorados: number; erros: { linha: number; motivo: string }[] }
+interface Resultado { inseridos: number; atualizados: number; ignorados: number; erros: { linha: number; motivo: string }[]; fila?: number; avisoFila?: string }
 
 export default function ImportContacts({ organizationId, companyName, onImported, onGoAgent, onGoRadar }: { organizationId: string; companyName: string; onImported: () => void; onGoAgent?: () => void; onGoRadar?: () => void }) {
   const [tipo, setTipo] = useState<'cliente' | 'prospect' | 'lista'>('cliente');
   const [nomeLista, setNomeLista] = useState('');
+  // Automação da lista: ao terminar de importar, o agente já começa a trabalhar.
+  const [auto, setAuto] = useState({ ligar: true, sid: '', basis: '', recipient: '', simulate: false });
+  const [cadencias, setCadencias] = useState<{ id: string; nome: string }[]>([]);
+  const [envioLigado, setEnvioLigado] = useState(true);
+
+  useEffect(() => {
+    if (tipo !== 'lista') return;
+    let ativo = true;
+    void (async () => {
+      const [seq, cfg, pol, usr] = await Promise.all([
+        supabase.from('outreach_sequences').select('id,nome,status,settings').eq('organization_id', organizationId).eq('status', 'ACTIVE'),
+        supabase.from('sdr_settings').select('sequence_id,contact_basis,notify_email').eq('organization_id', organizationId).maybeSingle(),
+        supabase.from('outreach_policy').select('live_enabled').eq('organization_id', organizationId).maybeSingle(),
+        supabase.auth.getUser(),
+      ]);
+      if (!ativo) return;
+      const lista = (Array.isArray(seq.data) ? seq.data : []).filter((c: any) => c.settings?.publico === 'prospect').map((c: any) => ({ id: c.id, nome: c.nome }));
+      const atual: any = cfg.data && !Array.isArray(cfg.data) ? cfg.data : {};
+      setCadencias(lista);
+      setEnvioLigado(!pol.data || Array.isArray(pol.data) || (pol.data as any).live_enabled !== false);
+      setAuto(a => ({ ...a,
+        sid: lista.some(c => c.id === atual.sequence_id) ? atual.sequence_id : lista.length === 1 ? lista[0].id : '',
+        basis: a.basis || atual.contact_basis || '', recipient: a.recipient || atual.notify_email || usr.data?.user?.email || '' }));
+    })();
+    return () => { ativo = false; };
+  }, [tipo, organizationId]);
+  const automatico = tipo === 'lista' && auto.ligar && cadencias.length > 0;
   const [etiquetas, setEtiquetas] = useState('');
   const [fonte, setFonte] = useState('Planilha de clientes');
   const [arquivo, setArquivo] = useState('');
@@ -127,9 +154,13 @@ export default function ImportContacts({ organizationId, companyName, onImported
     if (!linhas.length || importando) return;
     const emLista = tipo === 'lista';
     if (emLista && nomeLista.trim().length < 3) { setErro('Dê um nome à lista de prospecção (ao menos 3 letras).'); return; }
+    if (automatico && (!auto.sid || auto.basis.trim().length < 10 || !EMAIL_RE.test(auto.recipient.trim()))) {
+      setErro('Para começar automaticamente, escolha a cadência, descreva a origem/finalidade do contato (ao menos 10 letras) e informe o e-mail que recebe os avisos.'); return; }
     const destino = tipo === 'cliente' ? 'clientes da carteira' : 'prospects';
     if (!window.confirm(emLista
-      ? `Criar a lista "${nomeLista.trim()}" com ${linhas.length} linha(s) em ${companyName}?\n\nNada é enviado agora. O agente só trabalha a lista depois que você ligá-lo na Central da IA.`
+      ? `Criar a lista "${nomeLista.trim()}" com ${linhas.length} linha(s) em ${companyName}?\n\n` + (!automatico ? 'Nada é enviado agora. O agente só trabalha a lista depois que você ligá-lo na Central da IA.'
+        : auto.simulate ? 'O agente começa em SIMULAÇÃO: busca os dados da empresa, mas não consulta o Snov.io nem envia e-mail.'
+        : 'O agente começa em seguida: busca os dados da empresa e dos sócios, verifica os e-mails no Snov.io (consome créditos) e ENVIA a cadência de e-mails para os contatos válidos.')
       : `Importar ${linhas.length} linha(s) como ${destino} em ${companyName}?\n\nQuem já existir (mesmo CNPJ ou e-mail) só terá os campos vazios completados.`)) return;
     setImportando(true); setErro(''); setResultado(null); setProgresso(0);
     const tags = etiquetas.split(/[;,]/).map(t => t.trim()).filter(Boolean);
@@ -148,6 +179,11 @@ export default function ImportContacts({ organizationId, companyName, onImported
         // +2: linha 1 é o cabeçalho e a numeração do banco começa em 1 dentro do lote.
         total.erros.push(...(data.erros || []).map((e: any) => ({ linha: e.linha + i + 1, motivo: e.motivo })));
         setProgresso(Math.min(linhas.length, i + LOTE));
+      }
+      if (emLista && automatico && job) {
+        const { data, error } = await supabase.rpc('start_list_automation', { org: organizationId, job, sid: auto.sid, simulation: auto.simulate, basis: auto.basis.trim(), recipient: auto.recipient.trim() });
+        if (error) total.avisoFila = `A lista foi criada, mas o agente não pôde ser ligado: ${error.message}`;
+        else total.fila = Number(data) || 0;
       }
       setResultado(total);
       onImported();
@@ -183,6 +219,25 @@ export default function ImportContacts({ organizationId, companyName, onImported
       {tipo === 'lista' ? <>
         <label className="block">Nome da lista<input className={field} value={nomeLista} disabled={importando} maxLength={120} onChange={e => setNomeLista(e.target.value)} placeholder="Ex.: Feira de Logística · outubro/2026" /></label>
         <p className="text-sm text-slate-500">Para o Snov.io trabalhar, cada linha precisa de <strong>e-mail</strong> (ele verifica se é válido) ou do <strong>site da empresa</strong> (ele procura o e-mail do decisor). O nome do contato ajuda a achar a pessoa certa. O nome do arquivo fica registrado como origem (exigência da LGPD).</p>
+        <div className="border rounded-xl p-4 space-y-3 bg-slate-50">
+          <label className="flex gap-2 font-bold"><input type="checkbox" checked={auto.ligar} disabled={importando || !cadencias.length} onChange={e => setAuto({ ...auto, ligar: e.target.checked })} />Começar automaticamente ao importar</label>
+          {!cadencias.length ? <p className="text-sm text-amber-700">Esta empresa não tem cadência de prospecção ativa. Ative uma em Central da IA → Cadências para a lista começar sozinha; sem isso ela só fica guardada no Radar.</p>
+          : auto.ligar && <>
+            <ol className="text-sm text-slate-600 list-decimal pl-5 space-y-1">
+              <li>Com o CNPJ, busca na Receita Federal os dados da empresa, os sócios e o telefone.</li>
+              <li>Verifica o e-mail no Snov.io; sem e-mail, procura o decisor pelo site da empresa.</li>
+              <li>Com e-mail válido, o contato entra na cadência e os e-mails começam a sair.</li>
+            </ol>
+            <div className="grid md:grid-cols-2 gap-3">
+              <label className="block">Cadência de e-mails<select className={field} value={auto.sid} disabled={importando} onChange={e => setAuto({ ...auto, sid: e.target.value })}><option value="">Escolha a cadência</option>{cadencias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
+              <label className="block">E-mail para avisos de lead quente<input type="email" className={field} value={auto.recipient} disabled={importando} maxLength={254} onChange={e => setAuto({ ...auto, recipient: e.target.value })} /></label>
+            </div>
+            <label className="block">Origem da lista e finalidade do contato<textarea className={field} rows={2} maxLength={500} value={auto.basis} disabled={importando} onChange={e => setAuto({ ...auto, basis: e.target.value })} placeholder="Ex.: Transportadoras de MG com dados públicos do CNPJ; oferta de serviços contábeis para empresas do setor." /></label>
+            <label className="flex gap-2"><input type="checkbox" checked={auto.simulate} disabled={importando} onChange={e => setAuto({ ...auto, simulate: e.target.checked })} />Só simular (não consulta o Snov.io nem envia e-mail)</label>
+            {!auto.simulate && !envioLigado && <p className="text-sm text-amber-700">O envio de e-mails está desligado nesta empresa (Comunicados → configuração de envio). Os contatos serão preparados, mas nenhum e-mail sai até ligar.</p>}
+            <p className="text-sm text-slate-500">O agente desta empresa passa a trabalhar esta lista. Contatos de listas anteriores que já estão na fila continuam na cadência deles.</p>
+          </>}
+        </div>
       </> : <><div className="grid md:grid-cols-2 gap-3">
         <label className="block">Etiquetas para todos (opcional)<input className={field} value={etiquetas} disabled={importando} onChange={e => setEtiquetas(e.target.value)} placeholder="Ex.: Carteira 2026; Newsletter" /></label>
         <label className="block">Origem dos dados<input className={field} value={fonte} disabled={importando} maxLength={200} onChange={e => setFonte(e.target.value)} placeholder="Ex.: Planilha do financeiro" /></label>
@@ -240,9 +295,11 @@ export default function ImportContacts({ organizationId, companyName, onImported
       {resultado.erros.length > 0 && <details><summary className="cursor-pointer">Ver avisos por linha ({resultado.erros.length})</summary>
         <ul className="text-sm mt-2 space-y-1">{resultado.erros.slice(0, 200).map((e, i) => <li key={i}>Linha {e.linha}: {e.motivo}</li>)}</ul></details>}
       {tipo === 'lista' ? <>
-        <p className="text-sm text-slate-600">Nada foi enviado. Próximo passo: na Central da IA, aba do agente, escolha esta lista e uma cadência de prospecção ativa, e ligue o agente. Ele verifica e completa os e-mails no Snov.io e inscreve cada contato válido na cadência.</p>
+        {resultado.fila !== undefined
+          ? <p className="text-sm text-slate-600"><strong>{resultado.fila} contato(s) na fila do agente.</strong> Ele já está trabalhando{auto.simulate ? ' em simulação' : ''}: cerca de 8 contatos por minuto, mesmo com o navegador fechado. Acompanhe em Central da IA → Agente SDR; quem precisar de revisão aparece lá com o motivo.</p>
+          : <p className="text-sm text-slate-600">{resultado.avisoFila || 'Nada foi enviado. Próximo passo: na Central da IA, aba do agente, escolha esta lista e uma cadência de prospecção ativa, e ligue o agente.'}</p>}
         <div className="flex flex-wrap gap-3">
-          {onGoAgent && <button type="button" className="btn-navy" onClick={onGoAgent}>Ligar o agente nesta lista</button>}
+          {onGoAgent && <button type="button" className="btn-navy" onClick={onGoAgent}>{resultado.fila !== undefined ? 'Acompanhar o agente' : 'Ligar o agente nesta lista'}</button>}
           {onGoRadar && <button type="button" className="ux-secondary" onClick={onGoRadar}>Ver a lista no Radar</button>}
         </div>
       </> : <p className="text-sm text-slate-500">{tipo === 'cliente' ? 'Os clientes aparecem em Clientes Ativos e já podem receber Comunicados.' : 'Os prospects estão na Fila de Qualificação.'}</p>}

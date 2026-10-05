@@ -196,7 +196,17 @@ Deno.serve(async req => {
       const r=await abrirRemetente(env,db,{ignorarInterruptor:true,readReplies:true});status.inbox=await processSdrInbox(db,env,r.graph);
     }else status.inbox='read_permission_required';
   }catch{status.inbox='needs_configuration';}
-  try { status.agent=await processSdr(db,env); }catch{status.agent='error';}
+  // Vários contatos por minuto (lista importada começa a andar logo), com teto de tempo
+  // para não atrasar cadências, comunicados e onboarding da mesma execução.
+  try {
+    const inicio=Date.now();let feitos=0;
+    for(let i=0;i<8&&Date.now()-inicio<20000;i++){
+      status.agent=await processSdr(db,env);
+      if(status.agent==='idle'||status.agent==='snov_disabled')break;
+      feitos++;
+    }
+    if(feitos)status.agent_processed=String(feitos);
+  }catch{status.agent='error';}
   try { status.outreach = await processOutreach(db); } catch { status.outreach = 'error'; }
   try { status.broadcast = await processBroadcast(db); } catch { status.broadcast = 'error'; }
   try { status.onboarding = await processOnboarding(db); } catch { status.onboarding = 'error'; }

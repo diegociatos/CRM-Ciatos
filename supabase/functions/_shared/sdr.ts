@@ -18,13 +18,82 @@ export function chooseCandidate(candidates: ReturnType<typeof snovCandidates>, n
   return decision.length===1 ? decision[0] : null;
 }
 
+const titulo = (s: string) => s.toLowerCase().replace(/(^|[\s'-])([a-zà-ú])/g, (_, a, b) => a + b.toUpperCase()).replace(/\b(D[aeo]s?|E)\b/g, m => m.toLowerCase());
+const fone = (v: unknown) => { const d = String(v ?? '').replace(/\D/g, ''); return d.length === 10 ? `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}` : d.length === 11 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}` : ''; };
+const txt = (v: unknown, n = 200) => String(v ?? '').trim().slice(0, n);
+
+/** Cadastro público do CNPJ (Receita Federal, via BrasilAPI) reduzido ao que o CRM usa. */
+export function receitaFromBrasilApi(d: any) {
+  if (!d || typeof d !== 'object' || !/^\d{14}$/.test(String(d.cnpj ?? '').replace(/\D/g, ''))) throw new Error('invalid_receita');
+  const email = txt(d.email, 254).toLowerCase();
+  return {
+    status: 'ok' as const, consultado_em: new Date().toISOString(),
+    razao_social: txt(d.razao_social), nome_fantasia: txt(d.nome_fantasia),
+    situacao: txt(d.descricao_situacao_cadastral, 40).toUpperCase(), porte: txt(d.porte, 60), natureza_juridica: txt(d.natureza_juridica, 120),
+    cnae: txt(d.cnae_fiscal, 10), cnae_descricao: txt(d.cnae_fiscal_descricao), abertura: txt(d.data_inicio_atividade, 10),
+    capital_social: Number.isFinite(Number(d.capital_social)) ? Number(d.capital_social) : null,
+    simples: typeof d.opcao_pelo_simples === 'boolean' ? d.opcao_pelo_simples : null, mei: typeof d.opcao_pelo_mei === 'boolean' ? d.opcao_pelo_mei : null,
+    endereco: [txt(d.descricao_tipo_de_logradouro, 30), txt(d.logradouro, 120), txt(d.numero, 20), txt(d.complemento, 60), txt(d.bairro, 80)].filter(Boolean).join(' ').replace(/\s+/g, ' '),
+    municipio: txt(d.municipio, 80), uf: txt(d.uf, 2).toUpperCase(), cep: txt(d.cep, 9),
+    telefones: [...new Set([fone(d.ddd_telefone_1), fone(d.ddd_telefone_2)].filter(Boolean))],
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '',
+    socios: (Array.isArray(d.qsa) ? d.qsa : []).slice(0, 30).map((q: any) => ({ nome: titulo(txt(q?.nome_socio)), qualificacao: txt(q?.qualificacao_socio, 80) })).filter((q: any) => q.nome),
+  };
+}
+export type Receita = ReturnType<typeof receitaFromBrasilApi>;
+
+/** Completa só o que está vazio no lead; o que veio da planilha nunca é sobrescrito. */
+export function applyReceita(l: any, r: Receita) {
+  const vazio = (v: unknown) => !String(v ?? '').trim() || /^n[ãa]o localizado$/i.test(String(v).trim());
+  const admins = r.socios.filter(q => /administrador/i.test(q.qualificacao));
+  const decisor = admins.length === 1 ? admins[0] : r.socios.length === 1 ? r.socios[0] : null;
+  const dados = { ...(l.dados || {}), receita: r, verificadoReceita: r.situacao === 'ATIVA', legalName: l.dados?.legalName || r.razao_social,
+    partners: l.dados?.partners?.length ? l.dados.partners : r.socios.map(q => q.nome),
+    // Formato que a ficha do lead já exibe em "Quadro Societário"; a qualificação ocupa o selo.
+    detailedPartners: l.dados?.detailedPartners?.length ? l.dados.detailedPartners : r.socios.map(q => ({ name: q.nome, cpf: '', sharePercentage: q.qualificacao })),
+    ...(r.porte ? { porteReceita: r.porte } : {}), ...(r.simples !== null ? { simplesNacional: r.simples } : {}) };
+  const patch: Record<string, unknown> = { dados };
+  if (vazio(l.empresa)) patch.empresa = r.nome_fantasia || r.razao_social;
+  if (vazio(l.telefone) && r.telefones[0]) patch.telefone = r.telefones[0];
+  if (vazio(l.nome) && decisor) patch.nome = decisor.nome;
+  if (vazio(l.cidade) && r.municipio) patch.cidade = titulo(r.municipio);
+  if (vazio(l.uf) && r.uf) patch.uf = r.uf;
+  if (vazio(l.segmento) && r.cnae_descricao) patch.segmento = r.cnae_descricao;
+  if (vazio(l.email) && r.email) { patch.email = r.email; patch.email_verified_at = null; }
+  return patch;
+}
+
+/** Consulta pública e gratuita; só a rota fixa, nunca URL vinda de dados. */
+export async function lookupReceita(cnpj: string, request: Requester = fetch): Promise<Receita | 'not_found' | 'retry'> {
+  if (!/^\d{14}$/.test(cnpj)) return 'not_found';
+  try {
+    const response = await request(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } });
+    if (response.status === 404 || response.status === 400) return 'not_found';
+    if (!response.ok) return 'retry';
+    return receitaFromBrasilApi(await response.json());
+  } catch { return 'retry'; }
+}
+
 /** One durable enrichment transition. Simulation never consumes Snov credits. */
-export async function processSdr(db: any, env: Env) {
+export async function processSdr(db: any, env: Env, http: Requester = fetch) {
   await call(db,'prepare_sdr_queue');
   const q=await call(db,'claim_sdr_lead'); if(!q)return 'idle';
   const finish=(outcome:string,detail?:string)=>call(db,'finish_sdr_lead',{qid:q.id,token:q.lease,outcome,detail:detail||null});
   try {
-    const l=q.lead;
+    let l=q.lead;
+    // 1º passo, sem custo: dados da empresa e dos sócios pelo CNPJ. Falha temporária tenta de novo
+    // até 3 vezes e depois segue sem a Receita, para não travar a cadência.
+    const antes=l.dados?.receita;
+    if(/^\d{14}$/.test(l.cnpj_raw||'') && (!antes || antes.status==='tentar')){
+      const r=await lookupReceita(l.cnpj_raw,http);
+      const tentativas=(antes?.tentativas||0)+1;
+      const patch:Record<string,unknown>=typeof r==='object'?applyReceita(l,r)
+        :{dados:{...(l.dados||{}),receita:r==='retry'&&tentativas<3?{status:'tentar',tentativas}:{status:'indisponivel',consultado_em:new Date().toISOString()}}};
+      await save(db.from('leads').update(patch).eq('id',l.id).eq('organization_id',q.organization_id));
+      l={...l,...patch};
+      if(r==='retry'&&tentativas<3){await finish('PENDING','Aguardando o cadastro da Receita Federal.');return 'waiting';}
+      if(typeof r==='object'&&r.situacao&&r.situacao!=='ATIVA'){await finish('REVIEW',`Empresa com situação "${r.situacao.toLowerCase()}" na Receita Federal. Nenhum envio.`);return 'review';}
+    }
     if(q.simulate){await finish(l.email?'ENROLLED':'REVIEW','Simulação não consulta Snov.io. Informe um e-mail fictício para testar.');return 'simulation';}
     if(!l.contact_basis || !l.contact_source){await finish('REVIEW','Origem e finalidade do contato precisam de avaliação.');return 'review';}
     if(l.email && l.email_verified_at && Date.parse(l.email_verified_at)>Date.now()-30*864e5){await finish('ENROLLED');return 'enrolled';}

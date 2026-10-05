@@ -73,3 +73,24 @@ test('agente recebe a lista da planilha e reaproveita o lead que já tem o mesmo
     assert.equal((await db.query<{ n: number }>(`select count(*)::int n from crm.sdr_queue`)).rows[0].n, 2);
   } finally { await db.close(); }
 });
+
+test('importar com automação liga o agente na lista e enfileira tudo de uma vez', async () => {
+  const db = await banco();
+  try {
+    const linhas = Array.from({ length: 25 }, (_, i) => ({ nome_fantasia: `Transportadora ${i}`, email: `contato${i}@t${i}.test`, cnpj: String(11222333000100 + i) }));
+    const r = await importar(db, null, linhas);
+    const sid = (await db.query<{ id: string }>(`select crm.create_cadence_v2($1,'Prospecção','prospect',$2::jsonb,3) id`,
+      [org, JSON.stringify([{ assunto: 'Olá', corpo: 'Podemos conversar?', espera_dias: 0 }])])).rows[0].id;
+    const ligar = (job: string, basis = 'Dados públicos do CNPJ; oferta de serviços contábeis') =>
+      db.query<{ n: number }>(`select crm.start_list_automation($1,$2,$3,false,$4,'ana@ciatos.test') n`, [org, job, sid, basis]);
+    await assert.rejects(ligar(r.job_id), /Ative a cadência/);
+    await db.query(`select crm.set_cadence_state($1,'ACTIVE')`, [sid]);
+    await assert.rejects(ligar(r.job_id, 'curta'), /finalidade/);
+    await assert.rejects(ligar('99999999-9999-4999-8999-999999999999'), /Lista inválida/);
+    assert.equal((await ligar(r.job_id)).rows[0].n, 25, 'a lista inteira entra na fila, sem esperar o limite de 10 por minuto');
+    const cfg = (await db.query<any>(`select enabled, simulate, radar_job_id from crm.sdr_settings where organization_id = $1`, [org])).rows[0];
+    assert.deepEqual([cfg.enabled, cfg.simulate, cfg.radar_job_id], [true, false, r.job_id]);
+    assert.equal((await ligar(r.job_id)).rows[0].n, 0, 'repetir não duplica');
+    await assert.rejects(db.query(`select crm.prepare_sdr_queue()`), /permission denied/);
+  } finally { await db.close(); }
+});

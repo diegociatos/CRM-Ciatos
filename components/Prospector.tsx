@@ -228,11 +228,11 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
               </div>
               <h3 className="text-2xl font-bold text-[#0a192f] serif-authority mb-1">{job.name}</h3>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
-                {[job.filters.city, job.filters.state].filter(Boolean).join(' / ') || 'Brasil inteiro'}
+                {[job.filters.city, job.filters.state].filter(Boolean).join(' / ') || ((job as any).sourceProvider==='planilha' ? ((job as any).sourceFile || 'Planilha importada') : 'Brasil inteiro')}
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
-                <span className="bg-amber-50 text-[#9b6c22] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">{(job as any).sourceProvider==='snov_database'?'Busca Snov.io':(job as any).sourceProvider==='snov'?'Lista Snov.io':'Busca anterior'}</span>
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-indigo-100">{job.filters.segment || 'Sem setor'}</span>
+                <span className="bg-amber-50 text-[#9b6c22] px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-amber-100">{(job as any).sourceProvider==='snov_database'?'Busca Snov.io':(job as any).sourceProvider==='snov'?'Lista Snov.io':(job as any).sourceProvider==='planilha'?'Planilha':'Busca anterior'}</span>
+                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-indigo-100">{job.filters.segment || ((job as any).sourceProvider==='planilha'?'Importada':'Sem setor')}</span>
               </div>
 
               <div className="space-y-4">

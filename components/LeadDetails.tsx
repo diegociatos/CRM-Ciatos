@@ -264,6 +264,22 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                     </div>
                   </section>
 
+                  {/* CADASTRO NA RECEITA FEDERAL (preenchido pelo agente a partir do CNPJ) */}
+                  {(lead as any).receita?.status === 'ok' && (() => { const r = (lead as any).receita; return (
+                  <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100">
+                    <h4 className={sectionHeader}>Cadastro na Receita Federal</h4>
+                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                      {([['Situação', r.situacao], ['Porte', r.porte], ['Abertura', r.abertura ? r.abertura.split('-').reverse().join('/') : ''],
+                         ['Simples Nacional', r.simples === null || r.simples === undefined ? '' : r.simples ? 'Optante' : 'Não optante'],
+                         ['Atividade principal', r.cnae_descricao], ['Natureza jurídica', r.natureza_juridica],
+                         ['Capital social', typeof r.capital_social === 'number' ? r.capital_social.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : ''],
+                         ['Telefones', (r.telefones || []).join(' · ')], ['E-mail cadastrado', r.email],
+                         ['Endereço', [r.endereco, [r.municipio, r.uf].filter(Boolean).join('/'), r.cep].filter(Boolean).join(' · ')]] as [string, string][])
+                        .filter(([, v]) => v).map(([k, v]) => <div key={k}><dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{k}</dt><dd className="font-bold text-slate-700 break-words">{v}</dd></div>)}
+                    </dl>
+                    <p className="text-[10px] text-slate-400 mt-4">Dados públicos do CNPJ, consultados em {new Date(r.consultado_em).toLocaleDateString('pt-BR')}. O telefone é o cadastrado na Receita; pode não ser WhatsApp.</p>
+                  </section>); })()}
+
                   {/* QUADRO SOCIETÁRIO (QSA) */}
                   <section className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner">
                     <h4 className={sectionHeader}>Quadro Societário (QSA)</h4>
