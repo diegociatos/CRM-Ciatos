@@ -11,6 +11,7 @@ const CAMPOS: { id: string; label: string; sinonimos: string[] }[] = [
   { id: 'cargo', label: 'Cargo', sinonimos: ['cargo', 'funcao'] },
   { id: 'email', label: 'E-mail', sinonimos: ['email', 'emailcontato', 'mail', 'correioeletronico'] },
   { id: 'telefone', label: 'Telefone / WhatsApp', sinonimos: ['telefone', 'celular', 'whatsapp', 'fone', 'tel', 'telefonecontato'] },
+  { id: 'site', label: 'Site da empresa', sinonimos: ['site', 'website', 'dominio', 'url', 'sitedaempresa', 'siteempresa', 'paginaweb', 'homepage'] },
   { id: 'cidade', label: 'Cidade', sinonimos: ['cidade', 'municipio'] },
   { id: 'uf', label: 'UF', sinonimos: ['uf', 'estado'] },
   { id: 'segmento', label: 'Segmento', sinonimos: ['segmento', 'atividade', 'ramo', 'setor', 'ramodeatividade'] },
@@ -20,6 +21,7 @@ const CAMPOS: { id: string; label: string; sinonimos: string[] }[] = [
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SITE_RE = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,63}(\/|\?|#|$)/i;
 const LOTE = 500;
 
 /** CSV simples com aspas, separador ; ou , (o Excel em português usa ;). */
@@ -62,7 +64,7 @@ async function lerArquivo(arquivo: File): Promise<string[][]> {
 
 function modeloCsv() {
   const cab = CAMPOS.map(c => c.label.replace(/ \(.*\)/, '')).join(';');
-  const ex = 'Alfa Comércio Ltda;Alfa;11.222.333/0001-81;Ana Souza;Sócia;ana@alfa.com.br;(31) 99999-0000;Belo Horizonte;MG;Comércio;Cliente desde 2020;Simples Nacional; Newsletter';
+  const ex = 'Alfa Comércio Ltda;Alfa;11.222.333/0001-81;Ana Souza;Sócia;ana@alfa.com.br;(31) 99999-0000;alfa.com.br;Belo Horizonte;MG;Comércio;Cliente desde 2020;Simples Nacional; Newsletter';
   const url = URL.createObjectURL(new Blob(['﻿' + cab + '\r\n' + ex + '\r\n'], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = 'modelo-importacao-crm.csv'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -70,8 +72,9 @@ function modeloCsv() {
 
 interface Resultado { inseridos: number; atualizados: number; ignorados: number; erros: { linha: number; motivo: string }[] }
 
-export default function ImportContacts({ organizationId, companyName, onImported }: { organizationId: string; companyName: string; onImported: () => void }) {
-  const [tipo, setTipo] = useState<'cliente' | 'prospect'>('cliente');
+export default function ImportContacts({ organizationId, companyName, onImported, onGoAgent, onGoRadar }: { organizationId: string; companyName: string; onImported: () => void; onGoAgent?: () => void; onGoRadar?: () => void }) {
+  const [tipo, setTipo] = useState<'cliente' | 'prospect' | 'lista'>('cliente');
+  const [nomeLista, setNomeLista] = useState('');
   const [etiquetas, setEtiquetas] = useState('');
   const [fonte, setFonte] = useState('Planilha de clientes');
   const [arquivo, setArquivo] = useState('');
@@ -115,23 +118,33 @@ export default function ImportContacts({ organizationId, companyName, onImported
   const resumo = useMemo(() => {
     const comEmail = linhas.filter(l => EMAIL_RE.test(l.email || '')).length;
     const semIdentificacao = linhas.filter(l => !l.razao_social && !l.nome_fantasia && !l.contato && !l.email).length;
-    return { total: linhas.length, comEmail, emailInvalido: linhas.filter(l => l.email && !EMAIL_RE.test(l.email)).length, semIdentificacao };
+    const soSite = linhas.filter(l => !EMAIL_RE.test(l.email || '') && SITE_RE.test(l.site || '')).length;
+    const semCaminho = linhas.filter(l => !EMAIL_RE.test(l.email || '') && !SITE_RE.test(l.site || '') && (l.razao_social || l.nome_fantasia || l.contato)).length;
+    return { total: linhas.length, comEmail, soSite, semCaminho, emailInvalido: linhas.filter(l => l.email && !EMAIL_RE.test(l.email)).length, semIdentificacao };
   }, [linhas]);
 
   const importar = async () => {
     if (!linhas.length || importando) return;
+    const emLista = tipo === 'lista';
+    if (emLista && nomeLista.trim().length < 3) { setErro('Dê um nome à lista de prospecção (ao menos 3 letras).'); return; }
     const destino = tipo === 'cliente' ? 'clientes da carteira' : 'prospects';
-    if (!window.confirm(`Importar ${linhas.length} linha(s) como ${destino} em ${companyName}?\n\nQuem já existir (mesmo CNPJ ou e-mail) só terá os campos vazios completados.`)) return;
+    if (!window.confirm(emLista
+      ? `Criar a lista "${nomeLista.trim()}" com ${linhas.length} linha(s) em ${companyName}?\n\nNada é enviado agora. O agente só trabalha a lista depois que você ligá-lo na Central da IA.`
+      : `Importar ${linhas.length} linha(s) como ${destino} em ${companyName}?\n\nQuem já existir (mesmo CNPJ ou e-mail) só terá os campos vazios completados.`)) return;
     setImportando(true); setErro(''); setResultado(null); setProgresso(0);
     const tags = etiquetas.split(/[;,]/).map(t => t.trim()).filter(Boolean);
     const total: Resultado = { inseridos: 0, atualizados: 0, ignorados: 0, erros: [] };
     try {
+      let job: string | null = null;
       for (let i = 0; i < linhas.length; i += LOTE) {
-        const { data, error } = await supabase.rpc('import_leads', {
-          org: organizationId, tipo, linhas: linhas.slice(i, i + LOTE), etiquetas: tags, fonte: fonte || 'Importação de planilha',
-        });
+        const { data, error } = emLista
+          ? await supabase.rpc('import_radar_sheet', { org: organizationId, job, lista: nomeLista.trim(), linhas: linhas.slice(i, i + LOTE), arquivo })
+          : await supabase.rpc('import_leads', {
+            org: organizationId, tipo, linhas: linhas.slice(i, i + LOTE), etiquetas: tags, fonte: fonte || 'Importação de planilha',
+          });
         if (error) throw new Error(error.message);
-        total.inseridos += data.inseridos; total.atualizados += data.atualizados; total.ignorados += data.ignorados;
+        if (emLista) job = data.job_id;
+        total.inseridos += data.inseridos; total.atualizados += data.atualizados || 0; total.ignorados += data.ignorados;
         // +2: linha 1 é o cabeçalho e a numeração do banco começa em 1 dentro do lote.
         total.erros.push(...(data.erros || []).map((e: any) => ({ linha: e.linha + i + 1, motivo: e.motivo })));
         setProgresso(Math.min(linhas.length, i + LOTE));
@@ -158,19 +171,23 @@ export default function ImportContacts({ organizationId, companyName, onImported
 
     <div className={card}>
       <h2 className="font-bold text-lg">1. O que você está importando?</h2>
-      <div className="grid md:grid-cols-2 gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
         {([['cliente', 'Clientes da carteira', 'Já são clientes. Entram como contrato fechado e podem receber comunicados e cadências de relacionamento.'],
-           ['prospect', 'Prospects', 'Empresas para prospectar. Entram na Fila de Qualificação; e-mail frio só sai depois de verificado.']] as const).map(([id, titulo, texto]) =>
+           ['prospect', 'Prospects', 'Empresas para prospectar. Entram na Fila de Qualificação; e-mail frio só sai depois de verificado.'],
+           ['lista', 'Lista para o Snov.io e cadência', 'Leads que você gerou. Viram uma lista do Radar: o agente completa e verifica o e-mail no Snov.io e inscreve na cadência de prospecção.']] as const).map(([id, titulo, texto]) =>
           <label key={id} className={`border rounded-xl p-4 cursor-pointer ${tipo === id ? 'border-amber-500 ring-2 ring-amber-200' : 'border-slate-200'}`}>
             <input type="radio" name="tipo" className="mr-2" checked={tipo === id} onChange={() => setTipo(id)} disabled={importando} />
             <strong>{titulo}</strong><p className="text-sm text-slate-500 mt-1">{texto}</p>
           </label>)}
       </div>
-      <div className="grid md:grid-cols-2 gap-3">
+      {tipo === 'lista' ? <>
+        <label className="block">Nome da lista<input className={field} value={nomeLista} disabled={importando} maxLength={120} onChange={e => setNomeLista(e.target.value)} placeholder="Ex.: Feira de Logística · outubro/2026" /></label>
+        <p className="text-sm text-slate-500">Para o Snov.io trabalhar, cada linha precisa de <strong>e-mail</strong> (ele verifica se é válido) ou do <strong>site da empresa</strong> (ele procura o e-mail do decisor). O nome do contato ajuda a achar a pessoa certa. O nome do arquivo fica registrado como origem (exigência da LGPD).</p>
+      </> : <><div className="grid md:grid-cols-2 gap-3">
         <label className="block">Etiquetas para todos (opcional)<input className={field} value={etiquetas} disabled={importando} onChange={e => setEtiquetas(e.target.value)} placeholder="Ex.: Carteira 2026; Newsletter" /></label>
         <label className="block">Origem dos dados<input className={field} value={fonte} disabled={importando} maxLength={200} onChange={e => setFonte(e.target.value)} placeholder="Ex.: Planilha do financeiro" /></label>
       </div>
-      <p className="text-sm text-slate-500">A origem fica registrada em cada contato (exigência da LGPD).</p>
+      <p className="text-sm text-slate-500">A origem fica registrada em cada contato (exigência da LGPD).</p></>}
     </div>
 
     <div className={card}>
@@ -196,31 +213,39 @@ export default function ImportContacts({ organizationId, companyName, onImported
       </div>
       <div className="flex flex-wrap gap-4 text-sm">
         <span>✓ {resumo.comEmail} com e-mail válido</span>
+        {tipo === 'lista' && <span>✓ {resumo.soSite} só com site (o Snov.io procura o e-mail)</span>}
+        {tipo === 'lista' && resumo.semCaminho > 0 && <span className="text-amber-700">⚠ {resumo.semCaminho} sem e-mail e sem site (ficam para revisão manual)</span>}
         {resumo.emailInvalido > 0 && <span className="text-amber-700">⚠ {resumo.emailInvalido} com e-mail inválido (entram sem e-mail)</span>}
         {resumo.semIdentificacao > 0 && <span className="text-amber-700">⚠ {resumo.semIdentificacao} sem empresa, contato ou e-mail (serão ignoradas)</span>}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr>{['Empresa', 'CNPJ', 'Contato', 'E-mail', 'Telefone', 'Cidade/UF'].map(h => <th key={h} className="text-left p-2 border-b">{h}</th>)}</tr></thead>
+          <thead><tr>{['Empresa', 'CNPJ', 'Contato', 'E-mail', 'Site', 'Telefone', 'Cidade/UF'].map(h => <th key={h} className="text-left p-2 border-b">{h}</th>)}</tr></thead>
           <tbody>{linhas.slice(0, 8).map((l, i) => <tr key={i}>
             <td className="p-2 border-b">{l.nome_fantasia || l.razao_social}</td><td className="p-2 border-b">{l.cnpj}</td>
             <td className="p-2 border-b">{l.contato}</td><td className={`p-2 border-b ${l.email && !EMAIL_RE.test(l.email) ? 'text-red-700' : ''}`}>{l.email}</td>
-            <td className="p-2 border-b">{l.telefone}</td><td className="p-2 border-b">{[l.cidade, l.uf].filter(Boolean).join('/')}</td>
+            <td className="p-2 border-b">{l.site}</td><td className="p-2 border-b">{l.telefone}</td><td className="p-2 border-b">{[l.cidade, l.uf].filter(Boolean).join('/')}</td>
           </tr>)}</tbody>
         </table>
         {linhas.length > 8 && <p className="text-sm text-slate-500 mt-2">Mostrando 8 de {linhas.length} linhas.</p>}
       </div>
       <button className="btn-navy" disabled={importando || !linhas.length} onClick={() => void importar()}>
-        {importando ? `Importando… ${progresso}/${linhas.length}` : `Importar ${linhas.length} contato(s)`}
+        {importando ? `Importando… ${progresso}/${linhas.length}` : tipo === 'lista' ? `Criar lista com ${linhas.length} lead(s)` : `Importar ${linhas.length} contato(s)`}
       </button>
     </div>}
 
     {resultado && <div className={card} role="status">
-      <h2 className="font-bold text-lg">Importação concluída</h2>
-      <p>{resultado.inseridos} novo(s) · {resultado.atualizados} já existente(s) completado(s) · {resultado.ignorados} ignorado(s)</p>
+      <h2 className="font-bold text-lg">{tipo === 'lista' ? 'Lista criada' : 'Importação concluída'}</h2>
+      <p>{tipo === 'lista' ? `${resultado.inseridos} lead(s) na lista "${nomeLista.trim()}" · ${resultado.ignorados} ignorado(s)` : `${resultado.inseridos} novo(s) · ${resultado.atualizados} já existente(s) completado(s) · ${resultado.ignorados} ignorado(s)`}</p>
       {resultado.erros.length > 0 && <details><summary className="cursor-pointer">Ver avisos por linha ({resultado.erros.length})</summary>
         <ul className="text-sm mt-2 space-y-1">{resultado.erros.slice(0, 200).map((e, i) => <li key={i}>Linha {e.linha}: {e.motivo}</li>)}</ul></details>}
-      <p className="text-sm text-slate-500">{tipo === 'cliente' ? 'Os clientes aparecem em Clientes Ativos e já podem receber Comunicados.' : 'Os prospects estão na Fila de Qualificação.'}</p>
+      {tipo === 'lista' ? <>
+        <p className="text-sm text-slate-600">Nada foi enviado. Próximo passo: na Central da IA, aba do agente, escolha esta lista e uma cadência de prospecção ativa, e ligue o agente. Ele verifica e completa os e-mails no Snov.io e inscreve cada contato válido na cadência.</p>
+        <div className="flex flex-wrap gap-3">
+          {onGoAgent && <button type="button" className="btn-navy" onClick={onGoAgent}>Ligar o agente nesta lista</button>}
+          {onGoRadar && <button type="button" className="ux-secondary" onClick={onGoRadar}>Ver a lista no Radar</button>}
+        </div>
+      </> : <p className="text-sm text-slate-500">{tipo === 'cliente' ? 'Os clientes aparecem em Clientes Ativos e já podem receber Comunicados.' : 'Os prospects estão na Fila de Qualificação.'}</p>}
     </div>}
   </section>;
 }

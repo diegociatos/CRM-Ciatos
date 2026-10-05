@@ -19,6 +19,7 @@ test('importa planilha de clientes e monta comunicado com público e teste', asy
       const body = req.postDataJSON(); calls.push({ name, body });
       const json: any = name === 'my_companies' ? companies : name === 'tenant_member' || name === 'pode_administrar' ? true
         : name === 'import_leads' ? { inseridos: body.linhas.length, atualizados: 0, ignorados: 0, erros: [] }
+        : name === 'import_radar_sheet' ? { job_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', inseridos: body.linhas.length, ignorados: 0, erros: [] }
         : name === 'broadcast_audience_count' ? { total: body.aud.tags?.length ? 1 : 2, exemplos: ['Alfa'] }
         : name === 'save_broadcast' ? 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' : name === 'broadcast_stats' ? [] : null;
       return route.fulfill({ headers, json });
@@ -43,6 +44,24 @@ test('importa planilha de clientes e monta comunicado com público e teste', asy
   const imp = calls.find(c => c.name === 'import_leads')!.body;
   expect(imp.tipo).toBe('cliente');
   expect(imp.linhas[0]).toMatchObject({ razao_social: 'Alfa Ltda', nome_fantasia: 'Alfa', cnpj: '11.222.333/0001-81', contato: 'Ana', email: 'ana@alfa.test', uf: 'MG' });
+
+  // Lista de prospecção: vai para o Radar (Snov.io + cadência), não para a carteira.
+  await page.getByText('Lista para o Snov.io e cadência').click();
+  const leadsCsv = 'Empresa;Contato;E-mail;Site\r\nGama;Carla;carla@gama.test;\r\nDelta;Davi;;https://www.delta.com.br\r\nÉpsilon;Eva;;\r\n';
+  await page.getByLabel('Arquivo da planilha').setInputFiles({ name: 'feira.csv', mimeType: 'text/csv', buffer: Buffer.from(leadsCsv, 'utf8') });
+  await expect(page.getByText('1 só com site')).toBeVisible();
+  await expect(page.getByText(/1 sem e-mail e sem site/)).toBeVisible();
+  await page.getByRole('button', { name: 'Criar lista com 3 lead(s)' }).click();
+  await expect(page.getByText('Dê um nome à lista de prospecção')).toBeVisible();
+  await page.getByLabel('Nome da lista').fill('Feira de Logística');
+  page.once('dialog', d => d.accept());
+  await page.getByRole('button', { name: 'Criar lista com 3 lead(s)' }).click();
+  await expect(page.getByRole('heading', { name: 'Lista criada' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ligar o agente nesta lista' })).toBeVisible();
+  const lista = calls.find(c => c.name === 'import_radar_sheet')!.body;
+  expect(lista).toMatchObject({ org: a, job: null, lista: 'Feira de Logística', arquivo: 'feira.csv' });
+  expect(lista.linhas[1]).toMatchObject({ nome_fantasia: 'Delta', contato: 'Davi', site: 'https://www.delta.com.br' });
+  expect(calls.filter(c => c.name === 'import_leads')).toHaveLength(1);
 
   await page.getByRole('button', { name: 'Comunicados', exact: true }).click();
   await expect(page.getByText('Envio desligado nesta empresa')).toBeVisible();
