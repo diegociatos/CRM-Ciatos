@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
-import { SnovAdapter, verifiedResult } from '../supabase/functions/_shared/snov.ts';
+import { SnovAdapter, snovListRows, verifiedResult } from '../supabase/functions/_shared/snov.ts';
 
 const org='00000000-0000-4000-8000-000000000001';
 const uid='11111111-1111-4111-8111-111111111111';
@@ -109,4 +109,19 @@ test('Snov disabled by default; unknown/catch-all never verifies; API requests a
   await adapter.start('discover','example.test');
   await assert.rejects(adapter.result('discover','https://evil.test/'));
   assert.deepEqual(requests,['https://api.snov.io/v1/oauth/access_token','https://api.snov.io/v2/domain-search/prospects/start']);
+});
+test('Snov lists use fixed read routes and do not treat an imported email as freshly verified',async()=>{
+  const calls:string[]=[];
+  const adapter=new SnovAdapter(n=>({CRM_SNOV_ENABLED:'true',SNOV_CLIENT_ID:'fake',SNOV_CLIENT_SECRET:'fake'})[n],async(url)=>{
+    calls.push(String(url));return Response.json(calls.length===1?{access_token:'fake'}:{success:true,prospects:[]});
+  });
+  await adapter.lists();
+  await adapter.listProspects(41281293,1);
+  await assert.rejects(adapter.listProspects(0,1));
+  assert.deepEqual(calls.map(u=>u.split('?')[0]),['https://api.snov.io/v1/oauth/access_token','https://api.snov.io/v1/get-user-lists','https://api.snov.io/v1/prospect-list']);
+  const rows=snovListRows({success:true,prospects:[{id:'abc123456789',name:'Ana Exemplo',emails:[{email:'ana@example.test',isVerified:true}]},{id:'xyz987654321',name:'Bia',emails:[{email:'bia@example.test'},{email:'bia2@example.test'}]}]});
+  assert.equal(rows.length,2);
+  assert.equal(rows[0].emailCompany,'ana@example.test');
+  assert.equal(rows[1].emailCompany,'');
+  assert.equal((rows[0] as any).email_verified_at,undefined);
 });

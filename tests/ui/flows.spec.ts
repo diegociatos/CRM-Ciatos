@@ -12,6 +12,20 @@ async function contact(page:Page){
  await page.getByLabel('E-mail profissional').fill('contato@example.test');
 }
 test.beforeEach(async({page})=>{await page.goto('/tests/ui/?flow');});
+test('empty views explain the next action on desktop and mobile',async({page})=>{
+ await expect(page.getByRole('heading',{name:'Tudo pronto para receber novos leads.'})).toBeVisible();
+ await page.getByRole('button',{name:'Pipeline Comercial',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'O pipeline começa com um lead qualificado.'})).toBeVisible();
+ await page.getByRole('button',{name:'Minha Agenda',exact:true}).click();
+ await expect(page.getByText('Nenhum compromisso neste dia.')).toBeVisible();
+ await page.getByRole('button',{name:'Agendar atividade →'}).click();
+ await expect(page.getByRole('dialog',{name:'Agendar atividade'})).toBeVisible();
+ await page.getByRole('button',{name:'Fechar agendamento'}).click();
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Pipeline Comercial',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'O pipeline começa com um lead qualificado.'})).toBeInViewport();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
 test('cancel, Escape and dirty protection preserve deliberate user choices',async({page})=>{
  await page.getByRole('button',{name:'Novo Lead',exact:true}).click();
  await page.keyboard.press('Escape');

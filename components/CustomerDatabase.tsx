@@ -1,16 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner } from '../types';
+import WorkspaceEmpty from './WorkspaceEmpty';
 
 interface CustomerDatabaseProps {
   leads: Lead[];
   currentUser: User;
   onUpdateCustomer: (customer: Lead) => void;
   onDeleteCustomer: (id: string) => void;
+  onImport?: () => void;
+  onCreate?: () => void;
 }
 
-const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer, onDeleteCustomer }) => {
-  const customers = useMemo(() => leads.filter(l => l.status === LeadStatus.WON), [leads]);
+const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer, onDeleteCustomer, onImport, onCreate }) => {
+  const customers = useMemo(() => leads.filter(l => l.status === LeadStatus.WON || l.relacao === 'cliente'), [leads]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'perfil' | 'timeline' | 'feedback' | 'onboarding'>('perfil');
   const [feedbackText, setFeedbackText] = useState('');
@@ -112,7 +115,14 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+        {filteredCustomers.length === 0 ? <WorkspaceEmpty
+          eyebrow={searchTerm ? 'SEM RESULTADOS' : 'COMECE SUA CARTEIRA'}
+          title={searchTerm ? 'Nenhum cliente corresponde à busca.' : 'Seus clientes aparecem aqui.'}
+          description={searchTerm ? 'Tente o nome da empresa, do contato ou o CNPJ. Você também pode limpar a busca.' : 'Importe sua carteira existente. Leads cadastrados manualmente também aparecerão aqui quando o negócio for marcado como ganho.'}
+          steps={searchTerm ? undefined : ['Importe clientes ou cadastre um novo lead.', 'Registre o contrato e os serviços ativos.', 'Acompanhe relacionamento, onboarding e novas oportunidades.']}
+          action={searchTerm ? {label:'Limpar busca',onClick:()=>setSearchTerm('')} : onImport ? {label:'Importar clientes',onClick:onImport} : undefined}
+          secondary={!searchTerm && onCreate ? {label:'Cadastrar lead',onClick:onCreate} : undefined}
+        /> : <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
            <table className="w-full text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                  <tr>
@@ -153,16 +163,9 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                       </td>
                    </tr>
                  ))}
-                 {filteredCustomers.length === 0 && (
-                   <tr>
-                     <td colSpan={5} className="py-32 text-center">
-                        <p className="text-slate-300 italic serif-authority text-xl">Nenhum cliente ativo localizado.</p>
-                     </td>
-                   </tr>
-                 )}
               </tbody>
            </table>
-        </div>
+        </div>}
       </div>
     );
   }

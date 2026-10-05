@@ -38,22 +38,22 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
   const inputClass = "w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#c5a059] transition-all";
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-8">
+    <div className="users-workspace space-y-7 animate-in fade-in duration-500">
+      <div className="flex flex-wrap gap-4 justify-between items-end border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Gestão de Usuários</h1>
-          <p className="text-slate-500 text-lg font-medium">Administre os acessos e permissões da equipe Ciatos.</p>
+          <h1 className="text-3xl font-bold text-[#0a192f] mb-2 serif-authority tracking-tight">Gestão de usuários</h1>
+          <p className="text-slate-600">Veja quem trabalha nesta empresa e administre os acessos da equipe.</p>
         </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="bg-[#0a192f] text-white px-10 py-4 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-2xl border-b-4 border-[#c5a059] hover:scale-105 transition-all"
+          className="bg-[#0a192f] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#173744] transition-all"
         >
-          🚀 Adicionar Membro
+          + Adicionar membro
         </button>
       </div>
 
-      <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[650px] text-left border-collapse">
           <thead className="bg-slate-50/50 border-b border-slate-100">
             <tr>
               <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Membro</th>

@@ -35,11 +35,28 @@ Esta versão é um piloto seguro para homologação. Aplicar migrations não age
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | Envio e validação de eventos |
 | `CRM_AI_ENABLED`, `CRM_AI_PROVIDER` | Ativação e provider `openai` ou `anthropic` |
 | `OPENAI_API_KEY`, `CRM_OPENAI_MODEL` | Modelo escolhido/configurado pelo operador; não existe fallback silencioso |
-| `ANTHROPIC_API_KEY`, `CRM_CLAUDE_MODEL` | Claude; Radar/assistentes legados ainda dependem de Claude |
-| `CRM_SNOV_ENABLED`, `SNOV_CLIENT_ID`, `SNOV_CLIENT_SECRET` | Snov.io opcional |
+| `ANTHROPIC_API_KEY`, `CRM_CLAUDE_MODEL` | Claude; permanece disponível ao selecionar `CRM_AI_PROVIDER=anthropic` |
+| `CRM_SNOV_ENABLED`, `SNOV_CLIENT_ID`, `SNOV_CLIENT_SECRET` | Snov.io opcional; use o API User ID e API Secret da conta Snov.io como secrets do servidor. Não use valores `VITE_`. |
+
 | `CRM_APP_URLS` | Origens permitidas para convites legados |
 
+O Radar agora pode consultar e importar listas existentes do Snov.io, uma página de até 100 contatos por vez. Publique também a função `crm-snov-lists` e a migração `20260930160000_snov_list_import.sql`. O acesso às listas da conta do grupo exige o dono da plataforma ou o master `diegociatos@gmail.com`, além de permissão administrativa na empresa selecionada. Outros clientes do CRM não têm acesso à conta Snov do grupo. A importação deduplica por ID do contato na lista, mantém cada empresa isolada e não ativa cadências. E-mails vindos da lista não recebem data de verificação: verifique a origem/finalidade do contato e valide o endereço antes de enviar. Listas do Snov não entram automaticamente na fila SDR; o operador faz a triagem pelo Radar. A conta Snov e seus créditos precisam estar habilitados para API; teste primeiro a consulta de listas e uma lista de teste sem envios.
+
 As variáveis internas `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` são do runtime Supabase. Nunca coloque service_role, chaves de IA, Resend, Snov ou secrets em VITE_, tabelas de configuração, logs, commits ou chat.
+
+### Escolher GPT ou Claude para a IA do CRM
+
+O proprietário cadastra as chaves **somente nos Secrets do Supabase**, sem colá-las em formulários públicos, repositório ou conversa. `OPENAI_API_KEY` e `CRM_OPENAI_MODEL` habilitam GPT; `ANTHROPIC_API_KEY` e `CRM_CLAUDE_MODEL` mantêm Claude disponível. `CRM_AI_PROVIDER=openai` ou `anthropic` escolhe **um** provedor para toda a instalação e todas as empresas. `CRM_AI_ENABLED=true` permite as consultas; não ativa cadências ou envios. Não há troca automática de provedor por falha de saldo, para não mudar custos e destino de dados sem decisão do proprietário.
+
+O provedor escolhido cuida da ajuda com objeções, personalização de e-mails, supervisão das cadências e classificação das respostas. O Radar usa a Database Search API do Snov.io e não chama GPT ou Claude para descobrir empresas. A assinatura do ChatGPT e o faturamento da API são distintos; a chave e a conta da API precisam estar aptas ao uso para as funções de IA.
+
+### Radar pela base de empresas do Snov.io
+
+Publique `crm-snov-search` junto com o frontend. A busca recebe setor e localização, salva o identificador da tarefa no job e consulta uma página por vez, até 25 páginas ou a meta de 500 empresas. Retomar a lista consulta a mesma tarefa pendente, sem iniciar outra pesquisa para a página. O Snov.io cobra um crédito por busca única de empresas que retorna resultado, segundo sua documentação; a busca não revela e-mails. O Radar mostra o aviso antes de iniciar. Não execute buscas reais na implantação sem o operador decidir iniciar uma lista.
+
+A API de empresas fornece nome, domínio, localização, setor e faixa de funcionários; **não fornece CNPJ, regime tributário nem status cadastral na Receita**. O CRM não preenche esses campos por inferência e não rotula os resultados como verificados pela Receita. Filtros antigos de porte jurídico e regime são ignorados ao retomar listas anteriores; novas listas pedem apenas setor, localidade e meta. O usuário revisa os resultados antes de importar. O agente SDR, se configurado separadamente, ainda precisa descobrir/verificar endereço, respeitar origem/base de contato, política de envio e demais bloqueios.
+
+A conta Snov.io configurada hoje é global do Grupo Ciatos. A busca de sua base fica restrita ao administrador da plataforma ou usuário master com permissão administrativa na empresa ativa. Para clientes externos futuros, configure credenciais separadas por empresa antes de oferecer essa busca. Nenhuma chave é enviada ao navegador.
 
 Envio real exige **todos** os controles: flag global, política `outreach_policy.live_enabled`, remetente verificado em formato `email@dominio`, inscrição com `dry_run=false`, cadência ativa, tenant ativo, email verificado há menos de 30 dias, `contact_basis` e `contact_source`, ausência de opt-out/supressão e cotas disponíveis. A tela só cria inscrições simuladas. Não converter simulações em envios: criar outra cadência/inscrição após revisão. As verificações e políticas de envio são alteráveis apenas no servidor.
 

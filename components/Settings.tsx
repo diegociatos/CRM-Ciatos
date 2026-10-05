@@ -1,4 +1,5 @@
 
+import OnboardingTemplateEditor from './OnboardingTemplateEditor';
 import React, { useState } from 'react';
 import { 
   SystemConfig, UserRole, User, Lead, OnboardingTemplate, 
@@ -6,6 +7,7 @@ import {
 } from '../types';
 
 interface SettingsProps {
+  initialTab?: 'journeys';
   config: SystemConfig;
   role: UserRole;
   currentUser: User;
@@ -17,14 +19,14 @@ interface SettingsProps {
   onSeedDatabase: () => void;
   onClearDatabase: () => void;
   templates: OnboardingTemplate[];
-  onSaveTemplates: (tpls: OnboardingTemplate[]) => void;
+  onSaveTemplates: (tpls: OnboardingTemplate[]) => void | Promise<void>;
   onSyncTemplate: (templateId: string, leadIds: string[]) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
-  config, onSaveConfig, leads, userGoals, allUsers, onSaveGoals, onSeedDatabase, onClearDatabase, templates, onSaveTemplates, onSyncTemplate, currentUser 
+  initialTab, config, onSaveConfig, leads, userGoals, allUsers, onSaveGoals, onSeedDatabase, onClearDatabase, templates, onSaveTemplates, onSyncTemplate, currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'comercial' | 'parametros' | 'journeys' | 'data'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'comercial' | 'parametros' | 'journeys' | 'data'>(initialTab || 'pipeline');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
   // States para novos itens
@@ -153,31 +155,8 @@ const Settings: React.FC<SettingsProps> = ({
 
   const handleDeleteTemplate = (id: string) => {
     if (confirm("Deseja remover este modelo de onboarding?")) {
-      onSaveTemplates(templates.filter(t => t.id !== id));
+      Promise.resolve(onSaveTemplates(templates.filter(t => t.id !== id))).catch(()=>alert('Não foi possível remover o modelo. Tente novamente.'));
     }
-  };
-
-  const handleSaveTpl = () => {
-    if (!editingTpl?.name || !editingTpl?.serviceType) {
-      return alert("Preencha o nome e o tipo de serviço do modelo.");
-    }
-    
-    const finalTpl: OnboardingTemplate = {
-      ...editingTpl,
-      id: editingTpl.id || `tpl-${Date.now()}`,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUser.name,
-      phases: editingTpl.phases || []
-    } as OnboardingTemplate;
-
-    const exists = templates.find(t => t.id === finalTpl.id);
-    const nextTemplates = exists 
-      ? templates.map(t => t.id === finalTpl.id ? finalTpl : t)
-      : [...templates, finalTpl];
-    
-    onSaveTemplates(nextTemplates);
-    setIsTplModalOpen(false);
-    setEditingTpl(null);
   };
 
   // Design Tokens
@@ -187,18 +166,18 @@ const Settings: React.FC<SettingsProps> = ({
   const inputStyled = "w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold text-[#0a192f] outline-none focus:border-[#c5a059] transition-all";
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in pb-20">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-10">
+    <div className="settings-workspace max-w-7xl mx-auto space-y-8 animate-in fade-in pb-20">
+      <div className="flex flex-wrap gap-5 justify-between items-end border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-4xl font-black text-[#0a192f] mb-2 serif-authority tracking-tight">Configurações Gerais</h1>
-          <p className="text-slate-500 text-lg font-medium">Customização de Pipeline, Bônus e Canais.</p>
+          <h1 className="text-3xl font-bold text-[#0a192f] mb-2 serif-authority tracking-tight">Configurações</h1>
+          <p className="text-slate-600">Organize etapas, metas, jornadas e preferências desta empresa.</p>
         </div>
-        <div className="flex bg-slate-100 p-1.5 rounded-[2.2rem] border border-slate-200 shadow-inner overflow-x-auto no-scrollbar">
-           {([['pipeline', '📝 PIPELINE & CANAIS'], ['comercial', '💸 METAS & BÔNUS'], ['parametros', '⚙️ PARÂMETROS'], ['journeys', '🏁 JORNADAS'], ['data', '💾 SISTEMA']] as const).map(([id, label]) => (
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
+           {([['pipeline', 'Pipeline e canais'], ['comercial', 'Metas e bônus'], ['parametros', 'Parâmetros'], ['journeys', 'Jornadas'], ['data', 'Sistema']] as const).map(([id, label]) => (
              <button 
                key={id}
                onClick={() => setActiveTab(id)}
-               className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === id ? 'bg-white text-[#0a192f] shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+               className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === id ? 'bg-white text-[#0a192f] shadow-sm' : 'text-slate-600 hover:text-[#0a192f]'}`}
              >
                {label}
              </button>
@@ -216,7 +195,7 @@ const Settings: React.FC<SettingsProps> = ({
              </h3>
              <div className="space-y-6">
                 <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
-                  Esta assinatura será fixada automaticamente em todos os e-mails enviados pelo CRM, utilizando a fonte **Book Antiqua**.
+                  Esta assinatura será adicionada aos e-mails enviados pelo CRM com a fonte Book Antiqua.
                 </p>
                 <div>
                    <label className={labelHeader}>Conteúdo da Assinatura (Texto ou HTML)</label>
@@ -508,103 +487,12 @@ const Settings: React.FC<SettingsProps> = ({
         </section>
       )}
 
-      {isTplModalOpen && editingTpl && (
-        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-[#0a192f]/90 backdrop-blur-md">
-           <div className="bg-white w-full max-w-5xl h-[90vh] rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-              <div className="p-10 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                 <div>
-                    <h2 className="text-3xl font-black text-[#0a192f] serif-authority">Editor de Modelo Onboarding</h2>
-                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Defina as fases obrigatórias de entrega técnica.</p>
-                 </div>
-                 <button onClick={() => setIsTplModalOpen(false)} className="text-3xl text-slate-300 hover:text-[#0a192f]">✕</button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-                 <div className="grid grid-cols-2 gap-8 mb-10">
-                    <div>
-                       <label className={labelHeader}>NOME DO MODELO</label>
-                       <input className={inputStyled} value={editingTpl.name || ''} onChange={e => setEditingTpl({...editingTpl, name: e.target.value})} placeholder="Ex: Jornada de Holding" />
-                    </div>
-                    <div>
-                       <label className={labelHeader}>TIPO DE SERVIÇO VINCULADO</label>
-                       <select className={inputStyled} value={editingTpl.serviceType || ''} onChange={e => setEditingTpl({...editingTpl, serviceType: e.target.value})}>
-                          {config.serviceTypes.map(s => <option key={s} value={s}>{s}</option>)}
-                       </select>
-                    </div>
-                    <div className="col-span-2">
-                       <label className={labelHeader}>DESCRIÇÃO BREVE</label>
-                       <textarea className={`${inputStyled} h-24 resize-none pt-4`} value={editingTpl.description || ''} onChange={e => setEditingTpl({...editingTpl, description: e.target.value})} placeholder="Descreva o objetivo desta jornada..." />
-                    </div>
-                 </div>
+      {isTplModalOpen && editingTpl && <OnboardingTemplateEditor initial={editingTpl} serviceTypes={config.serviceTypes} onClose={()=>{setIsTplModalOpen(false);setEditingTpl(null);}} onSave={async value=>{
+        const finalTpl={...value,updatedAt:new Date().toISOString(),updatedBy:currentUser.name};
+        await onSaveTemplates(templates.some(t=>t.id===finalTpl.id)?templates.map(t=>t.id===finalTpl.id?finalTpl:t):[...templates,finalTpl]);
+        setIsTplModalOpen(false);setEditingTpl(null);
+      }}/>}
 
-                 <div className="space-y-6">
-                    <div className="flex justify-between items-center mb-6">
-                       <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Fases da Entrega Técnica</h3>
-                       <button onClick={() => {
-                          const newPhase: OnboardingTemplatePhase = { 
-                            id: `tp-${Date.now()}`, 
-                            name: 'Nova Fase', 
-                            description: '', 
-                            order: editingTpl.phases?.length || 0, 
-                            defaultDueDays: 5, 
-                            mandatory: true 
-                          };
-                          setEditingTpl({ ...editingTpl, phases: [...(editingTpl.phases || []), newPhase] });
-                       }} className="px-6 py-2 bg-[#0a192f] text-white rounded-xl text-[9px] font-black uppercase tracking-widest border-b-2 border-[#c5a059]">+ Adicionar Fase</button>
-                    </div>
-
-                    <div className="space-y-4">
-                       {editingTpl.phases?.map((phase, idx) => (
-                          <div key={phase.id} className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner relative group">
-                             <button onClick={() => setEditingTpl({ ...editingTpl, phases: editingTpl.phases?.filter(p => p.id !== phase.id) })} className="absolute top-8 right-8 text-slate-300 hover:text-red-500">✕</button>
-                             <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-                                <div className="md:col-span-4">
-                                   <label className={labelHeader}>NOME DA FASE</label>
-                                   <input className={inputStyled} value={phase.name} onChange={e => {
-                                      const next = [...(editingTpl.phases || [])];
-                                      next[idx] = { ...phase, name: e.target.value };
-                                      setEditingTpl({ ...editingTpl, phases: next });
-                                   }} />
-                                </div>
-                                <div className="md:col-span-2">
-                                   <label className={labelHeader}>PRAZO (DIAS)</label>
-                                   <input type="number" className={inputStyled} value={phase.defaultDueDays} onChange={e => {
-                                      const next = [...(editingTpl.phases || [])];
-                                      next[idx] = { ...phase, defaultDueDays: parseInt(e.target.value) || 0 };
-                                      setEditingTpl({ ...editingTpl, phases: next });
-                                   }} />
-                                </div>
-                                <div className="md:col-span-2">
-                                   <label className={labelHeader}>QUEM EXECUTA</label>
-                                   <select className={inputStyled} value={(phase as any).executor === 'cliente' ? 'cliente' : 'equipe'} onChange={e => {
-                                      const next = [...(editingTpl.phases || [])];
-                                      next[idx] = { ...phase, executor: e.target.value } as any;
-                                      setEditingTpl({ ...editingTpl, phases: next });
-                                   }}>
-                                      <option value="equipe">Equipe</option>
-                                      <option value="cliente">Cliente</option>
-                                   </select>
-                                </div>
-                                <div className="md:col-span-4">
-                                   <label className={labelHeader}>DETALHES DA EXECUÇÃO</label>
-                                   <input className={inputStyled} value={phase.description} onChange={e => {
-                                      const next = [...(editingTpl.phases || [])];
-                                      next[idx] = { ...phase, description: e.target.value };
-                                      setEditingTpl({ ...editingTpl, phases: next });
-                                   }} placeholder="O que deve ser feito nesta fase?" />
-                                </div>
-                             </div>
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-              </div>
-              <div className="p-10 border-t border-slate-100 bg-slate-50 flex justify-end gap-6">
-                 <button onClick={() => setIsTplModalOpen(false)} className="px-10 py-4 bg-white border border-slate-200 text-slate-400 rounded-2xl font-black uppercase text-xs">Cancelar</button>
-                 <button onClick={handleSaveTpl} className="px-16 py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl border-b-4 border-[#c5a059]">Salvar Modelo</button>
-              </div>
-           </div>
-        </div>
-      )}
     </div>
   );
 };

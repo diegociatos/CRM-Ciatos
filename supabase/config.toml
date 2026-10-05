@@ -6,6 +6,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.crm-inbound-event]
 verify_jwt = false
+[functions.crm-email-open]
+verify_jwt = false
 # GET de retorno do login da Microsoft; os POST validam o usuário dentro da função.
 [functions.crm-ms365]
 verify_jwt = false

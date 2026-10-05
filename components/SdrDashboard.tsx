@@ -66,7 +66,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
   }, [qualifications, selectedUserId, selectedMonth]);
 
   return (
-    <div className="flex gap-8 animate-in fade-in duration-700">
+    <div className="performance-dashboard flex gap-8 animate-in fade-in duration-700">
       <div className="flex-1 space-y-10">
         {/* HEADER EXECUTIVO */}
         <div className="flex justify-between items-start">
@@ -105,7 +105,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
                     </div>
                  </div>
                  <div className="text-right">
-                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyProgress}%</p>
+                    <p className="text-3xl font-black text-emerald-400 serif-authority">{metrics.dailyGoal > 0 ? `${metrics.dailyProgress}%` : '—'}</p>
                     <p className="text-[8px] font-black uppercase text-slate-500">Objetivo Dia</p>
                  </div>
               </div>
@@ -142,7 +142,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               </div>
               <div className="mt-10 pt-6 border-t border-slate-50 flex justify-between">
                  <div><p className="text-[8px] font-black text-slate-300 uppercase">Meta Mensal</p><p className="text-sm font-bold text-slate-400">{metrics.goal?.qualsGoal || '—'}</p></div>
-                 <div className="text-right"><p className="text-[8px] font-black text-slate-300 uppercase">Ating.</p><p className="text-sm font-black text-[#0a192f]">{metrics.goal?.qualsGoal ? ((metrics.qualsCount/metrics.goal.qualsGoal)*100).toFixed(0) : 0}%</p></div>
+                 <div className="text-right"><p className="text-[8px] font-black text-slate-300 uppercase">Ating.</p><p className="text-sm font-black text-[#0a192f]">{metrics.goal?.qualsGoal ? `${((metrics.qualsCount/metrics.goal.qualsGoal)*100).toFixed(0)}%` : '—'}</p></div>
               </div>
            </div>
 
@@ -157,7 +157,7 @@ const SdrDashboard: React.FC<SdrDashboardProps> = ({ currentUser, allUsers, qual
               </div>
               <div className="mt-10 pt-6 border-t border-slate-50 flex justify-between">
                  <div><p className="text-[8px] font-black text-slate-300 uppercase">Meta Agendamento</p><p className="text-sm font-bold text-slate-400">{metrics.goal?.callsGoal || '—'}</p></div>
-                 <div className="text-right"><p className="text-[8px] font-black text-slate-300 uppercase">Ating.</p><p className="text-sm font-black text-[#0a192f]">{metrics.goal?.callsGoal ? ((metrics.meetingsCount/metrics.goal.callsGoal)*100).toFixed(0) : 0}%</p></div>
+                 <div className="text-right"><p className="text-[8px] font-black text-slate-300 uppercase">Ating.</p><p className="text-sm font-black text-[#0a192f]">{metrics.goal?.callsGoal ? `${((metrics.meetingsCount/metrics.goal.callsGoal)*100).toFixed(0)}%` : '—'}</p></div>
               </div>
            </div>
 
