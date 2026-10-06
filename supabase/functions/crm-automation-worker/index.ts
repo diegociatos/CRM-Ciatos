@@ -202,7 +202,7 @@ Deno.serve(async req => {
     const inicio=Date.now();let feitos=0;
     for(let i=0;i<8&&Date.now()-inicio<20000;i++){
       status.agent=await processSdr(db,env);
-      if(status.agent==='idle'||status.agent==='snov_disabled')break;
+      if(status.agent==='idle'||status.agent==='snov_disabled'||status.agent==='snov_refused')break;
       feitos++;
     }
     if(feitos)status.agent_processed=String(feitos);

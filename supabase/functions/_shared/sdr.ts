@@ -74,6 +74,10 @@ export async function lookupReceita(cnpj: string, request: Requester = fetch): P
   } catch { return 'retry'; }
 }
 
+const SNOV_MOTIVO:Record<string,string>={'401':'credencial inválida','402':'sem créditos na conta','403':'acesso negado pelo plano','429':'muitas consultas por minuto'};
+/** Código HTTP quando o Snov.io respondeu recusando (4xx). Timeout e 5xx ficam de fora: resultado incerto. */
+const snovCode=(e:unknown)=>String((e as Error)?.message||'').match(/^snov_(4\d\d)$/)?.[1]||(String((e as Error)?.message||'')==='snov_auth_failed'?'401':'');
+
 /** One durable enrichment transition. Simulation never consumes Snov credits. */
 export async function processSdr(db: any, env: Env, http: Requester = fetch) {
   await call(db,'prepare_sdr_queue');
@@ -109,11 +113,17 @@ export async function processSdr(db: any, env: Env, http: Requester = fetch) {
           const result=await adapter.start(kind,value);const hash=result.data?.task_hash||result.meta?.task_hash;
           if(typeof hash!=='string')throw new Error('invalid_result');
           await save(db.from('enrichment_requests').update({status:'WAITING',task_hash:hash,updated_at:new Date().toISOString()}).eq('id',id));
-        }catch{await save(db.from('enrichment_requests').update({status:'FAILED'}).eq('id',id));throw new Error('provider_failed');}
+        }catch(e){
+          const code=snovCode(e);
+          // Recusa explícita do Snov.io não cria tarefa lá: o pedido volta a PENDING e pode repetir sem gastar em dobro.
+          await save(db.from('enrichment_requests').update({status:code?'PENDING':'FAILED',result:{error:String((e as Error)?.message||'').slice(0,80)},updated_at:new Date().toISOString()}).eq('id',id));
+          throw new Error(code?`snov_refused:${code}`:'provider_failed');
+        }
         return null;
       }
       if(row.data.status==='WAITING'){
-        const result=await adapter.result(kind,row.data.task_hash);if(result.status!=='completed')return null;
+        let result:any;try{result=await adapter.result(kind,row.data.task_hash);}catch(e){const code=snovCode(e);throw new Error(code?`snov_refused:${code}`:'provider_failed');}
+        if(result.status!=='completed')return null;
         const candidates=snovCandidates(result);const verified=kind==='verify'&&verifiedResult(result,value);
         await call(db,'complete_enrichment',{rid:id,verified,candidates});
         return {candidates,verified};
@@ -143,6 +153,15 @@ export async function processSdr(db: any, env: Env, http: Requester = fetch) {
       await finish('PENDING','Limite diário de consultas ao Snov.io atingido. Continua automaticamente.');
       await save(db.from('sdr_queue').update({next_at:new Date(Date.now()+3600e3).toISOString(),attempts:Math.max(0,(q.attempts||1)-1)}).eq('id',q.id).eq('status','PENDING'));
       return 'snov_quota';
+    }
+    const recusa=String((e as Error)?.message||'').match(/^snov_refused:(\d+)$/)?.[1];
+    if(recusa){
+      await finish('PENDING',`Snov.io recusou a consulta (${SNOV_MOTIVO[recusa]||'erro '+recusa}). Nova tentativa automática em 1 hora.`);
+      const depois=new Date(Date.now()+3600e3).toISOString();
+      await save(db.from('sdr_queue').update({next_at:depois,attempts:Math.max(0,(q.attempts||1)-1)}).eq('id',q.id).eq('status','PENDING'));
+      // A recusa vale para a conta toda: o resto da fila da empresa espera junto, em vez de bater no Snov.io a cada minuto.
+      await save(db.from('sdr_queue').update({next_at:depois}).eq('organization_id',q.organization_id).eq('status','PENDING').lt('next_at',depois));
+      return 'snov_refused';
     }
     await finish('REVIEW','Enriquecimento não concluído. Verifique integração e limites antes de repetir.');return 'review';
   }

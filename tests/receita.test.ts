@@ -30,13 +30,13 @@ test('Receita: reduz o cadastro, formata telefone e sócios e só completa o que
 
 function fila(lead: any, simulate = true) {
   const feito: any = { updates: [], finish: null };
-  const db = {
+  const db: any = {
     rpc: async (name: string, args: any) => {
       if (name === 'claim_sdr_lead') return { data: { id: 'q1', lease: 't1', organization_id: 'o1', simulate, lead }, error: null };
       if (name === 'finish_sdr_lead') feito.finish = args;
       return { data: null, error: null };
     },
-    from: () => ({ update: (patch: any) => { feito.updates.push(patch); const q: any = { eq: () => q, then: (ok: any) => ok({ data: null, error: null }) }; return q; } }),
+    from: () => ({ update: (patch: any) => { feito.updates.push(patch); const q: any = { eq: () => q, lt: () => q, then: (ok: any) => ok({ data: null, error: null }) }; return q; } }),
   };
   return { db, feito };
 }
@@ -75,4 +75,21 @@ test('teto diário do Snov.io: o contato espera na fila em vez de ir para revis�
   assert.equal(await processSdr(f.db, (n: string) => n === 'CRM_SNOV_ENABLED' ? 'true' : undefined), 'snov_quota');
   assert.equal(f.feito.finish.outcome, 'PENDING');
   assert.ok(Date.parse(f.feito.updates[0].next_at) > Date.now() + 3000e3);
+});
+
+test('Snov.io sem crédito: pedido volta a pendente, fila espera 1 hora e o motivo fica visível', async () => {
+  const f = fila({ ...lead, dados: { receita: { status: 'ok' } } }, false);
+  const rpc = f.db.rpc; const from = f.db.from;
+  f.db.rpc = async (name: string, args: any) => name === 'reserve_enrichment' ? { data: 'r1', error: null } : rpc(name, args);
+  (f.db as any).from = (t: string) => t === 'enrichment_requests'
+    ? { select: () => ({ eq: () => ({ single: async () => ({ data: { id: 'r1', status: 'PENDING' }, error: null }) }) }),
+        update: (patch: any) => { f.feito.updates.push(patch); const q: any = { eq: () => q, select: async () => ({ data: [{ id: 'r1' }], error: null }), then: (ok: any) => ok({ data: [{ id: 'r1' }], error: null }) }; return q; } }
+    : (from as any)(t);
+  const semCredito = async (url: any) => String(url).includes('oauth') ? new Response(JSON.stringify({ access_token: 't' })) : new Response('{}', { status: 402 });
+  const env = (n: string) => ({ CRM_SNOV_ENABLED: 'true', SNOV_CLIENT_ID: 'a', SNOV_CLIENT_SECRET: 'b' } as any)[n];
+  const original = globalThis.fetch; globalThis.fetch = semCredito as any;
+  try { assert.equal(await processSdr(f.db, env), 'snov_refused'); } finally { globalThis.fetch = original; }
+  assert.equal(f.feito.finish.outcome, 'PENDING');
+  assert.match(f.feito.finish.detail, /sem créditos na conta/);
+  assert.ok(f.feito.updates.some((u: any) => u.status === 'PENDING' && u.result?.error === 'snov_402'), 'pedido pode ser repetido quando houver crédito');
 });

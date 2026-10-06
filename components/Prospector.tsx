@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { CompanySize, MiningJob, MiningLead, Lead } from '../types';
 import { MiningEngine } from '../services/miningService';
+import { supabase } from '../lib/supabase';
 import WorkspaceEmpty from './WorkspaceEmpty';
 import SnovListImport from './SnovListImport';
 
@@ -52,6 +53,11 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingResults,setLoadingResults]=useState(false);
   const [resultError,setResultError]=useState('');
+  // O que o agente fez com a lista (contagens): os contatos saem daqui quando vão para ele.
+  const [progress,setProgress]=useState<any>(null);
+  useEffect(()=>{setProgress(null);if(!inspectingJob)return;let on=true;
+    void supabase.rpc('radar_list_progress',{job:inspectingJob.id}).then(({data,error})=>{if(on&&!error&&data&&!Array.isArray(data))setProgress(data);});
+    return()=>{on=false;};},[inspectingJob?.id]);
 
   const [newJob, setNewJob] = useState({
     listName: '',
@@ -333,6 +339,15 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                 </div>
              </div>
 
+             {progress?.com_agente>0 && <div className="px-5 sm:px-8 py-4 border-b border-slate-100 bg-white" role="status">
+                <p className="text-sm font-bold text-[#0a192f]">{progress.com_agente} de {progress.total} contato(s) desta lista estão com o agente. Eles saem desta tela e passam a ser acompanhados na Central da IA.</p>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3">
+                  {([['Com dados da Receita',progress.com_receita],['Na fila',progress.na_fila],['Na cadência',progress.na_cadencia],['E-mails enviados',progress.emails_enviados],['Respostas',progress.respostas],['Em revisão',progress.revisao]] as [string,number][])
+                    .map(([k,v])=><div key={k} className="border border-slate-100 rounded-lg px-3 py-2"><p className="text-xl font-black text-[#0a192f]">{v}</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{k}</p></div>)}
+                </div>
+                {progress.motivos?.length>0 && <ul className="mt-3 text-sm text-slate-600 space-y-1">{progress.motivos.slice(0,5).map((m:any)=><li key={m.motivo}><strong>{m.n}</strong> · {m.motivo}</li>)}</ul>}
+                {onGoAgent && <button type="button" onClick={()=>{setInspectingJob(null);onGoAgent();}} className="mt-3 px-4 py-2 bg-[#0a192f] text-white rounded-lg text-[10px] font-black uppercase tracking-widest">Acompanhar no agente</button>}
+             </div>}
              <div className="flex-1 min-h-0 overflow-auto">
                 <table className="w-full text-left border-collapse min-w-[860px]">
                    <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-20">
@@ -416,7 +431,7 @@ const Prospector: React.FC<ProspectorProps> =({ organizationId,onGoAgent,onAddAs
                 {loadingResults ? <p role="status" className="p-8">Carregando resultados…</p> : resultError ? <p role="alert" className="p-8 text-red-700">{resultError}</p> : jobLeads.length === 0 && (
                    <div className="py-40 text-center opacity-30 flex flex-col items-center">
                       <div className="text-6xl mb-6">🎯</div>
-                      <p className="text-3xl font-bold serif-authority">Nenhum resultado pendente.</p>
+                      <p className="text-3xl font-bold serif-authority">{progress?.com_agente>0?'Todos os contatos já estão com o agente.':'Nenhum resultado pendente.'}</p>
                    </div>
                 )}
              </div>
