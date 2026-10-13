@@ -104,7 +104,7 @@ export async function enviarGraph(token: string, m: Mensagem, request: Requester
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, saveToSentItems: true }),
   });
-  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j?.error?.message || `graph_${r.status}`); }
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new GraphError(r.status, j?.error?.message || `graph_${r.status}`); }
   return true;
 }
 
