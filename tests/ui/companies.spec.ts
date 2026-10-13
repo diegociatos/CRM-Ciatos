@@ -32,6 +32,33 @@ test('whole CRM switches company, scopes writes and remembers selection',async({
  });
  await page.goto('/tests/ui/?companies');
  await expect(card(page)).toContainText('Ciatos Contabilidade');
+ // Invitation responses are mocked: no Auth mutation, provider call or real email.
+ let inviteResult:any={user:{id:uid},contaExistente:true,delivery:{status:'accepted',provider:'microsoft365',attempts:[]}};
+ const inviteCalls:any[]=[];
+ await page.route('**/functions/v1/crm-admin-users',route=>{
+   if(route.request().method()==='OPTIONS')return route.fulfill({status:200,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}});
+   inviteCalls.push(route.request().postDataJSON());return route.fulfill({json:inviteResult});
+ });
+ await page.getByRole('button',{name:'Gestão de Usuários',exact:true}).click();
+ const inviteDialogs:string[]=[];
+ const handleInviteDialog=async(d:any)=>{inviteDialogs.push(d.message());await d.accept();};
+ page.on('dialog',handleInviteDialog);
+ await page.getByRole('button',{name:'Reenviar convite',exact:true}).click();
+ await expect.poll(()=>inviteDialogs.length).toBe(1);
+ expect(inviteDialogs[0]).toContain('senha atual');expect(inviteDialogs[0]).toContain('ainda não foi confirmada');
+ expect(inviteCalls[0]).toMatchObject({action:'resend-invite',id:uid,organization_id:a});
+ inviteResult={...inviteResult,contaExistente:false,delivery:{status:'failed',provider:'resend',attempts:[{provider:'resend',status:'failed',error:'http_401'}]}};
+
+ await page.getByRole('button',{name:'Reenviar convite',exact:true}).click();
+ await expect.poll(()=>inviteDialogs.length).toBe(2);
+ expect(inviteDialogs[1]).toContain('envio não foi confirmado');expect(inviteDialogs[1]).toContain('http_401');
+ inviteResult={...inviteResult,delivery:{status:'accepted',provider:'resend',attempts:[]}};
+
+ await page.getByRole('button',{name:'Reenviar convite',exact:true}).click();
+ await expect.poll(()=>inviteDialogs.length).toBe(3);
+ expect(inviteDialogs[2]).toContain('define sua senha');
+ page.off('dialog',handleInviteDialog);
+
  await page.getByRole('button',{name:'Fila de Qualificação',exact:true}).click();
  await expect(page.getByRole('cell',{name:/Cliente Contábil 00/})).toBeVisible();
  page.once('dialog',d=>d.dismiss());await pickCompany(page,'Ciatos Jurídico');await expect(card(page)).toContainText('Ciatos Contabilidade');

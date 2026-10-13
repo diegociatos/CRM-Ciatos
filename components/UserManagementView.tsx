@@ -4,19 +4,22 @@ import { User, UserRole, Department } from '../types';
 
 interface UserManagementViewProps {
   users: User[];
-  onAddUser: (user: User) => void;
+  onAddUser: (user: User) => Promise<void>;
+  onResendInvite: (user: User) => Promise<void>;
   onDeleteUser: (id: string) => void;
   currentUser: User;
 }
 
-const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUser, onDeleteUser, currentUser }) => {
+const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUser, onDeleteUser, onResendInvite, currentUser }) => {
+  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState<Partial<User>>({
     role: UserRole.SDR,
     department: 'Comercial'
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email) return;
 
@@ -29,7 +32,9 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
       department: formData.department as Department,
     };
 
-    onAddUser(newUser);
+    if (busy) return;
+    setBusy(true);
+    try { await onAddUser(newUser); } catch { return; } finally { setBusy(false); }
     setFormData({ role: UserRole.SDR, department: 'Comercial' });
     setShowModal(false);
   };
@@ -83,6 +88,11 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
                   <span className="text-xs font-bold text-slate-600">{user.department}</span>
                 </td>
                 <td className="px-10 py-6 text-right">
+                  <button disabled={sending !== null} className="px-3 py-2 text-sm font-bold disabled:opacity-50" onClick={async () => {
+                    if (sending !== null) return;
+                    setSending(user.id);
+                    try { await onResendInvite(user); } finally { setSending(null); }
+                  }}>{sending === user.id ? 'Reenviando…' : 'Reenviar convite'}</button>
                   {user.id !== currentUser.id && (
                     <button 
                       onClick={() => { if(confirm('Excluir este usuário?')) onDeleteUser(user.id); }}
@@ -136,7 +146,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({ users, onAddUse
             </div>
 
             <div className="p-10 border-t bg-slate-50 flex gap-4">
-               <button type="submit" className="flex-1 py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
+               <button disabled={busy} type="submit" className="flex-1 py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl border-b-4 border-[#c5a059] active:translate-y-1 transition-all">
                  Criar Acesso
                </button>
                <button type="button" onClick={() => setShowModal(false)} className="px-8 py-4 bg-white border-2 border-slate-100 text-slate-400 rounded-2xl font-black uppercase text-xs">Cancelar</button>

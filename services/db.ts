@@ -233,7 +233,11 @@ async function convidarUsuario(u: { name: string; email: string; role: UserRole;
     papel: roleParaPapel(u.role),
     departamento: u.department,
     redirectTo: window.location.origin,
-  }) as Promise<{ user: { id: string }; emailEnviado: boolean; inviteLink?: string }>;
+  }) as Promise<{ user: { id: string }; emailEnviado: boolean; contaExistente: boolean; delivery: { status: string; provider: string | null; attempts: { provider: string; status: string; error?: string }[] } }>;
+}
+
+async function reenviarConvite(id: string): ReturnType<typeof convidarUsuario> {
+  return adminUsers({ action: 'resend-invite', id, redirectTo: window.location.origin });
 }
 
 async function desativarUsuario(id: string) {
@@ -354,5 +358,5 @@ async function excluirEvento(id: string): Promise<void> {
   falhou(error, 'Excluir evento');
 }
 
-return {isUuid,novoId,carregarLeads,salvarLead,excluirLead,registrarInteracao,carregarPerfil,carregarUsuarios,atualizarMeuPerfil,convidarUsuario,desativarUsuario,carregarConfig,salvarConfig,carregarScripts,salvarScript,excluirScript,carregarTemplatesOnboarding,salvarTemplatesOnboarding,carregarMetas,salvarMetas,carregarEventos,salvarEvento,excluirEvento};
+return {isUuid,novoId,carregarLeads,salvarLead,excluirLead,registrarInteracao,carregarPerfil,carregarUsuarios,atualizarMeuPerfil,convidarUsuario,reenviarConvite,desativarUsuario,carregarConfig,salvarConfig,carregarScripts,salvarScript,excluirScript,carregarTemplatesOnboarding,salvarTemplatesOnboarding,carregarMetas,salvarMetas,carregarEventos,salvarEvento,excluirEvento};
 }

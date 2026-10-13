@@ -37,7 +37,7 @@ export function receitaFromBrasilApi(d: any) {
     municipio: txt(d.municipio, 80), uf: txt(d.uf, 2).toUpperCase(), cep: txt(d.cep, 9),
     telefones: [...new Set([fone(d.ddd_telefone_1), fone(d.ddd_telefone_2)].filter(Boolean))],
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '',
-    socios: (Array.isArray(d.qsa) ? d.qsa : []).slice(0, 30).map((q: any) => ({ nome: titulo(txt(q?.nome_socio)), qualificacao: txt(q?.qualificacao_socio, 80) })).filter((q: any) => q.nome),
+    socios: (Array.isArray(d.qsa) ? d.qsa : []).slice(0, 30).map((q: any) => ({ nome: titulo(txt(q?.nome_socio)), qualificacao: txt(q?.qualificacao_socio, 80) })).filter((q: any) => q.nome) as { nome: string; qualificacao: string }[],
   };
 }
 export type Receita = ReturnType<typeof receitaFromBrasilApi>;
