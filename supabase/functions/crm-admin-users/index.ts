@@ -5,6 +5,7 @@
 // (ex.: usuário do Chekly), NÃO recriamos nem trocamos a senha dele — só
 // liberamos o acesso ao CRM criando a linha em crm.profiles.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { enviarConviteEmail, prepararLinkConvite } from '../_shared/invitations.ts';
 import { abrirRemetente } from '../_shared/ms365.ts';
 
 const cors = {
@@ -37,23 +38,11 @@ function senhaAleatoria(): string {
 // Convite de acesso é e-mail transacional: NÃO depende de CRM_LIVE_SEND_ENABLED,
 // que é o interruptor das cadências de prospecção. Sai pela caixa do Microsoft
 // 365 do grupo; o Resend fica só de reserva se a caixa não estiver conectada.
-async function enviarEmail(db: any, to: string, assunto: string, html: string): Promise<boolean> {
-  try {
+async function enviarEmail(db: any, to: string, assunto: string, html: string) {
+  return enviarConviteEmail({ microsoft: async () => {
     const envio = await abrirRemetente((n: string) => Deno.env.get(n), db, { ignorarInterruptor: true });
     await envio.enviar({ from: envio.enviaComoPadrao, fromName: 'CRM Ciatos', to, subject: assunto, html });
-    return true;
-  } catch { /* segue para a reserva */ }
-  const key = Deno.env.get('RESEND_API_KEY');
-  const from = Deno.env.get('CRM_EMAIL_FROM') || 'CRM Ciatos <nao-responder@envio.grupociatos.com.br>';
-  if (!key) return false;
-  try {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject: assunto, html }),
-    });
-    return r.ok;
-  } catch { return false; }
+  }, resendKey: Deno.env.get('RESEND_API_KEY'), resendFrom: Deno.env.get('CRM_EMAIL_FROM') || 'CRM Ciatos <nao-responder@envio.grupociatos.com.br>', to, assunto, html });
 }
 
 function htmlConvite(nome: string, link: string, contaExistente: boolean): string {
@@ -69,7 +58,7 @@ function htmlConvite(nome: string, link: string, contaExistente: boolean): strin
     <div style="border:1px solid #e2e8f0; border-top:0; border-radius:0 0 12px 12px; padding:24px;">
       <p style="margin:0 0 12px;">Olá${nome ? ', ' + esc(nome) : ''},</p>
       <p style="margin:0 0 16px;">${corpo}</p>
-      <p style="margin:0 0 20px;"><a href="${link}" style="background:#c5a059; color:#0a192f; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:700; display:inline-block;">${botao}</a></p>
+      <p style="margin:0 0 20px;"><a href="${esc(link)}" style="background:#c5a059; color:#0a192f; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:700; display:inline-block;">${botao}</a></p>
       <p style="margin:0; color:#64748b; font-size:13px;">Se você não esperava este convite, ignore este e-mail.</p>
     </div>
   </div>`;
@@ -106,6 +95,18 @@ Deno.serve(async (req) => {
   if(accessError||!allowed)return json({error:'Sem permissão para administrar usuários desta empresa.'},403);
 
   try {
+    if (p.action === 'resend-invite') {
+      const { data: member, error: membershipError } = await admin.from('organization_members').select('user_id').eq('organization_id', org).eq('user_id', p.id).eq('ativo', true).maybeSingle();
+      if (membershipError || !member) return json({ error: 'Usuário fora desta empresa ou acesso desativado.' }, 403);
+      const { data: profile, error: profileError } = await admin.from('profiles').select('nome,ativo').eq('id', member.user_id).maybeSingle();
+      if (profileError || !profile?.ativo) return json({ error: 'Perfil desativado ou inexistente.' }, 403);
+      const { data, error } = await admin.auth.admin.getUserById(member.user_id);
+      if (error || !data.user?.email) return json({ error: 'Conta não encontrada.' }, 404);
+      const contaExistente = data.user.app_metadata?.crm_password_change_required !== true;
+      const link = await prepararLinkConvite(admin.auth.admin, data.user.email, origemPermitida(p.redirectTo), contaExistente);
+      const delivery = await enviarEmail(admin, data.user.email, 'Convite de acesso ao CRM Ciatos', htmlConvite(profile.nome, link, contaExistente));
+      return json({ user: { id: member.user_id }, contaExistente, requiresPasswordChange: !contaExistente, emailEnviado: delivery.status === 'accepted', delivery });
+    }
     if (p.action === 'create' || p.action === 'create-master') {
       if(p.action==='create-master'){const {data:owner,error}=await asCaller.schema('crm').rpc('platform_admin');if(error||!owner)return json({error:'Somente o dono define usuários master.'},403);}
       const email = String(p.email ?? '').trim().toLowerCase();
@@ -128,7 +129,7 @@ Deno.serve(async (req) => {
         if (data.users.length < 1000) break;
       }
       // Conta criada pelo CRM que ainda não definiu senha: trata como convite novo
-      // (reenvia o link) e troca a senha inicial por uma aleatória.
+      // (reenvia o link), preservando a senha existente.
       const contaExistente = !!userId && !pendente;
 
       if (!userId) {
@@ -137,9 +138,6 @@ Deno.serve(async (req) => {
         });
         if (error) throw error;
         userId = created.user!.id;
-      } else if (pendente) {
-        const { error } = await admin.auth.admin.updateUserById(userId, { password: senhaAleatoria() });
-        if (error) throw error;
       }
 
       const {data:existingProfile,error:profileError}=await admin.from('profiles').select('id,ativo').eq('id',userId).maybeSingle();
@@ -153,21 +151,14 @@ Deno.serve(async (req) => {
         :await asCaller.schema('crm').rpc('set_company_member',{org,member_email:email,member_role:papel,enabled:true});
       if(eMember)throw eMember;
 
-      let link = origem;
-      if (!contaExistente) {
-        const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: origem } });
-        if (error) throw error;
-        const tokenHash = data?.properties?.hashed_token;
-        if (!tokenHash) throw new Error('Não foi possível gerar o acesso.');
-        link = `${origem}/#type=recovery&token_hash=${encodeURIComponent(tokenHash)}`;
-      }
-      const emailEnviado = await enviarEmail(
+      const link = await prepararLinkConvite(admin.auth.admin, email, origem, contaExistente);
+      const delivery = await enviarEmail(
         admin,
         email,
         contaExistente ? 'Seu acesso ao CRM Ciatos foi liberado' : 'Convite — defina sua senha no CRM Ciatos',
         htmlConvite(nome, link, contaExistente),
       );
-      return json({ user: { id: userId }, contaExistente, emailEnviado, inviteLink: emailEnviado ? null : link, requiresPasswordChange: !contaExistente });
+      return json({ user: { id: userId }, contaExistente, emailEnviado: delivery.status === 'accepted', delivery, requiresPasswordChange: !contaExistente });
     }
 
     if(p.action==='deactivate'||p.action==='set-role'){
@@ -182,6 +173,7 @@ Deno.serve(async (req) => {
 
     return json({ error: 'Ação desconhecida' }, 400);
   } catch (err) {
-    return json({ error: (err as Error).message || 'Erro ao processar' }, 400);
+    console.error('crm_user_operation_failed', { code: 'operation_failed' });
+    return json({ error: 'Não foi possível concluir a operação de acesso. Tente novamente.' }, 400);
   }
 });

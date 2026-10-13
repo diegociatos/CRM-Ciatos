@@ -290,11 +290,18 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     try {
       const r = await db.convidarUsuario({ name: user.name, email: user.email, role: user.role, department: user.department });
       await carregarTudo();
-      if (r.emailEnviado) alert(`Convite enviado para ${user.email}. A pessoa cria a própria senha pelo link do e-mail.`);
-      else if (r.inviteLink) {
-        prompt('Não foi possível enviar o e-mail. Copie o link de convite e envie para a pessoa:', r.inviteLink);
-      }
-    } catch (e) { erro(e); }
+      alert(resultadoConvite(r, user.email));
+    } catch (e) { erro(e); throw e; }
+  };
+
+  const resultadoConvite = (r: Awaited<ReturnType<typeof db.convidarUsuario>>, email: string) =>
+    r.delivery?.status === 'accepted'
+      ? `O provedor ${r.delivery.provider} aceitou o convite para ${email}. A entrega na caixa de entrada ainda não foi confirmada. ${r.contaExistente ? 'A pessoa acessa com sua senha atual.' : 'A pessoa define sua senha pelo link do e-mail.'}`
+      : `O acesso foi cadastrado, mas o envio não foi confirmado. ${r.delivery?.attempts.map(a => a.provider + ': ' + a.status + (a.error ? ' (' + a.error + ')' : '')).join('; ') || 'Status indisponível.'} Use Reenviar convite após verificar a configuração.`;
+
+  const handleResendInvite = async (user: User) => {
+    try { alert(resultadoConvite(await db.reenviarConvite(user.id), user.email)); }
+    catch (e) { erro(e); }
   };
 
   const handleUpdateUser = async (updatedUser: User & { password?: string }) => {
@@ -382,7 +389,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
       case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
-      case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />;
+      case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onResendInvite={handleResendInvite} currentUser={currentUser} />;
       case 'scripts': return <ScriptsLibrary scripts={scripts} config={config} currentUser={currentUser} onSaveScript={handleSaveScript} onDeleteScript={handleDeleteScript} />;
       case 'sdr_dashboard': return <SdrDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} onUpdateStatus={()=>{}} />;
       case 'closer_dashboard': return <CloserDashboard currentUser={currentUser} allUsers={users} leads={leads} qualifications={[]} config={config} userGoals={userGoals} />;
