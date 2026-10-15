@@ -2,8 +2,12 @@
 import React, { useState, useMemo } from 'react';
 import { Lead, LeadStatus, SystemConfig, User, UserRole } from '../types';
 import WorkspaceEmpty from './WorkspaceEmpty';
+import BulkLeadImport from './BulkLeadImport';
 
 interface QualificationQueueProps {
+  organizationId: string;
+  companyName: string;
+  onImported: () => Promise<void>;
   leads: Lead[];
   config: SystemConfig;
   onApprove: (leadId: string) => void;
@@ -16,7 +20,8 @@ interface QualificationQueueProps {
   canCreate?: boolean;
 }
 
-const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, onApprove, onUpdateLead, onDeleteLead, onSelectLead, onOpenManualLead, currentUser, canEdit, canCreate }) => {
+const QualificationQueue: React.FC<QualificationQueueProps> = ({ organizationId, companyName, onImported, leads, config, onApprove, onUpdateLead, onDeleteLead, onSelectLead, onOpenManualLead, currentUser, canEdit, canCreate }) => {
+  const [showImport, setShowImport] = useState(false);
   const [filterOwner, setFilterOwner] = useState<'all' | 'mine'>('all');
 
   const queueLeads = useMemo(() => {
@@ -53,6 +58,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
              </button>
           </div>
 
+          {canCreate && <button className="ux-secondary" onClick={()=>setShowImport(true)}>Importar leads em lote</button>}
           {canCreate && (
             <button 
               onClick={onOpenManualLead} 
@@ -65,6 +71,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ leads, config, 
         </div>
       </div>
 
+      {showImport && <BulkLeadImport organizationId={organizationId} companyName={companyName} config={config} onClose={()=>setShowImport(false)} onImported={onImported}/>}
       {queueLeads.length === 0 ? <WorkspaceEmpty
         eyebrow={filterOwner === 'mine' ? 'SUA FILA' : 'FILA DE ENTRADA'}
         title={filterOwner === 'mine' ? 'Nenhum contato atribuído a você.' : 'Tudo pronto para receber novos leads.'}
