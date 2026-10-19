@@ -98,3 +98,25 @@ test('agenda keeps failed activity and closes only after successful save',async(
  await expect(page.getByRole('dialog')).toHaveCount(0);
  await expect(page.getByText('Retorno salvo',{exact:true})).toBeVisible();
 });
+
+test('corporate email remains visible and editable without inventing a contact email',async({page})=>{
+ await company(page);
+ await page.getByRole('button',{name:'Continuar →'}).click();
+ await page.getByLabel('Nome do contato').fill('Ana');
+ await page.getByLabel('Telefone / WhatsApp').fill('31999999999');
+ await page.getByRole('button',{name:'Complementar dados'}).click();
+ await page.getByLabel('E-mail da empresa',{exact:true}).fill('sede@example.test');
+ await page.getByRole('button',{name:'Salvar lead',exact:true}).click();
+ await expect(page.getByText('sede@example.test')).toHaveCount(2);
+ await page.getByRole('button',{name:'Abrir cadastro',exact:true}).click();
+ const detail=page.getByRole('dialog',{name:'Detalhes do lead'});
+ await expect(detail.getByText('E-mail do contato: Não informado',{exact:true})).toBeVisible();
+ await expect(detail.getByText('sede@example.test',{exact:true})).toBeVisible();
+ await detail.getByRole('button',{name:/Editar Dossiê/i}).click();
+ await expect(detail.getByLabel('E-mail da empresa',{exact:true})).toHaveValue('sede@example.test');
+ await detail.getByLabel('E-mail do contato',{exact:true}).fill('ana@example.test');
+ await detail.getByLabel('E-mail da empresa',{exact:true}).fill('empresa@example.test');
+ await detail.getByRole('button',{name:'Salvar',exact:false}).click();
+ await expect(detail.getByText('E-mail do contato: ana@example.test',{exact:true})).toBeVisible();
+ await expect(detail.getByText('empresa@example.test',{exact:true})).toBeVisible();
+});

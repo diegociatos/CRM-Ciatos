@@ -100,7 +100,7 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ organizationId,
                        <p className="text-[10px] text-slate-500 font-medium flex items-center gap-1.5">
                          <span className="opacity-60 text-xs">📞</span> {lead.companyPhone || 'Sede não informada'}
                        </p>
-                       <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5 truncate max-w-[200px]" title={lead.companyEmail}>
+                       <p className="text-[10px] text-slate-400 font-medium break-all" title={lead.companyEmail}>
                          <span className="opacity-60 text-xs">📧</span> {lead.companyEmail || 'E-mail não localizado'}
                        </p>
                     </div>
@@ -119,8 +119,9 @@ const QualificationQueue: React.FC<QualificationQueueProps> = ({ organizationId,
                         <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1.5">
                            <span className="text-xs">📱</span> {lead.phone || '—'}
                         </p>
-                        <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 truncate max-w-[180px]" title={lead.email}>
-                           <span className="text-xs opacity-60">✉️</span> {lead.email || '—'}
+                        <p className="text-[10px] font-bold text-slate-500 break-all" title={lead.email || lead.companyEmail}>
+                           <span className="block text-[9px] uppercase">{lead.email ? 'E-mail do contato' : 'E-mail da empresa'}</span>
+                           {lead.email || lead.companyEmail || 'Não informado'}
                         </p>
                       </div>
                     </div>

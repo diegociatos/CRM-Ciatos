@@ -21,3 +21,9 @@ O servidor revalida campos obrigatórios, CNPJ numérico ou alfanumérico, e-mai
 5. Publicar em produção somente após validação explícita. Este PR não aplica migrações nem faz deploy.
 
 Testes automatizados: parser e validadores; RPC real em Postgres embarcado com migrações e RLS; upload XLSX, colagem, relatório, falha de permissão, mapeamento e lotes no navegador com transporte simulado. Estes testes não substituem homologação no Supabase de teste.
+
+## E-mails na fila e no dossiê
+
+O cadastro mantém separados `email` (do contato, usado pelas cadências) e `companyEmail` (da empresa). A fila mostra o e-mail do contato e, na ausência dele, o da empresa com identificação explícita. O dossiê permite consultar e editar ambos; o cadastro manual também oferece o e-mail da empresa.
+
+A prévia da importação mostra os dois endereços. Cabeçalhos como “E-mail da lead”, “E-mail do contato” e “E-mail comercial” são reconhecidos, mantendo a confirmação manual do mapeamento. Um e-mail corporativo não é copiado automaticamente para o contato: pode ser da contabilidade ou de outro destinatário. Confirme o endereço adequado no dossiê antes de preparar uma cadência. Nenhuma dessas alterações ativa agentes, cadências ou envios.

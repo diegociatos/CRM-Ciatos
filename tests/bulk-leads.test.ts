@@ -2,7 +2,15 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
-import {parseCsv,prepareRows,validCnpj,csvCell} from '../lib/bulkLeads';
+import {parseCsv,prepareRows,validCnpj,csvCell,mapLeadHeaders} from '../lib/bulkLeads';
+
+test('maps contact and company emails independently without assigning a corporate address to a person',()=>{
+ const headers=['Razão social','CNPJ','Nome do contato','Telefone / WhatsApp','E-mail da lead','E-mail comercial'];
+ const mapping=mapLeadHeaders(headers);
+ assert.equal(mapping.email,4);assert.equal(mapping.companyEmail,5);
+ const rows=prepareRows([headers,['Alfa','11222333000181','Ana','123','','SEDE@EXAMPLE.COM']],mapping);
+ assert.equal(rows[0].values.email,'');assert.equal(rows[0].values.companyEmail,'sede@example.com');assert.equal(rows[0].error,undefined);
+});
 
 test('CSV preserves quoted delimiters, newlines, accents and source row numbers',()=>{
  const table=parseCsv('\uFEFFRazão social;CNPJ;Nome;Telefone;Email\r\n"Alfa; Comércio";11.222.333/0001-81;"Ana\nSilva";31999999999;ANA@EXAMPLE.COM\r\n\r\nDuplicada;11222333000181;Ana;31999999999;ana@example.com');

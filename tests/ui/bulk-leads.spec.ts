@@ -14,6 +14,9 @@ test('paste, map, preview, report, import in active company and preserve manual 
  await page.getByRole('button',{name:'Usar CSV colado'}).click();
  await page.getByRole('button',{name:'Validar e pré-visualizar'}).click();
  await expect(page.getByText('3 linhas · 1 aptas · 2 com erros · 0 importadas')).toBeVisible();
+ await expect(page.getByRole('columnheader',{name:'E-mail do contato',exact:true})).toBeVisible();
+ await expect(page.getByRole('columnheader',{name:'E-mail da empresa',exact:true})).toBeVisible();
+ await expect(page.getByRole('cell',{name:'ana@example.com',exact:true})).toHaveCount(2);
  await page.screenshot({path:'test-results/bulk-leads-preview.png'});
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Baixar relatório de erros'}).click();expect((await download).suggestedFilename()).toBe('erros-importacao.csv');
  await page.getByRole('button',{name:'Importar 1 leads válidos',exact:true}).click();
