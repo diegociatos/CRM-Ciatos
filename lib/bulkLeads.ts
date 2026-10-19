@@ -8,6 +8,12 @@ export const leadFields = [
 ] as const;
 export type ImportRow = {line:number; values:Record<string,string>; error?:string; id?:string};
 export const normalizeHeader=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+export function mapLeadHeaders(headers:string[]):Record<string,number>{
+ const aliases:Record<string,string[]>={email:['emailcontato','emaildocontato','emaillead','emaildalead','emaildolead','correioeletronico'],companyEmail:['emaildaempresa','emailempresa','emailcomercial','emailcorporativo']};
+ const mapping:Record<string,number>={};
+ for(const [key,label] of leadFields)mapping[key]=headers.findIndex(h=>[normalizeHeader(key),normalizeHeader(label),...(aliases[key]||[])].includes(normalizeHeader(h)));
+ return mapping;
+}
 export function validCnpj(value:string) {
   const s=value.replace(/[.\/\-\s]/g,'').toUpperCase();
   if(!/^[A-Z0-9]{12}\d{2}$/.test(s)||/^(.)\1{13}$/.test(s))return false;

@@ -50,7 +50,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
 
   const handleSaveDossie = async () => {
     if(saving)return;setSaving(true);setFormError('');
-    try{if(!await onUpdateLead(editForm)){setFormError('Não foi possível salvar. Revise sua conexão e tente novamente.');return;}
+    for(const address of [editForm.email,editForm.companyEmail]){
+      if(address?.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.trim())){
+        setFormError('Informe um e-mail válido para o contato e para a empresa.');setSaving(false);return;
+      }
+    }
+    try{if(!await onUpdateLead({...editForm,email:editForm.email?.trim().toLowerCase()||'',companyEmail:editForm.companyEmail?.trim().toLowerCase()||''})){setFormError('Não foi possível salvar. Revise sua conexão e tente novamente.');return;}
 
     setIsEditing(false);
     onAddInteraction(lead.id, {
@@ -193,6 +198,11 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                   <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                     <h4 className={sectionHeader}>Identificação & Localização</h4>
                     <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+                      <div className="md:col-span-6 min-w-0">
+                        <label className={displayLabel} htmlFor="lead-company-email">E-mail da empresa</label>
+                        {isEditing ? <input id="lead-company-email" type="email" className={inputClass} value={editForm.companyEmail||''} onChange={e=>setEditForm({...editForm,companyEmail:e.target.value})}/> : <p className="text-sm font-bold text-indigo-600 break-all">{lead.companyEmail||'Não informado'}</p>}
+                        <p className="text-xs text-slate-500 mt-2">O e-mail da empresa é separado do e-mail do contato usado nas cadências. Confira o destinatário antes de preparar envios.</p>
+                      </div>
                       <div className="md:col-span-4">
                         <label className={displayLabel}>Razão Social Completa</label>
                         {isEditing ? <input className={inputClass} value={editForm.legalName} onChange={e => setEditForm({...editForm, legalName: e.target.value})} /> : <p className="text-sm font-bold text-[#0a192f]">{lead.legalName || 'S/I'}</p>}
@@ -330,8 +340,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                                <input className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs font-bold" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} />
                              </div>
                              <div>
-                               <label className="text-[8px] font-black text-slate-400 uppercase">E-mail</label>
-                               <input className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs font-bold" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} />
+                               <label htmlFor="lead-contact-email" className="text-[8px] font-black text-slate-400 uppercase">E-mail do contato</label>
+                               <input id="lead-contact-email" type="email" className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs font-bold" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} />
                              </div>
                           </div>
                         ) : (
@@ -340,7 +350,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                             <p className="text-[9px] text-[#c5a059] font-black uppercase tracking-widest mb-8">{lead.role || 'Tomador de Decisão'}</p>
                             <div className="space-y-4 text-xs font-bold text-slate-300">
                                <p className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/5">📞 {lead.phone}</p>
-                               <p className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/5">✉️ {lead.email || 'Não informado'}</p>
+                               <p className="bg-white/5 p-3 rounded-xl border border-white/5 break-all">E-mail do contato: {lead.email || 'Não informado'}</p>
+                               {!lead.email&&lead.companyEmail&&<p className="text-xs text-slate-300 break-all">E-mail da empresa cadastrado: {lead.companyEmail}. Confirme se este endereço também pode ser usado para falar com o contato.</p>}
                             </div>
                           </>
                         )}

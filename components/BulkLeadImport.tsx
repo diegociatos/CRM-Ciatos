@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {useDialog} from '../lib/useDialog';
-import {csvCell,ImportRow,leadFields,normalizeHeader,parseCsv,prepareRows} from '../lib/bulkLeads';
+import {csvCell,ImportRow,leadFields,mapLeadHeaders,parseCsv,prepareRows} from '../lib/bulkLeads';
 import {SystemConfig} from '../types';
 
 function download(name:string,rows:string[][]){
@@ -21,7 +21,7 @@ export default function BulkLeadImport({organizationId,companyName,config,onClos
  function load(t:string[][]){
   if(t.length<2||!t[0].some(Boolean)||!t.slice(1).some(r=>r.some(v=>v.trim())))throw new Error('Inclua cabeçalhos e pelo menos uma linha.');
   if(t.length>10001)throw new Error('Limite de 10.000 linhas por importação.');
-  const m:Record<string,number>={};for(const [key,label] of leadFields)m[key]=t[0].findIndex(h=>[normalizeHeader(key),normalizeHeader(label)].includes(normalizeHeader(h)));
+  const m=mapLeadHeaders(t[0]);
   setTable(t);setMapping(m);setRows([]);setReady(false);setFinished(false);setError('');setProgress(0);
  }
  async function file(f?:File){if(!f)return;setError('');setBusy(true);try{
@@ -64,7 +64,7 @@ export default function BulkLeadImport({organizationId,companyName,config,onClos
    <button className="ux-secondary" onClick={()=>{try{if(new Blob([text]).size>10*1024*1024)throw new Error('Limite de 10 MB por importação.');load(parseCsv(text));}catch(e){setError((e as Error).message);}}}>Usar CSV colado</button>
    {table.length>0&&<><h2>Mapear colunas</h2><div className="ux-fields">{leadFields.map(([key,label,required])=><label className="ux-field" key={key}><span>{label}{required?' *':''}</span><select value={mapping[key]??-1} onChange={e=>{setMapping({...mapping,[key]:Number(e.target.value)});setRows([]);setReady(false);}}><option value={-1}>Não importar</option>{table[0].map((h,i)=><option key={i} value={i}>{i+1}. {h||'Sem título'}</option>)}</select></label>)}</div><button className="btn-navy" onClick={()=>void run(true)}>Validar e pré-visualizar</button></>}
    </fieldset>
-   {rows.length>0&&<section ref={previewSection} aria-label="Pré-visualização"><p>{rows.length} linhas · {valid.length} aptas · {rows.filter(r=>r.error).length} com erros · {rows.filter(r=>r.id).length} importadas</p><p className="ux-hint">Primeiras 50 linhas. Baixe o relatório para consultar todos os erros.</p><div className="overflow-auto"><table className="w-full text-left"><thead><tr>{['Linha','Empresa','CNPJ','Contato','Resultado'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.slice(0,50).map(r=><tr key={r.line}><td>{r.line}</td><td>{r.values.legalName}</td><td>{r.values.cnpj}</td><td>{r.values.name}</td><td>{r.error|| (r.id?'Importada':'Apta')}</td></tr>)}</tbody></table></div></section>}
+   {rows.length>0&&<section ref={previewSection} aria-label="Pré-visualização"><p>{rows.length} linhas · {valid.length} aptas · {rows.filter(r=>r.error).length} com erros · {rows.filter(r=>r.id).length} importadas</p><p className="ux-hint">Primeiras 50 linhas. Confira os e-mails do contato e da empresa antes de importar. E-mail da empresa não preenche automaticamente o contato. Baixe o relatório para consultar todos os erros.</p><div className="overflow-auto"><table className="w-full text-left"><thead><tr>{['Linha','Empresa','CNPJ','Contato','E-mail do contato','E-mail da empresa','Resultado'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.slice(0,50).map(r=><tr key={r.line}><td>{r.line}</td><td>{r.values.legalName}</td><td>{r.values.cnpj}</td><td>{r.values.name}</td><td className="break-all">{r.values.email||'Não informado'}</td><td className="break-all">{r.values.companyEmail||'Não informado'}</td><td>{r.error|| (r.id?'Importada':'Apta')}</td></tr>)}</tbody></table></div></section>}
    {busy&&<div role="status" aria-live="polite">Processando: {progress} linhas verificadas ou importadas.<progress className="w-full" value={progress} max={rows.length||table.length-1||1}/><button className="ux-secondary" onClick={()=>{stopped.current=true;}}>Parar após este lote</button></div>}
    {finished&&<p role="status">{rows.filter(r=>r.id).length} leads importados para a Fila de Qualificação. {valid.length} não processados. Para repetir, feche e envie o arquivo novamente; os já cadastrados serão identificados.</p>}
    {error&&<p className="ux-error" role="alert">{error}</p>}
