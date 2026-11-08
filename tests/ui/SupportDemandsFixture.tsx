@@ -13,7 +13,9 @@ const rows: Record<string, any[]> = {
 };
 const requests = new Map<string, string>();
 let failNext = false;
+let rejectNext = false;
 let failAfterWrite = false;
+let rejectAfterInterruption = false;
 let delay = 0;
 let writes = 0;
 const addEvent = (row: any, kind: string, changes: any, body: string | null = null) => {
@@ -34,13 +36,14 @@ const fake = {
       async then(resolve: (value: any) => void) {
         let data = (rows[table] || []).filter(x => filters.every(fn => fn(x))).map(x => structuredClone(x));
         data.sort((a, b) => { for (const [key, options] of orders) { if (a[key] === b[key]) continue; if (a[key] === null) return options?.nullsFirst ? -1 : 1; if (b[key] === null) return options?.nullsFirst ? 1 : -1; return String(a[key]).localeCompare(String(b[key])) * (options?.ascending === false ? -1 : 1); } return 0; });
-        const count = data.length; data = data.slice(start, end + 1);
+        const count = data.length; data = data.slice(start, table === 'support_demand_activity' ? Math.min(end + 1, start + 25) : end + 1);
         await new Promise(r => setTimeout(r, delay));
         resolve({ data: single ? data[0] : data, count, error: null });
       },
     }; return query;
   },
   async rpc(name: string, args: any) {
+    if (rejectNext) { rejectNext = false; return { data: null, error: { code: 'P0001', message: 'Responsável inválido.' } }; }
     if (failNext) { failNext = false; return { data: null, error: { message: 'Falha simulada de conexão.' } }; }
     await new Promise(r => setTimeout(r, delay));
     if (name === 'create_support_demand') {
@@ -48,7 +51,7 @@ const fake = {
       const id = `demand-${rows.support_demands.length + 1}`;
       const row = { ...initial, id, organization_id: args.org, title: args.demand_title, description: args.demand_description, lead_id: args.related_lead, priority: args.demand_priority, due_at: args.demand_due_at, assigned_to: args.assignee, created_at: new Date().toISOString() };
       rows.support_demands.push(row); requests.set(args.request_id, id); addEvent(row, 'CREATED', { after: row }); writes++;
-      if (failAfterWrite) { failAfterWrite = false; return { data: null, error: { message: 'Resposta interrompida.' } }; }
+      if (failAfterWrite) { failAfterWrite = false; if (rejectAfterInterruption) { rejectNext = true; rejectAfterInterruption = false; } return { data: null, error: { message: 'Resposta interrompida.' } }; }
       return { data: id, error: null };
     }
     const row = rows.support_demands.find(x => x.id === args.demand);
@@ -74,9 +77,11 @@ export default function SupportDemandsFixture() {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
       <button onClick={() => setOrg(orgOne)}>Empresa Exemplo</button><button onClick={() => setOrg(orgTwo)}>Outra empresa</button>
       <button onClick={() => { failNext = true; }}>Falhar próximo registro</button><button onClick={() => { failAfterWrite = true; }}>Interromper retorno</button>
+      <button onClick={() => { rejectNext = true; }}>Rejeitar próximo registro</button><button onClick={() => { failAfterWrite = true; rejectAfterInterruption = true; }}>Interromper e rejeitar repetição</button>
       <button onClick={() => { rows.support_demands[0].version++; rows.support_demands[0].title = 'Atualizado por colega'; }}>Simular edição simultânea</button>
       <button onClick={() => { delay = 700; }}>Respostas lentas</button><button onClick={() => setShow(v => !v)}>Alternar tela</button>
       <button onClick={() => { for (let i = 0; i < 26; i++) rows.support_demands.push({ ...initial, id: `extra-${i}`, title: `Extra ${i}` }); }}>Popular fila</button>
+      <button onClick={() => { for (let i = 1; i <= 60; i++) rows.support_demand_activity.push({ id: `history-${i}`, organization_id: orgOne, demand_id: initial.id, actor_id: user.id, kind: 'NOTE', body: `Registro histórico ${i}`, changes: {}, created_at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() }); }}>Popular histórico</button>
       <button onClick={() => { document.body.dataset.writeCount = String(writes); }}>Contar gravações</button>
       {opened && <span role="status">Cadastro aberto: {opened}</span>}
     </div>

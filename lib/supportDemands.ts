@@ -35,6 +35,11 @@ export function toDeadline(value: string): string | null {
   return date.toISOString();
 }
 export const demandDate = (value: string) => new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+/** Only explicit validation/auth failures confirm that no mutation was committed. */
+export function isDefiniteDemandRejection(error: unknown): boolean {
+  const code = (error as { code?: string })?.code || '';
+  return /^(22|23|28|42)[0-9A-Z]{3}$/.test(code) || ['P0001', '40001', 'PGRST202', 'PGRST204', 'PGRST301', 'PGRST302', 'PGRST303'].includes(code);
+}
 export function demandError(error: unknown): string {
   const message = (error as { message?: string })?.message || '';
   if ((error as { code?: string })?.code === '40001' || /version|concurrent|conflito|alterad|stale|changed.*reload/i.test(message)) return 'Outra pessoa atualizou esta demanda. Seu rascunho foi preservado. Recarregue os dados antes de salvar novamente.';

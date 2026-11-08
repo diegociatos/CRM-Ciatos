@@ -53,7 +53,7 @@ test('demands: tenant isolation, direct-write denial, active membership and prot
  await assert.rejects(db.exec(`select crm.create_support_demand('${org2}','Foreign')`),/Forbidden/);
  await assert.rejects(db.exec(`select crm.create_support_demand('${org}','Wrong lead','', '33333333-3333-4333-8333-333333333333')`),/Invalid lead/);
  await assert.rejects(db.exec(`select crm.create_support_demand('${org}','Wrong owner','',null,'NORMAL',null,'${other}')`),/Invalid assignee/);
- await assert.rejects(db.exec(`select crm.update_support_demand('${id}',1,'{"lead_id":"33333333-3333-4333-8333-333333333333"}')`),/Invalid lead/);
+ await assert.rejects(db.exec(`select crm.update_support_demand('${id}',1,'{"lead_id":"33333333-3333-4333-8333-333333333333"}')`),{code:'23514'});
  await assert.rejects(db.exec(`select crm.update_support_demand('${id}',1,'{"assigned_to":"${other}"}')`),/Invalid assignee/);
  for(const sql of [`insert into crm.support_demands(organization_id,title,created_by) values('${org}','Bypass','${user}')`,`update crm.support_demands set title='Bypass'`,`delete from crm.support_demands`,`insert into crm.support_demand_activity(organization_id,demand_id,actor_id,kind) values('${org}','${id}','${user}','CREATED')`,`update crm.support_demand_activity set body='tamper'`,`delete from crm.support_demand_activity`]) await assert.rejects(db.exec(sql),/permission denied/);
  await actor(db,other);
@@ -77,25 +77,41 @@ test('demands: tenant isolation, direct-write denial, active membership and prot
  for(const sql of [`select * from crm.support_demands`,`select * from crm.support_demand_activity`,`select crm.create_support_demand('${org}','Anonymous')`,`select crm.update_support_demand('${id}',1,'{}')`,`select crm.add_support_demand_note('${id}','Anonymous')`]) await assert.rejects(db.exec(sql),/permission denied/);
  }finally{await db.close();}
 });
-test('demands: privacy export and erasure include current and former client links',async()=>{
+test('demands: privacy export and erasure stay scoped to immutable client links',async()=>{
  const db=await banco();try{
  await actor(db);
- const lead=(await db.query<{id:string}>(`insert into crm.leads(organization_id,nome,email) values('${org}','Client','privacy@example.test') returning id`)).rows[0].id;
- const id=await scalar(db,`crm.create_support_demand('${org}','Solicitação privada','Dados do cliente','${lead}')`);
- await db.exec(`select crm.add_support_demand_note('${id}','Nota privada');`);
+ const lead=(await db.query<{id:string}>(`insert into crm.leads(organization_id,nome,email) values('${org}','Client A','privacy@example.test') returning id`)).rows[0].id;
+ const second=(await db.query<{id:string}>(`insert into crm.leads(organization_id,nome,email) values('${org}','Client B','second@example.test') returning id`)).rows[0].id;
+ const id=await scalar(db,`crm.create_support_demand('${org}','Solicitação privada A','Dados de A','${lead}')`);
+ const linked=await scalar(db,`crm.create_support_demand('${org}','Solicitação privada B','Dados de B','${second}')`);
+ const internal=await scalar(db,`crm.create_support_demand('${org}','Demanda interna')`);
+ await db.exec(`select crm.add_support_demand_note('${id}','Nota privada A');select crm.add_support_demand_note('${linked}','Nota privada B');`);
+ // Reassign, unlink and link an internal demand all fail atomically.
+ for(const [demand,next] of [[id,second],[id,null],[internal,lead],[linked,lead]]){
+  await assert.rejects(db.query(`select crm.update_support_demand($1,1,$2::jsonb)`,[demand,JSON.stringify({lead_id:next,title:'Must not save'})]),
+   (error:any)=>error.code==='23514' && /contato.*não pode ser alterado/.test(error.message));
+ }
+ assert.equal(await scalar(db,`crm.update_support_demand('${id}',1,'{"lead_id":"${lead}"}')`),1,'same contact is a no-op');
+ assert.equal(await scalar(db,`crm.update_support_demand('${internal}',1,'{"lead_id":null}')`),1,'same internal link is a no-op');
+ assert.equal(await scalar(db,`crm.update_support_demand('${linked}',1,'{"lead_id":"${second}","status":"IN_PROGRESS"}')`),2,'unchanged contact allows other edits');
+ assert.equal(await scalar(db,`select title from crm.support_demands where id='${id}'`),'Solicitação privada A');
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demand_activity where demand_id='${id}'`),2,'rejected/no-op changes append no audit');
  await db.exec('reset role');
  const conversation=(await db.query<{id:string}>(`insert into crm.inbox_conversations(organization_id,lead_id) values('${org}','${lead}') returning id`)).rows[0].id;
  await db.exec(`insert into crm.inbox_messages(conversation_id,organization_id,direction,provider,body,received_at) values('${conversation}','${org}','INBOUND','microsoft365','Mensagem preservada','2026-11-01T12:00:00Z');`);
  await actor(db);
- let exported=await scalar(db,`crm.lead_privacy_export('${lead}')`);
+ const exported=await scalar(db,`crm.lead_privacy_export('${lead}')`);
  assert.equal(exported.inbox_messages.length,1,'existing inbox privacy export preserved');
  assert.equal(exported.inbox_messages[0].body,'Mensagem preservada');
  assert.equal(exported.inbox_messages[0].conversation_id,conversation);
  assert.deepEqual(Object.keys(exported).sort(),['lead','interactions','events','ai_runs','handoffs','inbox_messages','support_demands','support_demand_activity'].sort());
- assert.equal(exported.support_demands.length,1);assert.equal(exported.support_demand_activity.length,2);
- await db.exec(`select crm.update_support_demand('${id}',1,'{"lead_id":null}')`);
- exported=await scalar(db,`crm.lead_privacy_export('${lead}')`);
- assert.equal(exported.support_demands.length,1,'former link retained for privacy review');
+ assert.deepEqual(exported.support_demands.map((d:any)=>d.id),[id]);
+ assert.equal(exported.support_demand_activity.length,2);
+ assert.ok(exported.support_demand_activity.every((a:any)=>a.demand_id===id));
+ assert.ok(!JSON.stringify(exported).includes('Dados de B'));
+ const secondExport=await scalar(db,`crm.lead_privacy_export('${second}')`);
+ assert.deepEqual(secondExport.support_demands.map((d:any)=>d.id),[linked]);
+ assert.ok(secondExport.support_demand_activity.every((a:any)=>a.demand_id===linked));
  await actor(db,other);
  await assert.rejects(db.exec(`select crm.lead_privacy_export('${lead}')`),/Forbidden/);
  await assert.rejects(db.exec(`select crm.erase_lead('${lead}')`),/Forbidden/);
@@ -104,11 +120,13 @@ test('demands: privacy export and erasure include current and former client link
  assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${id}'`),0);
  assert.equal(await scalar(db,`select count(*)::int from crm.support_demand_activity where demand_id='${id}'`),0);
  assert.equal(await scalar(db,`select count(*)::int from crm.leads where id='${lead}'`),0);
- const second=(await db.query<{id:string}>(`insert into crm.leads(organization_id,nome,email) values('${org}','Second','second@example.test') returning id`)).rows[0].id;
- const linked=await scalar(db,`crm.create_support_demand('${org}','Demanda vinculada','','${second}')`);
- const internal=await scalar(db,`crm.create_support_demand('${org}','Demanda interna')`);
- await db.exec(`select crm.update_support_demand('${linked}',1,'{"lead_id":null}'); delete from crm.leads where id='${second}';`);
- assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${linked}'`),0);
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${linked}'`),1,'A erasure preserves B demand');
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demand_activity where demand_id='${linked}'`),3,'A erasure preserves B history');
+ assert.equal(await scalar(db,`select count(*)::int from crm.leads where id='${second}'`),1);
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${internal}'`),1);
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demand_activity where demand_id='${internal}'`),1);
+ await db.exec(`delete from crm.leads where id='${second}'`);
+ assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${linked}'`),0,'ordinary lead deletion also cascades');
  assert.equal(await scalar(db,`select count(*)::int from crm.support_demand_activity where demand_id='${linked}'`),0);
  assert.equal(await scalar(db,`select count(*)::int from crm.support_demands where id='${internal}'`),1);
  }finally{await db.close();}

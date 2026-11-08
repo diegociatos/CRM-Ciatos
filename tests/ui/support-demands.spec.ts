@@ -5,6 +5,7 @@ test('demand lifecycle, assignment, history, contact and closed queue', async ({
   await expect(page.getByRole('heading', { name: 'Central de demandas' })).toBeVisible();
   await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
   const detail = page.getByRole('complementary', { name: 'Detalhes da demanda' });
+  await expect(detail.getByLabel('Cliente ou contato')).toBeDisabled();
   await detail.getByRole('button', { name: 'Abrir cadastro do contato' }).click();
   await expect(page.getByText('Cadastro aberto: lead-one')).toBeVisible();
   await detail.getByRole('button', { name: 'Atribuir a mim' }).click();
@@ -41,11 +42,75 @@ test('creation, interruption retry and cancel do not duplicate or create acciden
   await modal.getByRole('button', { name: 'Registrar demanda' }).click();
   await expect(modal.getByRole('alert')).toContainText('Resposta interrompida');
   await expect(modal.getByLabel('Título', { exact: true })).toHaveValue('Preparar proposta de serviço');
+  await expect(modal.getByLabel('Título', { exact: true })).toBeDisabled();
   await modal.getByRole('button', { name: 'Registrar demanda' }).click();
   await expect(modal).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Preparar proposta de serviço/ })).toHaveCount(1);
   await page.getByRole('button', { name: 'Contar gravações' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-write-count', '1');
+});
+
+test('explicit rejections keep creation and note drafts editable without duplicates', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Rejeitar próximo registro', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova demanda', exact: false }).click();
+  const modal = page.getByRole('dialog', { name: 'Nova demanda' });
+  await modal.getByLabel('Título', { exact: true }).fill('Rascunho para corrigir');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal.getByRole('alert')).toContainText('Nada foi registrado nesta tentativa');
+  await expect(modal.getByLabel('Título', { exact: true })).toBeEnabled();
+  await modal.getByLabel('Título', { exact: true }).fill('Demanda corrigida');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal).toHaveCount(0);
+  const detail = page.getByRole('complementary', { name: 'Detalhes da demanda' });
+  await expect(detail.getByLabel('Título', { exact: true })).toHaveValue('Demanda corrigida');
+  await page.getByRole('button', { name: 'Rejeitar próximo registro', exact: true }).click();
+  await detail.getByLabel('Nota interna', { exact: true }).fill('Nota para corrigir');
+  await detail.getByRole('button', { name: 'Adicionar nota' }).click();
+  await expect(detail.getByRole('alert')).toContainText('Responsável inválido');
+  await expect(detail.getByLabel('Nota interna', { exact: true })).toBeEnabled();
+  await detail.getByLabel('Nota interna', { exact: true }).fill('Nota corrigida');
+  await detail.getByRole('button', { name: 'Adicionar nota' }).click();
+  await expect(detail.getByText('Nota corrigida', { exact: true })).toBeVisible();
+  await expect(detail.getByText('Nota para corrigir', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Contar gravações' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-write-count', '2');
+});
+
+test('a rejection after an uncertain result never unlocks the original payload', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Interromper e rejeitar repetição', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova demanda', exact: false }).click();
+  const modal = page.getByRole('dialog', { name: 'Nova demanda' });
+  await modal.getByLabel('Título', { exact: true }).fill('Conteúdo original confirmado depois');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal.getByRole('alert')).toContainText('Resposta interrompida');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal.getByRole('alert')).toContainText('Responsável inválido');
+  await expect(modal.getByLabel('Título', { exact: true })).toBeDisabled();
+  await expect(modal.getByRole('alert')).not.toContainText('Nada foi registrado');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal).toHaveCount(0);
+  await page.getByRole('button', { name: 'Contar gravações' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-write-count', '1');
+});
+
+test('history uses fixed pages so older events remain reachable under an API row limit', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Popular histórico', exact: true }).click();
+  await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
+  const history = page.getByRole('region', { name: 'Histórico da demanda' });
+  await expect(history.getByRole('listitem')).toHaveCount(25);
+  await expect(history.getByText('Registro histórico 60', { exact: true })).toBeVisible();
+  await history.getByRole('button', { name: 'Carregar histórico anterior' }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(50);
+  await history.getByRole('button', { name: 'Carregar histórico anterior' }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(61);
+  await expect(history.getByText('Registro histórico 1', { exact: true })).toBeVisible();
+  await expect(history.getByText('Demanda criada', { exact: true })).toBeVisible();
+  await expect(history.getByRole('button', { name: 'Carregar histórico anterior' })).toHaveCount(0);
+  await history.getByRole('button', { name: 'Atualizar histórico' }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(25);
 });
 
 test('conflict preserves draft until explicit reload; workspace switch clears notes and selection', async ({ page }) => {

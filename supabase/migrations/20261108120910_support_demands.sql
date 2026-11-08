@@ -79,15 +79,18 @@ declare previous crm.support_demands; updated crm.support_demands; begin
  if patch ? 'description' then updated.description:=patch->>'description'; end if;
  if patch ? 'status' then updated.status:=patch->>'status'; end if;
  if patch ? 'priority' then updated.priority:=patch->>'priority'; end if;
- if patch ? 'lead_id' then updated.lead_id:=(patch->>'lead_id')::uuid; end if;
+ -- Contact association is immutable, including an internal demand's null link.
+ -- Accept an unchanged value for compatibility with clients sending full forms.
+ if patch ? 'lead_id' and (patch->>'lead_id')::uuid is distinct from previous.lead_id then
+  raise exception 'O contato da demanda não pode ser alterado após a criação. Crie uma nova demanda para outro contato.' using errcode='23514';
+ end if;
  if patch ? 'assigned_to' then updated.assigned_to:=(patch->>'assigned_to')::uuid; end if;
  if patch ? 'due_at' then updated.due_at:=(patch->>'due_at')::timestamptz; end if;
- if updated.lead_id is not null and not exists(select 1 from crm.leads where id=updated.lead_id and organization_id=previous.organization_id) then raise exception 'Invalid lead'; end if;
  -- Validate changed assignments; an inactive former assignee must not block unrelated edits.
  if patch ? 'assigned_to' and updated.assigned_to is not null and not exists(select 1 from crm.organization_members m join crm.profiles p on p.id=m.user_id where m.organization_id=previous.organization_id and m.user_id=updated.assigned_to and m.ativo and p.ativo) then raise exception 'Invalid assignee'; end if;
  if updated is not distinct from previous then return previous.version; end if;
  updated.resolved_at:=case when updated.status='RESOLVED' then coalesce(previous.resolved_at,now()) else null end;
- update crm.support_demands set title=updated.title,description=updated.description,lead_id=updated.lead_id,status=updated.status,priority=updated.priority,due_at=updated.due_at,assigned_to=updated.assigned_to,resolved_at=updated.resolved_at,updated_at=now(),version=previous.version+1 where id=demand returning * into updated;
+ update crm.support_demands set title=updated.title,description=updated.description,status=updated.status,priority=updated.priority,due_at=updated.due_at,assigned_to=updated.assigned_to,resolved_at=updated.resolved_at,updated_at=now(),version=previous.version+1 where id=demand returning * into updated;
  insert into crm.support_demand_activity(organization_id,demand_id,actor_id,kind,changes)
  values(previous.organization_id,demand,auth.uid(),'UPDATED',jsonb_build_object('before',to_jsonb(previous)-'request_id','after',to_jsonb(updated)-'request_id'));
  return updated.version;
@@ -108,17 +111,15 @@ declare org uuid; saved uuid; begin
 end $$;
 revoke all on function crm.create_support_demand(uuid,text,text,uuid,text,timestamptz,uuid,uuid),crm.update_support_demand(uuid,integer,jsonb),crm.add_support_demand_note(uuid,text,uuid) from public,anon;
 grant execute on function crm.create_support_demand(uuid,text,text,uuid,text,timestamptz,uuid,uuid),crm.update_support_demand(uuid,integer,jsonb),crm.add_support_demand_note(uuid,text,uuid) to authenticated;
--- Keep the established contact privacy workflows complete. Historical links count:
--- unlinking a demand must not strand personal information in its audit snapshots.
+-- Keep the established contact privacy workflows complete. Contact links cannot
+-- change after creation, so export and FK-cascade erasure stay with one contact.
 create or replace function crm.lead_privacy_export(lid uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare l crm.leads; demand_ids uuid[]; begin
  select * into l from crm.leads where id=lid;
  if not found or auth.uid() is null or not crm.tenant_member(l.organization_id,true) then raise exception 'Forbidden'; end if;
  select coalesce(array_agg(d.id),'{}'::uuid[]) into demand_ids from crm.support_demands d
- where d.organization_id=l.organization_id and (d.lead_id=lid or exists(
-  select 1 from crm.support_demand_activity a where a.demand_id=d.id and a.organization_id=l.organization_id
-  and (a.changes#>>'{before,lead_id}'=lid::text or a.changes#>>'{after,lead_id}'=lid::text)));
+ where d.organization_id=l.organization_id and d.lead_id=lid;
  return jsonb_build_object('lead',to_jsonb(l),
  'interactions',(select coalesce(jsonb_agg(to_jsonb(i)),'[]') from crm.interactions i where i.lead_id=lid),
  'events',(select coalesce(jsonb_agg(to_jsonb(e)),'[]') from crm.message_events e where e.lead_id=lid),
@@ -130,19 +131,6 @@ declare l crm.leads; demand_ids uuid[]; begin
  'support_demands',(select coalesce(jsonb_agg(to_jsonb(d)),'[]') from crm.support_demands d where d.id=any(demand_ids)),
  'support_demand_activity',(select coalesce(jsonb_agg(to_jsonb(a)),'[]') from crm.support_demand_activity a where a.demand_id=any(demand_ids)));
 end $$;
--- Existing erase_lead and ordinary authorized lead deletion both purge historical
--- support links. Normal operators cannot alter or delete activity individually.
-create function crm.erase_support_demand_history() returns trigger
-language plpgsql security definer set search_path='' as $$
-begin
- delete from crm.support_demands d where d.organization_id=old.organization_id and (d.lead_id=old.id or exists(
-  select 1 from crm.support_demand_activity a where a.demand_id=d.id and a.organization_id=old.organization_id
-  and (a.changes#>>'{before,lead_id}'=old.id::text or a.changes#>>'{after,lead_id}'=old.id::text)));
- return old;
-end $$;
-create trigger erase_support_demand_history before delete on crm.leads
- for each row execute function crm.erase_support_demand_history();
-revoke all on function crm.erase_support_demand_history() from public,anon,authenticated;
 -- CREATE OR REPLACE preserves the export's prior grants; reinforce anon denial.
 revoke all on function crm.lead_privacy_export(uuid) from public,anon;
 commit;
