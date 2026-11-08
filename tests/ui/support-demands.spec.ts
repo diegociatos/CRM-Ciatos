@@ -1,0 +1,97 @@
+import { test, expect } from '@playwright/test';
+
+test('demand lifecycle, assignment, history, contact and closed queue', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await expect(page.getByRole('heading', { name: 'Central de demandas' })).toBeVisible();
+  await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
+  const detail = page.getByRole('complementary', { name: 'Detalhes da demanda' });
+  await detail.getByRole('button', { name: 'Abrir cadastro do contato' }).click();
+  await expect(page.getByText('Cadastro aberto: lead-one')).toBeVisible();
+  await detail.getByRole('button', { name: 'Atribuir a mim' }).click();
+  await detail.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(detail.getByLabel('Responsável')).toHaveValue('user-one');
+  await expect(detail.getByLabel('Estado', { exact: true })).toHaveValue('IN_PROGRESS');
+  await detail.getByLabel('Nota interna', { exact: true }).fill('Aguardando documento do cliente.');
+  await detail.getByRole('button', { name: 'Adicionar nota' }).click();
+  await expect(detail.getByText('Aguardando documento do cliente.', { exact: true })).toBeVisible();
+  await expect(detail.getByText('Responsável: Não definido → Diego')).toBeVisible();
+  await detail.getByLabel('Estado', { exact: true }).selectOption('RESOLVED');
+  await detail.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByText('Nenhuma demanda nesta visão.')).toBeVisible();
+  await page.getByRole('button', { name: 'Encerradas', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Revisar contrato do cliente/ })).toBeVisible();
+  await detail.getByLabel('Estado', { exact: true }).selectOption('OPEN');
+  await detail.getByRole('button', { name: 'Salvar alterações' }).click();
+  await page.getByRole('button', { name: 'Atrasadas', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Revisar contrato do cliente/ })).toBeVisible();
+});
+
+test('creation, interruption retry and cancel do not duplicate or create accidentally', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Nova demanda', exact: false }).click();
+  let modal = page.getByRole('dialog', { name: 'Nova demanda' });
+  await modal.getByLabel('Título', { exact: true }).fill('Rascunho descartado');
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await page.getByRole('button', { name: 'Interromper retorno' }).click();
+  await page.getByRole('button', { name: 'Nova demanda', exact: false }).click();
+  modal = page.getByRole('dialog', { name: 'Nova demanda' });
+  await modal.getByLabel('Título', { exact: true }).fill('Preparar proposta de serviço');
+  await modal.getByLabel('Cliente ou contato').selectOption('lead-one');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal.getByRole('alert')).toContainText('Resposta interrompida');
+  await expect(modal.getByLabel('Título', { exact: true })).toHaveValue('Preparar proposta de serviço');
+  await modal.getByRole('button', { name: 'Registrar demanda' }).click();
+  await expect(modal).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Preparar proposta de serviço/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Contar gravações' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-write-count', '1');
+});
+
+test('conflict preserves draft until explicit reload; workspace switch clears notes and selection', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
+  const detail = page.getByRole('complementary', { name: 'Detalhes da demanda' });
+  await detail.getByLabel('Título', { exact: true }).fill('Meu rascunho');
+  await page.getByRole('button', { name: 'Simular edição simultânea' }).click();
+  await detail.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(detail.getByRole('alert')).toContainText('Outra pessoa atualizou');
+  await expect(detail.getByLabel('Título', { exact: true })).toHaveValue('Meu rascunho');
+  await detail.getByRole('button', { name: 'Recarregar dados e descartar' }).click();
+  await expect(detail.getByLabel('Título', { exact: true })).toHaveValue('Atualizado por colega');
+  await detail.getByLabel('Nota interna', { exact: true }).fill('Rascunho confidencial desta empresa');
+  await page.getByRole('button', { name: 'Respostas lentas' }).click();
+  await page.getByRole('button', { name: 'Outra empresa', exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.getByText('Nenhuma demanda nesta visão.')).toBeVisible();
+  await expect(page.getByText('Rascunho confidencial desta empresa')).toHaveCount(0);
+  await expect(page.getByText('Atualizado por colega')).toHaveCount(0);
+});
+
+test('pagination, literal search and priority filters cover the full queue', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Popular fila' }).click();
+  await page.getByRole('button', { name: 'Atualizar lista' }).click();
+  await expect(page.getByText('27 demandas', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Próxima', exact: true }).click();
+  await expect(page.getByText('Página 2')).toBeVisible();
+  await page.getByLabel('Buscar por título').fill('Extra 25');
+  await expect(page.getByText('1 demanda', { exact: true })).toBeVisible();
+  await expect(page.getByText('Página 1')).toBeVisible();
+  await page.getByLabel('Prioridade', { exact: true }).selectOption('URGENT');
+  await expect(page.getByText('Nenhuma demanda nesta visão.')).toBeVisible();
+});
+
+test('phone layout and cancel return focus without leaving a modal behind', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tests/ui/?demands');
+  const create = page.getByRole('button', { name: 'Nova demanda', exact: false });
+  await create.click();
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(create).toBeFocused();
+  await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
+  await expect(page.getByLabel('Título', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole('button', { name: 'Fechar detalhes' }).click();
+  await expect(page.getByRole('complementary', { name: 'Detalhes da demanda' })).toHaveCount(0);
+});

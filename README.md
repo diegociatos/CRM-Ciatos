@@ -35,3 +35,7 @@ git checkout main
 Veja [o guia de homologação, secrets e operação](docs/AUTONOMOUS_OPERATIONS.md).
 A Central da IA usa filas persistentes e inicia em simulação, sem envio real.
 Validação local: `npm ci`, `npm run typecheck`, `npm test`, `npm run build`.
+
+## Central de demandas
+
+Atendimento interno e acompanhamento de solicitações ligados aos clientes existentes, com responsável, prioridade, prazo e histórico. Veja [escopo, segurança e implantação](docs/CENTRAL_DE_DEMANDAS.md). A migration deve ser aplicada antes de publicar o frontend; esta funcionalidade não conecta novos canais nem envia mensagens ao cliente.

@@ -1,0 +1,42 @@
+export const demandStatuses = {
+  OPEN: 'Aberta', IN_PROGRESS: 'Em andamento', WAITING: 'Aguardando retorno',
+  RESOLVED: 'Resolvida', CANCELLED: 'Cancelada',
+} as const;
+export const demandPriorities = { LOW: 'Baixa', NORMAL: 'Normal', HIGH: 'Alta', URGENT: 'Urgente' } as const;
+export type DemandStatus = keyof typeof demandStatuses;
+export type DemandPriority = keyof typeof demandPriorities;
+export type SupportDemand = {
+  id: string; organization_id: string; lead_id: string | null; title: string; description: string;
+  status: DemandStatus; priority: DemandPriority; due_at: string | null; assigned_to: string | null;
+  created_by: string | null; created_at: string; updated_at: string; resolved_at: string | null; version: number;
+};
+export type DemandActivity = {
+  id: string; demand_id: string; actor_id: string | null; kind: 'CREATED' | 'UPDATED' | 'NOTE';
+  body: string | null; changes: Record<string, unknown>; created_at: string;
+};
+export const activeDemandStatuses: DemandStatus[] = ['OPEN', 'IN_PROGRESS', 'WAITING'];
+export const isDemandOverdue = (demand: Pick<SupportDemand, 'status' | 'due_at'>, now = Date.now()) =>
+  activeDemandStatuses.includes(demand.status) && !!demand.due_at && new Date(demand.due_at).getTime() < now;
+
+/** datetime-local represents browser local time, never a UTC date with its suffix removed. */
+export function toLocalDeadline(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+export function toDeadline(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime()) || toLocalDeadline(date.toISOString()) !== value) {
+    throw new Error('Informe uma data e um horário válidos para o prazo.');
+  }
+  return date.toISOString();
+}
+export const demandDate = (value: string) => new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+export function demandError(error: unknown): string {
+  const message = (error as { message?: string })?.message || '';
+  if ((error as { code?: string })?.code === '40001' || /version|concurrent|conflito|alterad|stale|changed.*reload/i.test(message)) return 'Outra pessoa atualizou esta demanda. Seu rascunho foi preservado. Recarregue os dados antes de salvar novamente.';
+  return message || 'Não foi possível concluir. Confira a conexão e tente novamente.';
+}

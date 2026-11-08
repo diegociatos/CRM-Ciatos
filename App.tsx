@@ -6,6 +6,7 @@ import Header from './components/Header';
 import {useSdrNotifications} from './lib/useSdrNotifications';
 import Dashboard from './components/Dashboard';
 const HelpCenter = lazy(() => import('./components/HelpCenter'));
+const SupportDemands = lazy(() => import('./components/SupportDemands'));
 const Inbox = lazy(() => import('./components/Inbox'));
 const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'));
@@ -99,6 +100,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     return v;
   });
   const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : onboardingLink ? 'operational_dashboard' : 'dashboard' });
+  const [demandOrigin, setDemandOrigin] = useState<{leadId:string;title:string}|null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [scripts, setScripts] = useState<SalesScript[]>([]);
@@ -386,7 +388,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const renderView = () => {
     switch (nav.view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
-      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)}/> : null;
+      case 'demands': return company ? <SupportDemands organizationId={company.id} users={users} leads={leads} currentUser={currentUser} onOpenLead={id=>void openLead(id)} initialLeadId={demandOrigin?.leadId} initialTitle={demandOrigin?.title} onClearInitial={()=>setDemandOrigin(null)}/> : null;
+      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)} onCreateDemand={(leadId,title)=>{setDemandOrigin({leadId,title});setNav({view:'demands'});}}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onResendInvite={handleResendInvite} currentUser={currentUser} />;
