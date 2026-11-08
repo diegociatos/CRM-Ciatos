@@ -18,30 +18,36 @@ export default function SupportDemandsOverview({ organizationId, users, client, 
   const [settings, setSettings] = useState<DemandSettings | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
-  const [alertTotal, setAlertTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [alertsNotice, setAlertsNotice] = useState('');
-  const alertsPage = useCallback((from: number) => client.from('support_demand_alerts').select('id,demand_id,kind,title,created_at,read_at', { count: 'exact' }).eq('organization_id', organizationId).order('created_at', { ascending: false }).order('id').range(from, from + alertPageSize - 1), [client, organizationId]);
+  // Keyset pagination (created_at desc, id asc): alerts arriving while the list is open never shift or repeat pages.
+  // One extra row tells whether there is another page.
+  const alertsPage = useCallback((after?: DemandAlert) => {
+    let request = client.from('support_demand_alerts').select('id,demand_id,kind,title,created_at,read_at').eq('organization_id', organizationId);
+    if (after) request = request.or(`created_at.lt.${after.created_at},and(created_at.eq.${after.created_at},id.gt.${after.id})`);
+    return request.order('created_at', { ascending: false }).order('id').limit(alertPageSize + 1);
+  }, [client, organizationId]);
   useEffect(() => {
     let active = true; setError(''); setAlertsNotice('');
     void (async () => {
       const [statsResult, alertsResult, unreadResult, settingsResult] = await Promise.all([
         client.rpc('support_demand_stats', { org: organizationId }),
-        alertsPage(0),
+        alertsPage(),
         client.from('support_demand_alerts').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).is('read_at', null),
         client.rpc('get_support_settings', { org: organizationId }),
       ]);
       if (!active) return;
       if (statsResult.error || alertsResult.error || unreadResult.error || settingsResult.error) throw statsResult.error || alertsResult.error || unreadResult.error || settingsResult.error;
-      const loaded = (alertsResult.data || []) as DemandAlert[];
-      setStats(statsResult.data as DemandStats); setAlerts(loaded); setAlertTotal(alertsResult.count ?? loaded.length); setUnreadTotal(unreadResult.count ?? 0); setSettings(settingsResult.data as DemandSettings);
+      const rows = (alertsResult.data || []) as DemandAlert[];
+      const loaded = rows.slice(0, alertPageSize);
+      setStats(statsResult.data as DemandStats); setAlerts(loaded); setHasMore(rows.length > alertPageSize); setUnreadTotal(unreadResult.count ?? 0); setSettings(settingsResult.data as DemandSettings);
     })().catch(() => { if (active) setError('Não foi possível carregar o painel e os avisos. Confira a conexão e se a atualização do banco foi aplicada.'); });
     return () => { active = false; };
   }, [organizationId, client, revision, reload, alertsPage]);
   // Only the alerts actually on screen are marked: older unread ones stay unread until they are shown.
   const shownUnread = alerts.filter(item => !item.read_at);
-  const hasMore = alerts.length < alertTotal;
   const markRead = async () => {
     const { error: failure } = await client.rpc('mark_support_alerts_read', { org: organizationId, alert_ids: shownUnread.map(item => item.id) });
     if (failure) setError(demandError(failure)); else setReload(v => v + 1);
@@ -49,12 +55,13 @@ export default function SupportDemandsOverview({ organizationId, users, client, 
   const loadMore = async () => {
     if (loadingMore) return;
     setLoadingMore(true); setAlertsNotice('');
-    const result = await alertsPage(alerts.length);
+    const result = await alertsPage(alerts[alerts.length - 1]);
     setLoadingMore(false);
     if (result.error) { setAlertsNotice('Não foi possível carregar mais avisos. Tente novamente.'); return; }
-    const more = (result.data || []) as DemandAlert[];
+    const rows = (result.data || []) as DemandAlert[];
+    const more = rows.slice(0, alertPageSize);
     setAlerts(old => [...old, ...more.filter(item => !old.some(known => known.id === item.id))]);
-    setAlertTotal(result.count ?? alertTotal);
+    setHasMore(rows.length > alertPageSize);
   };
   const nameOf = (id: string | null) => id ? users.find(user => user.id === id)?.name || 'Membro da equipe' : 'Sem responsável';
   if (error) return <p className="demands-error" role="alert">{error}</p>;
@@ -71,7 +78,7 @@ export default function SupportDemandsOverview({ organizationId, users, client, 
       <div className="demands-panel"><header><h2>Meus avisos{unreadTotal > 0 && <span className="demands-count">{unreadTotal}</span>}</h2><button className="demands-secondary" disabled={!shownUnread.length} onClick={() => void markRead()}>{unreadTotal > shownUnread.length ? 'Marcar exibidos como lidos' : 'Marcar como lidos'}</button></header>
         {!alerts.length ? <p className="demands-empty-small">Nenhum aviso por enquanto.</p> : <ul>{alerts.map(item => <li key={item.id} className={item.read_at ? '' : 'is-unread'}><button onClick={() => onOpenDemand(item.demand_id)}><strong>{alertKinds[item.kind] || item.kind}</strong><span>{item.title}</span><time>{demandDate(item.created_at)}</time></button></li>)}</ul>}
         {alertsNotice && <p className="demands-error" role="alert">{alertsNotice}</p>}
-        {hasMore && <button className="demands-secondary" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Carregando…' : `Mostrar mais avisos (${alerts.length} de ${alertTotal})`}</button>}
+        {hasMore && <button className="demands-secondary" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Carregando…' : 'Mostrar mais avisos'}</button>}
       </div>
       <div className="demands-panel"><header><h2>Carga por responsável</h2></header>
         {!stats.by_assignee.length ? <p className="demands-empty-small">Sem demandas em aberto.</p> : <ul>{stats.by_assignee.map(row => <li key={row.assigned_to || 'none'}><span>{nameOf(row.assigned_to)}</span><span>{row.open} em aberto{row.overdue ? ` · ${row.overdue} atrasada${row.overdue > 1 ? 's' : ''}` : ''}</span></li>)}</ul>}

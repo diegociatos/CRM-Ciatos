@@ -197,10 +197,27 @@ test('avisos além dos 20 primeiros ficam acessíveis e só os exibidos são mar
   await page.getByRole('button', { name: 'Contar marcados' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-marked-count', '20');
   await expect(panel.getByRole('heading', { name: /Meus avisos/ })).toContainText('25');
-  await expect(panel.getByRole('button', { name: /Mostrar mais avisos \(20 de 45\)/ })).toBeVisible();
+  await expect(panel.getByRole('button', { name: /Mostrar mais avisos/ })).toBeVisible();
   await panel.getByRole('button', { name: /Mostrar mais avisos/ }).click();
   await expect(alerts).toHaveCount(40);
-  await panel.getByRole('button', { name: /Mostrar mais avisos \(40 de 45\)/ }).click();
+  await panel.getByRole('button', { name: /Mostrar mais avisos/ }).click();
   await expect(alerts).toHaveCount(45);
+  await expect(panel.getByRole('button', { name: /Mostrar mais avisos/ })).toHaveCount(0);
+});
+
+test('novos avisos durante "Mostrar mais" não repetem nem pulam avisos', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: 'Popular avisos' }).click();
+  await page.getByRole('button', { name: 'Alternar tela' }).click();
+  await page.getByRole('button', { name: 'Alternar tela' }).click();
+  const panel = page.getByRole('region', { name: 'Painel de atendimento' });
+  await expect(panel.getByRole('button', { name: /^Atrasada Aviso/ })).toHaveCount(20);
+  await page.getByRole('button', { name: 'Chegar aviso novo' }).click();
+  await panel.getByRole('button', { name: /Mostrar mais avisos/ }).click();
+  const titles = await panel.getByRole('button', { name: /^(Atrasada|Atribuída a você) Aviso/ }).allInnerTexts();
+  expect(titles).toHaveLength(40);
+  expect(new Set(titles).size).toBe(40);
+  await panel.getByRole('button', { name: /Mostrar mais avisos/ }).click();
+  await expect(panel.getByRole('button', { name: /^Atrasada Aviso/ })).toHaveCount(45);
   await expect(panel.getByRole('button', { name: /Mostrar mais avisos/ })).toHaveCount(0);
 });

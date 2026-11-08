@@ -33,6 +33,7 @@ const fake = {
       in(key: string, values: any[]) { filters.push(x => values.includes(x[key])); return query; },
       is(key: string, value: any) { filters.push(x => (x[key] ?? null) === value); return query; },
       limit(n: number) { end = start + n - 1; return query; },
+      or(expr: string) { const m = expr.match(/^created_at\.lt\.(.+?),and\(created_at\.eq\.(.+?),id\.gt\.(.+)\)$/); if (m) filters.push(x => x.created_at < m[1] || (x.created_at === m[2] && x.id > m[3])); return query; },
       lt(key: string, value: any) { filters.push(x => x[key] != null && x[key] < value); return query; },
       ilike(key: string, value: string) { const needle = value.slice(1, -1).replace(/\\([\\%_])/g, '$1').toLowerCase(); filters.push(x => x[key].toLowerCase().includes(needle)); return query; },
       order(key: string, options?: any) { orders.push([key, options]); return query; }, range(a: number, b: number) { start = a; end = b; return query; },
@@ -92,6 +93,7 @@ export default function SupportDemandsFixture() {
       <button onClick={() => { for (let i = 0; i < 26; i++) rows.support_demands.push({ ...initial, id: `extra-${i}`, title: `Extra ${i}` }); }}>Popular fila</button>
       <button onClick={() => { for (let i = 1; i <= 60; i++) rows.support_demand_activity.push({ id: `history-${i}`, organization_id: orgOne, demand_id: initial.id, actor_id: user.id, kind: 'NOTE', body: `Registro histórico ${i}`, changes: {}, created_at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() }); }}>Popular histórico</button>
       <button onClick={() => { for (let i = 1; i <= 45; i++) rows.support_demand_alerts.push({ id: `alert-${String(i).padStart(2, '0')}`, organization_id: orgOne, demand_id: initial.id, kind: 'OVERDUE', title: `Aviso ${i}`, created_at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString(), read_at: null }); }}>Popular avisos</button>
+      <button onClick={() => { rows.support_demand_alerts.push({ id: 'alert-new', organization_id: orgOne, demand_id: initial.id, kind: 'ASSIGNED', title: 'Aviso novo', created_at: new Date(Date.UTC(2026, 2, 1)).toISOString(), read_at: null }); }}>Chegar aviso novo</button>
       <button onClick={() => { document.body.dataset.markedCount = markedIds === null ? 'all' : String(markedIds.length); }}>Contar marcados</button>
       <button onClick={() => { document.body.dataset.writeCount = String(writes); }}>Contar gravações</button>
       {opened && <span role="status">Cadastro aberto: {opened}</span>}
