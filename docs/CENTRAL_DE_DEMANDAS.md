@@ -48,4 +48,6 @@ Os testes de navegador precisam de Chromium e suporte aos sockets de processo do
 
 Implementação original sobre o React, Supabase/PostgreSQL e componentes existentes. Não foram copiados módulos de sistemas de terceiros nem adicionadas dependências. O repositório atual não tem licença raiz identificada; isso não autoriza reutilizar código externo sem conferir a licença e suas obrigações.
 
+A auditoria de dependências em 08/11/2026 encontrou três alertas nas ferramentas de desenvolvimento existentes. Foram aplicadas correções compatíveis no lockfile: Vite 6.4.3 → 6.4.5, postcss-selector-parser 6.1.4 → 6.1.5 e source-map-js 1.2.1 → 1.2.2, sem alterar as faixas de versões do package.json. A nova auditoria npm informou zero vulnerabilidades conhecidas; esse resultado não substitui auditoria completa da aplicação.
+
 Próximas etapas possíveis, a escolher depois desta validação: categorias/equipes e SLA configurável, base de conhecimento, notificações internas, associação persistente entre conversa e demanda, portal de acompanhamento e novos canais de entrada. Integrações externas e acesso persistente exigem configuração e autorização próprias; não estão habilitados por esta entrega.
