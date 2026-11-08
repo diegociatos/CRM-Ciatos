@@ -30,7 +30,7 @@ test('demands: audited lifecycle, nullable client, idempotency, clear fields and
  await assert.rejects(db.exec(`select crm.update_support_demand('${id}',1,'{"title":"stale"}')`),/reload/);
  assert.equal(await scalar(db,`crm.update_support_demand('${id}',2,'{}')`),2);
  assert.equal(await scalar(db,`crm.update_support_demand('${id}',2,'{"status":"RESOLVED","assigned_to":null,"due_at":null}')`),3);
- assert.equal(await scalar(db,`select resolved_at is not null and assigned_to is null and due_at is null from crm.support_demands where id='${id}'`),true);
+ assert.equal(await scalar(db,`select resolved_at is not null and assigned_to is null and due_at is not null and sla_due from crm.support_demands where id='${id}'`),true);
  await db.exec(`select crm.update_support_demand('${id}',3,'{"status":"OPEN"}')`);
  assert.equal(await scalar(db,`select resolved_at is null from crm.support_demands where id='${id}'`),true);
  const note=await scalar(db,`crm.add_support_demand_note('${id}','  Nota interna  ','${req}')`);

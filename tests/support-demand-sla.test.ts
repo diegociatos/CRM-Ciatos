@@ -86,7 +86,7 @@ test('alerts: server-only scan, deduplicated, escalates to administrators, read 
  const late=await scalar(db,`crm.create_support_demand('${org}','Atrasada','',null,'NORMAL',now()-interval '10 hours','${member}','${r1}')`);
  const soon=await scalar(db,`crm.create_support_demand('${org}','Quase','',null,'NORMAL',now()+interval '2 hours','${member}','${r2}')`);
  const orphan=await scalar(db,`crm.create_support_demand('${org}','Sem dono','',null,'NORMAL',now()+interval '30 hours',null,'${r3}')`);
- await db.exec(`reset role;update crm.support_demands set created_at=now()-interval '2 hours' where id='${orphan}'`);
+ await db.exec(`reset role;update crm.support_demands set created_at=now()-interval '2 hours',unassigned_since=now()-interval '2 hours' where id='${orphan}'`);
  const first=await scalar(db,`crm.scan_support_demands()`);
  assert.ok(first>=4);
  assert.equal(await scalar(db,`crm.scan_support_demands()`),0,'second run must not duplicate alerts');
@@ -166,5 +166,74 @@ test('stats: counts overdue, unassigned and average resolution by company',async
  await actor(db,other);
  await assert.rejects(db.exec(`insert into crm.support_demand_alerts(organization_id,demand_id,recipient,kind,bucket,title) values('${org2}','${done}','${other}','OVERDUE','x','x')`),/permission denied/);
  assert.equal(await scalar(db,`crm.support_demand_stats('${org}')->>'open'`),'0');
+ }finally{await db.close();}
+});
+
+const count=(db:PGlite,where:string)=>scalar<number>(db,`select count(*)::int from crm.support_demand_alerts where ${where}`);
+const version=(db:PGlite,id:string)=>scalar<number>(db,`select version from crm.support_demands where id='${id}'`);
+
+test('sla: clearing the deadline goes back to the priority policy (counted from creation)',async()=>{
+ const db=await banco();try{
+ await actor(db);
+ const id=await scalar(db,`crm.create_support_demand('${org}','Manual','',null,'URGENT',now()+interval '500 hours',null,'${r1}')`);
+ await db.exec(`select crm.update_support_demand('${id}',1,'{"due_at":null}')`);
+ assert.equal(await scalar(db,`select sla_due from crm.support_demands where id='${id}'`),true);
+ assert.ok(Math.abs(await hoursFromNow(db,id)-4)<0.1,'urgent policy = 4 h from creation');
+ // it is policy-driven again, so a priority change recalculates it
+ await db.exec(`select crm.update_support_demand('${id}',2,'{"priority":"LOW"}')`);
+ assert.ok(Math.abs(await hoursFromNow(db,id)-120)<0.1);
+ // an explicit date makes it manual again
+ await db.exec(`select crm.update_support_demand('${id}',3,'{"due_at":"2031-01-01T00:00:00Z"}')`);
+ assert.equal(await scalar(db,`select sla_due from crm.support_demands where id='${id}'`),false);
+ }finally{await db.close();}
+});
+
+test('alerts: unassigned alert is issued once per effective unassigned period, including after unassigning',async()=>{
+ const db=await banco();try{
+ await actor(db);
+ const id=await scalar(db,`crm.create_support_demand('${org}','Sem dono','',null,'NORMAL',null,null,'${r1}')`);
+ await db.exec(`reset role;update crm.support_demands set unassigned_since=now()-interval '3 hours' where id='${id}'`);
+ await db.exec(`select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='UNASSIGNED' and recipient='${admin}'`),1);
+ assert.equal(await scalar(db,`crm.scan_support_demands()`),0);
+ // assigned: the period ends, no new alert
+ await actor(db);
+ await db.exec(`select crm.update_support_demand('${id}',1,'{"assigned_to":"${member}"}')`);
+ assert.equal(await scalar(db,`select unassigned_since is null from crm.support_demands where id='${id}'`),true);
+ await db.exec(`reset role;select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='UNASSIGNED'`),1);
+ // unassigned again: a new period starts now, so nothing before 1 hour...
+ await actor(db);
+ await db.exec(`select crm.update_support_demand('${id}',2,'{"assigned_to":null}')`);
+ await db.exec(`reset role;select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='UNASSIGNED'`),1);
+ // ...and one more alert once that new period is older than 1 hour
+ await db.exec(`update crm.support_demands set unassigned_since=now()-interval '90 minutes' where id='${id}'`);
+ await db.exec(`select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='UNASSIGNED' and recipient='${admin}'`),2);
+ assert.equal(await scalar(db,`crm.scan_support_demands()`),0);
+ }finally{await db.close();}
+});
+
+test('alerts: reopening an overdue demand starts a new alert cycle for the assignee',async()=>{
+ const db=await banco();try{
+ await actor(db);
+ const id=await scalar(db,`crm.create_support_demand('${org}','Vencida','',null,'NORMAL',now()-interval '10 hours','${member}','${r1}')`);
+ await db.exec(`reset role;select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='OVERDUE' and demand_id='${id}'`),1);
+ await actor(db);
+ await db.exec(`select crm.update_support_demand('${id}',${await version(db,id)},'{"status":"RESOLVED"}')`);
+ await db.exec(`reset role;select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='OVERDUE' and demand_id='${id}'`),1,'resolved demands do not alert');
+ await actor(db);
+ await db.exec(`select crm.update_support_demand('${id}',${await version(db,id)},'{"status":"IN_PROGRESS"}')`);
+ assert.equal(await scalar(db,`select reopen_count from crm.support_demands where id='${id}'`),1);
+ await db.exec(`reset role;select crm.scan_support_demands()`);
+ assert.equal(await count(db,`kind='OVERDUE' and demand_id='${id}' and recipient='${member}'`),2,'reopened overdue demand warns again');
+ assert.equal(await scalar(db,`crm.scan_support_demands()`),0,'and only once');
+ // changing between active states is not a reopening
+ await actor(db);
+ await db.exec(`select crm.update_support_demand('${id}',${await version(db,id)},'{"status":"WAITING"}')`);
+ assert.equal(await scalar(db,`select reopen_count from crm.support_demands where id='${id}'`),1);
  }finally{await db.close();}
 });

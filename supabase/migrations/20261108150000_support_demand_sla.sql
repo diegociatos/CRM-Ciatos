@@ -34,6 +34,10 @@ $$;
 -- Demandas: prazo veio da politica? confidencial?
 alter table crm.support_demands add column sla_due boolean not null default false;
 alter table crm.support_demands add column confidential boolean not null default false;
+-- Inicio do periodo atual sem responsavel (um aviso por periodo) e quantas vezes foi reaberta (novo ciclo de avisos).
+alter table crm.support_demands add column unassigned_since timestamptz;
+alter table crm.support_demands add column reopen_count integer not null default 0;
+update crm.support_demands set unassigned_since=created_at where assigned_to is null;
 
 -- Visibilidade: membro ativo da empresa; confidencial so criador, responsavel e administrador.
 create function crm.support_demand_visible(org uuid,is_confidential boolean,creator uuid,assignee uuid) returns boolean
@@ -95,8 +99,8 @@ declare saved uuid; final_due timestamptz; from_policy boolean:=false; final_ass
  end if;
  final_due:=demand_due_at;
  if final_due is null then final_due:=now()+make_interval(hours=>crm.support_sla_hours(org,demand_priority)); from_policy:=true; end if;
- insert into crm.support_demands(organization_id,lead_id,title,description,priority,due_at,assigned_to,created_by,request_id,sla_due,confidential)
- values(org,related_lead,trim(demand_title),coalesce(demand_description,''),demand_priority,final_due,final_assignee,auth.uid(),request_id,from_policy,coalesce(is_confidential,false))
+ insert into crm.support_demands(organization_id,lead_id,title,description,priority,due_at,assigned_to,created_by,request_id,sla_due,confidential,unassigned_since)
+ values(org,related_lead,trim(demand_title),coalesce(demand_description,''),demand_priority,final_due,final_assignee,auth.uid(),request_id,from_policy,coalesce(is_confidential,false),case when final_assignee is null then now() end)
  on conflict on constraint support_demands_request_unique do nothing returning id into saved;
  if saved is null then
   select d.id into saved from crm.support_demands d where d.organization_id=org and d.created_by=auth.uid() and d.request_id=create_support_demand.request_id;
@@ -128,7 +132,12 @@ declare previous crm.support_demands; updated crm.support_demands; begin
   raise exception 'O contato da demanda não pode ser alterado após a criação. Crie uma nova demanda para outro contato.' using errcode='23514';
  end if;
  if patch ? 'assigned_to' then updated.assigned_to:=(patch->>'assigned_to')::uuid; end if;
- if patch ? 'due_at' then updated.due_at:=(patch->>'due_at')::timestamptz; updated.sla_due:=false; end if;
+ if patch ? 'due_at' then
+  if patch->>'due_at' is null then
+   -- Prazo limpo = volta a usar a politica da prioridade, contada desde a abertura (como na criacao).
+   updated.due_at:=previous.created_at+make_interval(hours=>crm.support_sla_hours(previous.organization_id,updated.priority)); updated.sla_due:=true;
+  else updated.due_at:=(patch->>'due_at')::timestamptz; updated.sla_due:=false; end if;
+ end if;
  -- Prioridade mudou e o prazo ainda vem da politica: recalcula a partir da criacao.
  if updated.priority is distinct from previous.priority and previous.sla_due and not (patch ? 'due_at') and updated.priority in ('LOW','NORMAL','HIGH','URGENT') then
   updated.due_at:=previous.created_at+make_interval(hours=>crm.support_sla_hours(previous.organization_id,updated.priority));
@@ -136,7 +145,13 @@ declare previous crm.support_demands; updated crm.support_demands; begin
  if patch ? 'assigned_to' and updated.assigned_to is not null and not exists(select 1 from crm.organization_members m join crm.profiles p on p.id=m.user_id where m.organization_id=previous.organization_id and m.user_id=updated.assigned_to and m.ativo and p.ativo) then raise exception 'Invalid assignee'; end if;
  if updated is not distinct from previous then return previous.version; end if;
  updated.resolved_at:=case when updated.status='RESOLVED' then coalesce(previous.resolved_at,now()) else null end;
- update crm.support_demands set title=updated.title,description=updated.description,status=updated.status,priority=updated.priority,due_at=updated.due_at,sla_due=updated.sla_due,assigned_to=updated.assigned_to,resolved_at=updated.resolved_at,updated_at=now(),version=previous.version+1 where id=demand returning * into updated;
+ -- Reabertura (resolvida/cancelada -> ativa) inicia um novo ciclo de avisos: uma demanda reaberta ja vencida avisa de novo.
+ if previous.status in ('RESOLVED','CANCELLED') and updated.status in ('OPEN','IN_PROGRESS','WAITING') then updated.reopen_count:=previous.reopen_count+1; end if;
+ -- Periodo sem responsavel: comeca ao desatribuir ou reabrir sem responsavel; termina ao atribuir.
+ if updated.assigned_to is null then
+  if previous.assigned_to is not null or updated.reopen_count<>previous.reopen_count or previous.unassigned_since is null then updated.unassigned_since:=now(); end if;
+ else updated.unassigned_since:=null; end if;
+ update crm.support_demands set title=updated.title,description=updated.description,status=updated.status,priority=updated.priority,due_at=updated.due_at,sla_due=updated.sla_due,assigned_to=updated.assigned_to,resolved_at=updated.resolved_at,unassigned_since=updated.unassigned_since,reopen_count=updated.reopen_count,updated_at=now(),version=previous.version+1 where id=demand returning * into updated;
  insert into crm.support_demand_activity(organization_id,demand_id,actor_id,kind,changes)
  values(previous.organization_id,demand,auth.uid(),'UPDATED',jsonb_build_object('before',to_jsonb(previous)-'request_id','after',to_jsonb(updated)-'request_id'));
  if updated.assigned_to is not null and updated.assigned_to is distinct from previous.assigned_to and updated.assigned_to<>auth.uid() then
@@ -216,7 +231,7 @@ language plpgsql security definer set search_path='' as $$
 declare total integer:=0; n integer; begin
  -- Atrasadas: avisa o responsavel.
  insert into crm.support_demand_alerts(organization_id,demand_id,recipient,kind,bucket,title)
- select d.organization_id,d.id,d.assigned_to,'OVERDUE',extract(epoch from d.due_at)::bigint::text,d.title
+ select d.organization_id,d.id,d.assigned_to,'OVERDUE',extract(epoch from d.due_at)::bigint::text||'r'||d.reopen_count,d.title
  from crm.support_demands d join crm.organizations o on o.id=d.organization_id and o.ativo
  join crm.organization_members m on m.organization_id=d.organization_id and m.user_id=d.assigned_to and m.ativo
  join crm.profiles p on p.id=d.assigned_to and p.ativo
@@ -224,24 +239,24 @@ declare total integer:=0; n integer; begin
  get diagnostics n=row_count; total:=total+n;
  -- Vencem em breve.
  insert into crm.support_demand_alerts(organization_id,demand_id,recipient,kind,bucket,title)
- select d.organization_id,d.id,d.assigned_to,'DUE_SOON',extract(epoch from d.due_at)::bigint::text,d.title
+ select d.organization_id,d.id,d.assigned_to,'DUE_SOON',extract(epoch from d.due_at)::bigint::text||'r'||d.reopen_count,d.title
  from crm.support_demands d join crm.organizations o on o.id=d.organization_id and o.ativo
  join crm.organization_members m on m.organization_id=d.organization_id and m.user_id=d.assigned_to and m.ativo
  join crm.profiles p on p.id=d.assigned_to and p.ativo
  left join crm.support_settings s on s.organization_id=d.organization_id
  where d.status in ('OPEN','IN_PROGRESS','WAITING') and d.due_at>=now() and d.due_at<now()+make_interval(hours=>coalesce(s.due_soon_hours,4)) on conflict do nothing;
  get diagnostics n=row_count; total:=total+n;
- -- Sem responsavel ha mais de 1 hora: avisa administradores/masters da empresa.
+ -- Sem responsavel ha mais de 1 hora no periodo atual (um aviso por periodo, mesmo apos desatribuir): avisa administradores/masters da empresa.
  insert into crm.support_demand_alerts(organization_id,demand_id,recipient,kind,bucket,title)
- select d.organization_id,d.id,a.user_id,'UNASSIGNED','once',d.title
+ select d.organization_id,d.id,a.user_id,'UNASSIGNED',extract(epoch from coalesce(d.unassigned_since,d.created_at))::bigint::text,d.title
  from crm.support_demands d join crm.organizations o on o.id=d.organization_id and o.ativo
  join crm.organization_members a on a.organization_id=d.organization_id and a.ativo and (a.papel='ADMIN' or a.is_master)
  join crm.profiles p on p.id=a.user_id and p.ativo
- where d.status in ('OPEN','IN_PROGRESS','WAITING') and d.assigned_to is null and d.created_at<now()-interval '1 hour' on conflict do nothing;
+ where d.status in ('OPEN','IN_PROGRESS','WAITING') and d.assigned_to is null and coalesce(d.unassigned_since,d.created_at)<now()-interval '1 hour' on conflict do nothing;
  get diagnostics n=row_count; total:=total+n;
  -- Escalonamento: atraso alem do limite da empresa avisa administradores/masters.
  insert into crm.support_demand_alerts(organization_id,demand_id,recipient,kind,bucket,title)
- select d.organization_id,d.id,a.user_id,'ESCALATED',extract(epoch from d.due_at)::bigint::text,d.title
+ select d.organization_id,d.id,a.user_id,'ESCALATED',extract(epoch from d.due_at)::bigint::text||'r'||d.reopen_count,d.title
  from crm.support_demands d join crm.organizations o on o.id=d.organization_id and o.ativo
  left join crm.support_settings s on s.organization_id=d.organization_id
  join crm.organization_members a on a.organization_id=d.organization_id and a.ativo and (a.papel='ADMIN' or a.is_master)

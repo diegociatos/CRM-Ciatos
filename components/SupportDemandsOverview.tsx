@@ -8,6 +8,7 @@ type Props = {
   organizationId: string; users: User[]; client: typeof supabase;
   revision: number; onOpenDemand: (id: string) => void;
 };
+const alertPageSize = 20;
 const priorityOrder: DemandPriority[] = ['URGENT', 'HIGH', 'NORMAL', 'LOW'];
 
 /** Painel, avisos internos e prazos da empresa selecionada. Nada aqui envia mensagem a clientes. */
@@ -17,24 +18,43 @@ export default function SupportDemandsOverview({ organizationId, users, client, 
   const [settings, setSettings] = useState<DemandSettings | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [alertTotal, setAlertTotal] = useState(0);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [alertsNotice, setAlertsNotice] = useState('');
+  const alertsPage = useCallback((from: number) => client.from('support_demand_alerts').select('id,demand_id,kind,title,created_at,read_at', { count: 'exact' }).eq('organization_id', organizationId).order('created_at', { ascending: false }).order('id').range(from, from + alertPageSize - 1), [client, organizationId]);
   useEffect(() => {
-    let active = true; setError('');
+    let active = true; setError(''); setAlertsNotice('');
     void (async () => {
-      const [statsResult, alertsResult, settingsResult] = await Promise.all([
+      const [statsResult, alertsResult, unreadResult, settingsResult] = await Promise.all([
         client.rpc('support_demand_stats', { org: organizationId }),
-        client.from('support_demand_alerts').select('id,demand_id,kind,title,created_at,read_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(20),
+        alertsPage(0),
+        client.from('support_demand_alerts').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).is('read_at', null),
         client.rpc('get_support_settings', { org: organizationId }),
       ]);
       if (!active) return;
-      if (statsResult.error || alertsResult.error || settingsResult.error) throw statsResult.error || alertsResult.error || settingsResult.error;
-      setStats(statsResult.data as DemandStats); setAlerts((alertsResult.data || []) as DemandAlert[]); setSettings(settingsResult.data as DemandSettings);
+      if (statsResult.error || alertsResult.error || unreadResult.error || settingsResult.error) throw statsResult.error || alertsResult.error || unreadResult.error || settingsResult.error;
+      const loaded = (alertsResult.data || []) as DemandAlert[];
+      setStats(statsResult.data as DemandStats); setAlerts(loaded); setAlertTotal(alertsResult.count ?? loaded.length); setUnreadTotal(unreadResult.count ?? 0); setSettings(settingsResult.data as DemandSettings);
     })().catch(() => { if (active) setError('Não foi possível carregar o painel e os avisos. Confira a conexão e se a atualização do banco foi aplicada.'); });
     return () => { active = false; };
-  }, [organizationId, client, revision, reload]);
-  const unread = alerts.filter(item => !item.read_at).length;
+  }, [organizationId, client, revision, reload, alertsPage]);
+  // Only the alerts actually on screen are marked: older unread ones stay unread until they are shown.
+  const shownUnread = alerts.filter(item => !item.read_at);
+  const hasMore = alerts.length < alertTotal;
   const markRead = async () => {
-    const { error: failure } = await client.rpc('mark_support_alerts_read', { org: organizationId });
+    const { error: failure } = await client.rpc('mark_support_alerts_read', { org: organizationId, alert_ids: shownUnread.map(item => item.id) });
     if (failure) setError(demandError(failure)); else setReload(v => v + 1);
+  };
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true); setAlertsNotice('');
+    const result = await alertsPage(alerts.length);
+    setLoadingMore(false);
+    if (result.error) { setAlertsNotice('Não foi possível carregar mais avisos. Tente novamente.'); return; }
+    const more = (result.data || []) as DemandAlert[];
+    setAlerts(old => [...old, ...more.filter(item => !old.some(known => known.id === item.id))]);
+    setAlertTotal(result.count ?? alertTotal);
   };
   const nameOf = (id: string | null) => id ? users.find(user => user.id === id)?.name || 'Membro da equipe' : 'Sem responsável';
   if (error) return <p className="demands-error" role="alert">{error}</p>;
@@ -48,8 +68,10 @@ export default function SupportDemandsOverview({ organizationId, users, client, 
       <li><strong>{stats.avg_resolution_hours === null ? '—' : formatHours(Math.round(stats.avg_resolution_hours))}</strong><span>Tempo médio de resolução (90 dias)</span></li>
     </ul>
     <div className="demands-overview-grid">
-      <div className="demands-panel"><header><h2>Meus avisos{unread > 0 && <span className="demands-count">{unread}</span>}</h2><button className="demands-secondary" disabled={!unread} onClick={() => void markRead()}>Marcar como lidos</button></header>
+      <div className="demands-panel"><header><h2>Meus avisos{unreadTotal > 0 && <span className="demands-count">{unreadTotal}</span>}</h2><button className="demands-secondary" disabled={!shownUnread.length} onClick={() => void markRead()}>{unreadTotal > shownUnread.length ? 'Marcar exibidos como lidos' : 'Marcar como lidos'}</button></header>
         {!alerts.length ? <p className="demands-empty-small">Nenhum aviso por enquanto.</p> : <ul>{alerts.map(item => <li key={item.id} className={item.read_at ? '' : 'is-unread'}><button onClick={() => onOpenDemand(item.demand_id)}><strong>{alertKinds[item.kind] || item.kind}</strong><span>{item.title}</span><time>{demandDate(item.created_at)}</time></button></li>)}</ul>}
+        {alertsNotice && <p className="demands-error" role="alert">{alertsNotice}</p>}
+        {hasMore && <button className="demands-secondary" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Carregando…' : `Mostrar mais avisos (${alerts.length} de ${alertTotal})`}</button>}
       </div>
       <div className="demands-panel"><header><h2>Carga por responsável</h2></header>
         {!stats.by_assignee.length ? <p className="demands-empty-small">Sem demandas em aberto.</p> : <ul>{stats.by_assignee.map(row => <li key={row.assigned_to || 'none'}><span>{nameOf(row.assigned_to)}</span><span>{row.open} em aberto{row.overdue ? ` · ${row.overdue} atrasada${row.overdue > 1 ? 's' : ''}` : ''}</span></li>)}</ul>}

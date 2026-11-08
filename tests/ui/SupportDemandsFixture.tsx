@@ -9,6 +9,7 @@ const leads = [{ id: 'lead-one', organizationId: orgOne, company: 'Empresa Exemp
 const initial = { id: 'demand-one', organization_id: orgOne, lead_id: 'lead-one', title: 'Revisar contrato do cliente', description: 'Conferir documentos recebidos.', status: 'OPEN', priority: 'HIGH', due_at: '2026-01-01T12:00:00Z', assigned_to: null, created_by: user.id, created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-01T10:00:00Z', resolved_at: null, version: 1 };
 const rows: Record<string, any[]> = {
   support_demands: [{ ...initial }, { ...initial, id: 'demand-done', title: 'Cadastro conferido', status: 'RESOLVED', priority: 'NORMAL' }],
+  support_demand_alerts: [],
   support_demand_activity: [{ id: 'event-one', organization_id: orgOne, demand_id: initial.id, actor_id: user.id, kind: 'CREATED', body: null, changes: {}, created_at: initial.created_at }],
 };
 const requests = new Map<string, string>();
@@ -18,6 +19,7 @@ let failAfterWrite = false;
 let rejectAfterInterruption = false;
 let delay = 0;
 let writes = 0;
+let markedIds: string[] | null = null;
 const addEvent = (row: any, kind: string, changes: any, body: string | null = null) => {
   const id = `event-${rows.support_demand_activity.length + 1}`;
   rows.support_demand_activity.push({ id, organization_id: row.organization_id, demand_id: row.id, actor_id: user.id, kind, changes, body, created_at: new Date().toISOString() });
@@ -48,7 +50,8 @@ const fake = {
     // Panel/avisos/configuracao: leituras independentes que nao devem consumir as falhas simuladas das gravacoes.
     if (name === 'support_demand_stats') { const open = rows.support_demands.filter(x => ['OPEN', 'IN_PROGRESS', 'WAITING'].includes(x.status)); return { data: { open: open.length, overdue: open.filter(x => x.due_at && x.due_at < new Date().toISOString()).length, due_today: 0, unassigned: open.filter(x => !x.assigned_to).length, avg_resolution_hours: null, by_assignee: [] }, error: null }; }
     if (name === 'get_support_settings') return { data: { triage_assignee: null, due_soon_hours: 4, escalate_after_hours: 4, can_manage: true, policies: { URGENT: 4, HIGH: 24, NORMAL: 72, LOW: 120 } }, error: null };
-    if (name === 'mark_support_alerts_read' || name === 'save_support_settings') return { data: 0, error: null };
+    if (name === 'mark_support_alerts_read') { markedIds = args.alert_ids ?? null; rows.support_demand_alerts.forEach(x => { if (!x.read_at && (!args.alert_ids || args.alert_ids.includes(x.id))) x.read_at = new Date().toISOString(); }); return { data: 0, error: null }; }
+    if (name === 'save_support_settings') return { data: 0, error: null };
     if (rejectNext) { rejectNext = false; return { data: null, error: { code: 'P0001', message: 'Responsável inválido.' } }; }
     if (failNext) { failNext = false; return { data: null, error: { message: 'Falha simulada de conexão.' } }; }
     await new Promise(r => setTimeout(r, delay));
@@ -88,6 +91,8 @@ export default function SupportDemandsFixture() {
       <button onClick={() => { delay = 700; }}>Respostas lentas</button><button onClick={() => setShow(v => !v)}>Alternar tela</button>
       <button onClick={() => { for (let i = 0; i < 26; i++) rows.support_demands.push({ ...initial, id: `extra-${i}`, title: `Extra ${i}` }); }}>Popular fila</button>
       <button onClick={() => { for (let i = 1; i <= 60; i++) rows.support_demand_activity.push({ id: `history-${i}`, organization_id: orgOne, demand_id: initial.id, actor_id: user.id, kind: 'NOTE', body: `Registro histórico ${i}`, changes: {}, created_at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() }); }}>Popular histórico</button>
+      <button onClick={() => { for (let i = 1; i <= 45; i++) rows.support_demand_alerts.push({ id: `alert-${String(i).padStart(2, '0')}`, organization_id: orgOne, demand_id: initial.id, kind: 'OVERDUE', title: `Aviso ${i}`, created_at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString(), read_at: null }); }}>Popular avisos</button>
+      <button onClick={() => { document.body.dataset.markedCount = markedIds === null ? 'all' : String(markedIds.length); }}>Contar marcados</button>
       <button onClick={() => { document.body.dataset.writeCount = String(writes); }}>Contar gravações</button>
       {opened && <span role="status">Cadastro aberto: {opened}</span>}
     </div>
