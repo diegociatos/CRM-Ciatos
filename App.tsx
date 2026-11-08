@@ -6,6 +6,7 @@ import Header from './components/Header';
 import {useSdrNotifications} from './lib/useSdrNotifications';
 import Dashboard from './components/Dashboard';
 const HelpCenter = lazy(() => import('./components/HelpCenter'));
+const SupportDemands = lazy(() => import('./components/SupportDemands'));
 const Inbox = lazy(() => import('./components/Inbox'));
 const ExecutiveDashboard = lazy(() => import('./components/ExecutiveDashboard'));
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'));
@@ -99,6 +100,16 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     return v;
   });
   const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : onboardingLink ? 'operational_dashboard' : 'dashboard' });
+  const [demandOrigin, setDemandOrigin] = useState<{leadId:string;title:string}|null>(null);
+  const [demandAlerts, setDemandAlerts] = useState(0);
+  // Contador de avisos internos não lidos (somente leitura, escopo da empresa atual).
+  useEffect(() => {
+    const orgId = company?.id; setDemandAlerts(0); if (!orgId) return;
+    let active = true;
+    const load = async () => { try { const { count, error } = await supabase.from('support_demand_alerts').select('id', { count: 'exact', head: true }).eq('organization_id', orgId).is('read_at', null); if (active && !error) setDemandAlerts(count || 0); } catch { /* indisponível: sem contador */ } };
+    void load(); const timer = setInterval(load, 60000);
+    return () => { active = false; clearInterval(timer); };
+  }, [company?.id, nav.view]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [scripts, setScripts] = useState<SalesScript[]>([]);
@@ -386,7 +397,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const renderView = () => {
     switch (nav.view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
-      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)}/> : null;
+      case 'demands': return company ? <SupportDemands organizationId={company.id} users={users} leads={leads} currentUser={currentUser} onOpenLead={id=>void openLead(id)} initialLeadId={demandOrigin?.leadId} initialTitle={demandOrigin?.title} onClearInitial={()=>setDemandOrigin(null)}/> : null;
+      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)} onCreateDemand={(leadId,title)=>{setDemandOrigin({leadId,title});setNav({view:'demands'});}}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onResendInvite={handleResendInvite} currentUser={currentUser} />;
@@ -415,7 +427,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   return (
     <div className={`crm-app min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex text-slate-900`}>
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
-      <Sidebar brandName={company?.branding?.display_name} brandColor={company?.branding?.color} companyName={company?.nome} companyId={company?.id} companies={companies} onCompanyChange={onCompanyChange} onManageCompanies={company?.can_manage?()=>{setManageCompanies(true);setMobileMenuOpen(false);}:undefined} onOpenPlatform={company?.can_platform?()=>{setPlatformOpen(true);setMobileMenuOpen(false);}:undefined} mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
+      <Sidebar demandAlerts={demandAlerts} brandName={company?.branding?.display_name} brandColor={company?.branding?.color} companyName={company?.nome} companyId={company?.id} companies={companies} onCompanyChange={onCompanyChange} onManageCompanies={company?.can_manage?()=>{setManageCompanies(true);setMobileMenuOpen(false);}:undefined} onOpenPlatform={company?.can_platform?()=>{setPlatformOpen(true);setMobileMenuOpen(false);}:undefined} mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={true} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <Header onHelp={()=>setNav({view:'help'})} leads={leads} onSelectLead={id=>void openLead(id)} onToggleMenu={() => setMobileMenuOpen(true)} notifications={notifications} onMarkRead={id=>void markRead(id)} onClearAll={()=>void clearAll()} onOpenNewLead={() => setShowNewLeadForm(true)} currentUser={currentUser} canSwitchRole={podeSimular} onSwitchRole={(r) => podeSimular && setSimulatedRole(r === UserRole.ADMIN ? null : r)} canCreate={true} onOpenUserProfile={() => setShowUserProfileModal(true)} onLogout={handleLogout} />
         <main id="main-content" className={`crm-main flex-1 min-w-0 ml-0 md:ml-64 p-4 md:p-8 pt-28 md:pt-28 max-w-[1800px] ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : ''}`}>
