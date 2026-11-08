@@ -160,3 +160,26 @@ test('phone layout and cancel return focus without leaving a modal behind', asyn
   await page.getByRole('button', { name: 'Fechar detalhes' }).click();
   await expect(page.getByRole('complementary', { name: 'Detalhes da demanda' })).toHaveCount(0);
 });
+
+test('painel de atendimento, fila sem responsável e demanda confidencial', async ({ page }) => {
+  await page.goto('/tests/ui/?demands');
+  const panel = page.getByRole('region', { name: 'Painel de atendimento' });
+  await expect(panel.getByRole('list', { name: 'Resumo das demandas' })).toBeVisible();
+  await expect(panel.getByText('Atrasadas', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Nenhum aviso por enquanto.')).toBeVisible();
+  await panel.getByText('Prazos e responsável de triagem').click();
+  await expect(panel.getByLabel('Responsável pela triagem')).toBeVisible();
+  await expect(panel.getByLabel('Prazo Urgente (horas)')).toHaveValue('4');
+  await panel.getByLabel('Prazo Normal (horas)').fill('abc');
+  await panel.getByRole('button', { name: 'Salvar configuração' }).click();
+  await expect(panel.getByRole('alert')).toContainText('números inteiros');
+  await panel.getByLabel('Prazo Normal (horas)').fill('48');
+  await panel.getByRole('button', { name: 'Salvar configuração' }).click();
+  await expect(panel.getByRole('status')).toContainText('Configuração salva');
+  await page.getByRole('button', { name: 'Sem responsável', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Revisar contrato do cliente/ })).toBeVisible();
+  await page.getByRole('button', { name: /Nova demanda/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nova demanda' });
+  await expect(dialog.getByText('usa o prazo da prioridade')).toBeVisible();
+  await expect(dialog.getByLabel(/Demanda confidencial/)).not.toBeChecked();
+});

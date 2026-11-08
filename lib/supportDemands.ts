@@ -8,7 +8,7 @@ export type DemandPriority = keyof typeof demandPriorities;
 export type SupportDemand = {
   id: string; organization_id: string; lead_id: string | null; title: string; description: string;
   status: DemandStatus; priority: DemandPriority; due_at: string | null; assigned_to: string | null;
-  created_by: string | null; created_at: string; updated_at: string; resolved_at: string | null; version: number;
+  created_by: string | null; created_at: string; updated_at: string; resolved_at: string | null; version: number; confidential?: boolean;
 };
 export type DemandActivity = {
   id: string; demand_id: string; actor_id: string | null; kind: 'CREATED' | 'UPDATED' | 'NOTE';
@@ -44,4 +44,16 @@ export function demandError(error: unknown): string {
   const message = (error as { message?: string })?.message || '';
   if ((error as { code?: string })?.code === '40001' || /version|concurrent|conflito|alterad|stale|changed.*reload/i.test(message)) return 'Outra pessoa atualizou esta demanda. Seu rascunho foi preservado. Recarregue os dados antes de salvar novamente.';
   return message || 'Não foi possível concluir. Confira a conexão e tente novamente.';
+}
+
+export const alertKinds = { ASSIGNED: 'Atribuída a você', DUE_SOON: 'Vence em breve', OVERDUE: 'Atrasada', UNASSIGNED: 'Sem responsável', ESCALATED: 'Atraso escalado' } as const;
+export type AlertKind = keyof typeof alertKinds;
+export type DemandAlert = { id: string; demand_id: string; kind: AlertKind; title: string; created_at: string; read_at: string | null };
+export type DemandStats = { open: number; overdue: number; due_today: number; unassigned: number; avg_resolution_hours: number | null; by_assignee: { assigned_to: string | null; open: number; overdue: number }[] };
+export type DemandSettings = { triage_assignee: string | null; due_soon_hours: number; escalate_after_hours: number; can_manage: boolean; policies: Record<DemandPriority, number> };
+/** Human readable SLA window: 4 h, 24 h -> 1 dia, 72 h -> 3 dias. */
+export function formatHours(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || !Number.isFinite(hours)) return '—';
+  if (hours >= 24 && hours % 24 === 0) { const days = hours / 24; return `${days} ${days === 1 ? 'dia' : 'dias'}`; }
+  return `${hours} h`;
 }

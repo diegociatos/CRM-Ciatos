@@ -53,3 +53,22 @@ Implementação original sobre o React, Supabase/PostgreSQL e componentes existe
 A auditoria de dependências em 08/11/2026 encontrou três alertas nas ferramentas de desenvolvimento existentes. Foram aplicadas correções compatíveis no lockfile: Vite 6.4.3 → 6.4.5, postcss-selector-parser 6.1.4 → 6.1.5 e source-map-js 1.2.1 → 1.2.2, sem alterar as faixas de versões do package.json. A nova auditoria npm informou zero vulnerabilidades conhecidas; esse resultado não substitui auditoria completa da aplicação.
 
 Próximas etapas possíveis, a escolher depois desta validação: categorias/equipes e SLA configurável, base de conhecimento, notificações internas, associação persistente entre conversa e demanda, portal de acompanhamento e novos canais de entrada. Integrações externas e acesso persistente exigem configuração e autorização próprias; não estão habilitados por esta entrega.
+
+## Fase 1: prazo automático, triagem, avisos, painel e confidencialidade
+
+Migration `20261108150000_support_demand_sla.sql` (aplicar **depois** de `20261108120910_support_demands.sql`, também só no schema CRM e sem reset nem push global).
+
+- **Prazo automático (SLA simples).** Sem prazo informado, `due_at` vem da prioridade da empresa, em **horas corridas** (sem dias úteis, horário comercial ou feriados). Padrões: Urgente 4 h, Alta 24 h, Normal 72 h, Baixa 120 h, ajustáveis por empresa por administradores. Prazo digitado à mão nunca é recalculado; se a prioridade mudar e o prazo ainda vier da política, ele é recalculado a partir da criação. Não é um SLA contratual.
+- **Responsável de triagem.** Cada empresa pode escolher quem recebe as demandas criadas sem responsável. Se essa pessoa deixar de ser membro ativo, a demanda fica sem responsável em vez de falhar. Fila "Sem responsável" na lista.
+- **Avisos internos.** Tabela `support_demand_alerts`, visível só ao destinatário. Tipos: atribuída a você (gerada na hora), vence em breve, atrasada, sem responsável há mais de 1 h e atraso escalado (após X horas, padrão 4 h, aos administradores/masters). A função `crm.scan_support_demands()` gera os avisos sem duplicar e só o `service_role` a executa. Contador no menu lateral e lista "Meus avisos" na tela. **Nenhum e-mail, WhatsApp ou mensagem é enviado.**
+- **Painel por empresa.** `support_demand_stats(org)` roda com as permissões de quem consulta, então só conta o que a pessoa pode ver. Não existe visão que cruze empresas.
+- **Demanda confidencial.** Marcada na criação e imutável depois. Só criador, responsável e administradores/masters da empresa leem a demanda e o histórico, nas consultas diretas e nas funções de edição e nota. Ao atribuir a outra pessoa, ela passa a ver. A exportação de privacidade do contato continua incluindo essas demandas (restrita a administradores).
+
+### Implantação da Fase 1 (ainda não executada)
+1. Aplicar a migration de demandas, depois esta, somente no schema CRM do projeto correto.
+2. Conferir `select * from cron.job` e rodar manualmente `supabase/ops/support-scan.sql` (agendador a cada 10 minutos; para parar, `cron.unschedule`).
+3. Publicar o frontend. O módulo antigo continua funcionando sem a migration nova, mas o painel e os avisos mostram erro até ela ser aplicada.
+4. No painel, definir o responsável de triagem de cada empresa e revisar os prazos.
+
+### Testes
+`tests/support-demand-sla.test.ts` (banco descartável): prazo por política e sem recálculo manual, configuração restrita a administradores, triagem com membro inativo, varredura sem duplicar, escalonamento, leitura de avisos privada, isolamento entre empresas e confidencialidade. `tests/ui/support-demands.spec.ts`: painel, configuração e fila sem responsável com cliente simulado. Limites desta fase: horas corridas; avisos só na tela (sem e-mail); fuso do painel fixo em America/Sao_Paulo.

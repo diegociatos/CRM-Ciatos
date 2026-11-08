@@ -29,6 +29,8 @@ const fake = {
     const query = {
       select() { return query; }, eq(key: string, value: any) { filters.push(x => x[key] === value); return query; },
       in(key: string, values: any[]) { filters.push(x => values.includes(x[key])); return query; },
+      is(key: string, value: any) { filters.push(x => (x[key] ?? null) === value); return query; },
+      limit(n: number) { end = start + n - 1; return query; },
       lt(key: string, value: any) { filters.push(x => x[key] != null && x[key] < value); return query; },
       ilike(key: string, value: string) { const needle = value.slice(1, -1).replace(/\\([\\%_])/g, '$1').toLowerCase(); filters.push(x => x[key].toLowerCase().includes(needle)); return query; },
       order(key: string, options?: any) { orders.push([key, options]); return query; }, range(a: number, b: number) { start = a; end = b; return query; },
@@ -43,6 +45,10 @@ const fake = {
     }; return query;
   },
   async rpc(name: string, args: any) {
+    // Panel/avisos/configuracao: leituras independentes que nao devem consumir as falhas simuladas das gravacoes.
+    if (name === 'support_demand_stats') { const open = rows.support_demands.filter(x => ['OPEN', 'IN_PROGRESS', 'WAITING'].includes(x.status)); return { data: { open: open.length, overdue: open.filter(x => x.due_at && x.due_at < new Date().toISOString()).length, due_today: 0, unassigned: open.filter(x => !x.assigned_to).length, avg_resolution_hours: null, by_assignee: [] }, error: null }; }
+    if (name === 'get_support_settings') return { data: { triage_assignee: null, due_soon_hours: 4, escalate_after_hours: 4, can_manage: true, policies: { URGENT: 4, HIGH: 24, NORMAL: 72, LOW: 120 } }, error: null };
+    if (name === 'mark_support_alerts_read' || name === 'save_support_settings') return { data: 0, error: null };
     if (rejectNext) { rejectNext = false; return { data: null, error: { code: 'P0001', message: 'Responsável inválido.' } }; }
     if (failNext) { failNext = false; return { data: null, error: { message: 'Falha simulada de conexão.' } }; }
     await new Promise(r => setTimeout(r, delay));

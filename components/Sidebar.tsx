@@ -18,9 +18,11 @@ interface SidebarProps {
   role: UserRole;
   onOpenNewLead: () => void;
   canCreate: boolean;
+  /** Avisos internos não lidos da Central de demandas. */
+  demandAlerts?: number;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Grupo Ciatos", companyId, companies=[], onCompanyChange, onManageCompanies, onOpenPlatform, mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ demandAlerts=0, brandName,brandColor,companyName="Grupo Ciatos", companyId, companies=[], onCompanyChange, onManageCompanies, onOpenPlatform, mobileOpen, onClose, currentView, setView, role, onOpenNewLead, canCreate }) => {
   const [companyMenu,setCompanyMenu] = useState(false);
   const companyRef = useRef<HTMLDivElement>(null);
   useEffect(()=>{
@@ -80,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ brandName,brandColor,companyName="Gru
       {canCreate && <button onClick={onOpenNewLead} className="nav-create"><span aria-hidden="true">＋</span> Novo Lead</button>}
       <nav className="nav-groups">{groups.map(group => {
         const items = group.ids.map(id => menuItems.find(item => item.id===id)!).filter(item => item.roles.includes(role));
-        return items.length ? <div className="nav-group" key={group.title}><p>{group.title}</p>{items.map(item => <button key={item.id} aria-current={currentView===item.id ? 'page' : undefined} onClick={()=>setView(item.id as any)} className={`nav-item ${currentView===item.id?'is-current':''}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d={item.icon}/></svg><span>{item.label}</span>{item.id==='ai_center' && <small aria-hidden="true">IA</small>}</button>)}</div> : null;
+        return items.length ? <div className="nav-group" key={group.title}><p>{group.title}</p>{items.map(item => <button key={item.id} aria-current={currentView===item.id ? 'page' : undefined} onClick={()=>setView(item.id as any)} className={`nav-item ${currentView===item.id?'is-current':''}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d={item.icon}/></svg><span>{item.label}</span>{item.id==='ai_center' && <small aria-hidden="true">IA</small>}{item.id==='demands' && demandAlerts>0 && <small className="nav-badge" aria-label={`${demandAlerts} avisos não lidos`}>{demandAlerts>99?'99+':demandAlerts}</small>}</button>)}</div> : null;
       })}</nav>
       <div className="nav-footer"><span className="status-dot"/><div><strong>Conexões que geram valor</strong><small>Grupo Ciatos · {role}</small></div></div>
     </aside>
