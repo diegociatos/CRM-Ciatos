@@ -35,6 +35,7 @@ import {
 import { DEFAULT_ONBOARDING_TEMPLATES } from './constants';
 import { seedDatabase } from './services/dataGeneratorService';
 import { supabase } from './lib/supabase';
+import SupportDesk from './components/SupportDesk';
 import {createWorkspaceDb,roleDePapel} from './services/db';
 import {PlatformAdmin} from './components/PlatformAdmin';
 import {CompanyShell,CompanyManager,WorkspaceProps} from './components/CompanyWorkspace';
@@ -101,6 +102,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   });
   const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : onboardingLink ? 'operational_dashboard' : 'dashboard' });
   const [demandOrigin, setDemandOrigin] = useState<{leadId:string;title:string}|null>(null);
+  const [inboxConversation, setInboxConversation] = useState<string|null>(null);
+  useEffect(() => { if (nav.view !== 'inbox' && inboxConversation) setInboxConversation(null); }, [nav.view, inboxConversation]);
   const [demandAlerts, setDemandAlerts] = useState(0);
   // Contador de avisos internos não lidos (somente leitura, escopo da empresa atual).
   useEffect(() => {
@@ -395,10 +398,13 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   if (!currentUser) return <LoginPage onLogin={handleLogin} onForgotPassword={handleEsqueciSenha} isLoading={isAuthLoading} />;
 
   const renderView = () => {
-    switch (nav.view) {
+    // O perfil Suporte só navega no atendimento (o banco também nega o restante).
+    const view = currentUser.role === UserRole.SUPPORT && !['support', 'inbox', 'demands', 'help'].includes(nav.view) ? 'support' : nav.view;
+    switch (view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
+      case 'support': return company ? <SupportDesk key={company.id} organizationId={company.id} users={users} currentUser={currentUser} client={supabase} onOpenConversation={id => { setInboxConversation(id); setNav({ view: 'inbox' }); }}/> : null;
       case 'demands': return company ? <SupportDemands organizationId={company.id} users={users} leads={leads} currentUser={currentUser} onOpenLead={id=>void openLead(id)} initialLeadId={demandOrigin?.leadId} initialTitle={demandOrigin?.title} onClearInitial={()=>setDemandOrigin(null)}/> : null;
-      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} onOpenLead={id=>void openLead(id)} onCreateDemand={(leadId,title)=>{setDemandOrigin({leadId,title});setNav({view:'demands'});}}/> : null;
+      case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} initialConversationId={inboxConversation||undefined} canOpenLead={currentUser.role !== UserRole.SUPPORT} onOpenLead={id=>void openLead(id)} onCreateDemand={(leadId,title)=>{setDemandOrigin({leadId,title});setNav({view:'demands'});}}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;
       case 'user_management': if(!company?.can_manage)return <p>A administração do grupo gerencia os acessos. Solicite alterações ao administrador.</p>; return <UserManagementView users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onResendInvite={handleResendInvite} currentUser={currentUser} />;

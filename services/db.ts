@@ -29,6 +29,7 @@ const PAPEL_PARA_ROLE: Record<string, UserRole> = {
   OPERATIONAL: UserRole.OPERATIONAL,
   CS: UserRole.CS,
   MARKETING: UserRole.MARKETING,
+  SUPPORT: UserRole.SUPPORT,
 };
 export const roleDePapel=(role:string):UserRole=>PAPEL_PARA_ROLE[role]||UserRole.SDR;
 export const roleParaPapel = (role: UserRole): string =>

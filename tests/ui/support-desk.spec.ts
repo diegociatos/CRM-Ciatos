@@ -1,0 +1,55 @@
+import { test, expect } from '@playwright/test';
+
+test('atendente: filas com contagem, assumir sem roubar, abrir e estados vazio/erro', async ({ page }) => {
+  await page.goto('/tests/ui/?desk');
+  await expect(page.getByRole('heading', { name: /Atendimento/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Visão do gestor' })).toHaveCount(0);
+  const chips = page.getByRole('group', { name: 'Filas' });
+  await expect(chips.getByRole('button', { name: /Minhas/ })).toContainText('1');
+  await expect(chips.getByRole('button', { name: /Sem responsável/ })).toContainText('2');
+  await expect(page.getByText('Envio sem confirmação: confira na caixa Microsoft 365')).toBeVisible();
+  await expect(page.getByText('Reaberto 1×')).toBeVisible();
+  await chips.getByRole('button', { name: /Sem responsável/ }).click();
+  await expect(page.getByText('Aguardando 1ª resposta há 6 h · prazo vencido')).toBeVisible();
+  await page.getByRole('button', { name: 'Assumir atendimento de Cliente Exemplo B' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Atendimento assumido por você.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Outra pessoa assume' }).click();
+  await page.getByRole('button', { name: 'Assumir atendimento de Cliente Exemplo A' }).click();
+  await expect(page.getByText('Outra pessoa já assumiu este atendimento.')).toBeVisible();
+  await chips.getByRole('button', { name: /Minhas/ }).click();
+  await page.getByRole('button', { name: 'Abrir atendimento de Cliente Exemplo C' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Conversa aberta: c3' })).toBeVisible();
+  await page.getByLabel('Buscar atendimento').fill('zzz');
+  await expect(page.getByText('Nenhum atendimento encontrado para esta busca.')).toBeVisible();
+  await page.getByLabel('Buscar atendimento').fill('');
+  await page.getByRole('button', { name: 'Falhar fila' }).click();
+  await chips.getByRole('button', { name: /Abertos/ }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível carregar os atendimentos' })).toBeVisible();
+});
+
+test('gestor: indicadores abrem a lista, canais sem prometer cobertura e perfil de Suporte', async ({ page }) => {
+  await page.goto('/tests/ui/?desk-manager');
+  await page.getByRole('tab', { name: 'Visão do gestor' }).click();
+  const metrics = page.getByRole('list', { name: 'Indicadores' });
+  await expect(metrics.getByText('Não habilitada')).toBeVisible();
+  await expect(page.getByText('Nenhuma foi enviada.')).toBeVisible();
+  await expect(page.getByText('Conectado', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Com erro')).toBeVisible();
+  await expect(page.getByText('Falha: Não foi possível ler respostas.')).toBeVisible();
+  await expect(page.getByText('Não configurado')).toHaveCount(2);
+  await metrics.getByRole('button', { name: /Sem responsável: 2/ }).click();
+  await expect(page.getByRole('heading', { name: 'Sem responsável' })).toBeVisible();
+  await expect(page.getByText('2 atendimentos em “Sem responsável”')).toBeVisible();
+  await page.getByText('Prazos e perfil de Suporte').click();
+  await page.getByLabel('Prazo de 1ª resposta (horas)').fill('0');
+  await page.getByRole('button', { name: 'Salvar prazos' }).click();
+  await expect(page.getByRole('alert')).toContainText('números inteiros');
+  await page.getByLabel('Prazo de 1ª resposta (horas)').fill('6');
+  await page.getByRole('button', { name: 'Salvar prazos' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Prazos salvos' })).toBeVisible();
+  await page.getByLabel('Pessoa para o perfil de Suporte').selectOption('user-bruno');
+  await page.getByRole('button', { name: 'Atribuir perfil' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Perfil de Suporte atribuído' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ver chamadas de perfil' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-profile-calls', /"person":"user-bruno","enabled":true/);
+});

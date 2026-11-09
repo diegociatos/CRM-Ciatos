@@ -46,3 +46,23 @@ Cada fase termina com: o que funciona, o que é demonstração, testes, o que de
 ## 5. Banco e migrations
 
 A Central de Demandas (`20261108120910`, `20261108150000`) está aplicada no projeto de produção. Novas mudanças serão **migrations incrementais** novas; as aplicadas não serão editadas nem reaplicadas, sem reset nem push global no projeto compartilhado.
+
+## 6. Fase A: o que foi implementado
+
+Migration `20261108190000_support_desk_foundation.sql` (incremental; não altera as anteriores) e telas "Atendimento".
+
+**Funciona (verificado em banco descartável e com cliente simulado):**
+- Perfil **Suporte** (`operating_role='SUPPORT'`), atribuído só por administrador da empresa (`crm.set_support_profile`), nunca a si mesmo, a administradores ou masters, com auditoria (`crm.support_audit`). Nenhum acesso existente muda.
+- Restrição no banco: `crm.tenant_member` passou a negar Suporte (leads, comercial, configurações, exportações seguem fechados) e `crm.support_member` o inclui nas superfícies de atendimento (Inbox, respostas rápidas, Central de demandas, empresas do usuário). Suporte lê contatos só por `crm.support_contacts` (apenas quem tem conversa na empresa).
+- Atendimento sobre a conversa do Inbox: espera de retorno, primeira resposta humana **aceita pelo provedor** (enviando/incerto não contam), reaberturas e conclusão com justificativa obrigatória (`crm.support_resolve`). Estado derivado das mensagens (`recompute_case_state`), robusto a evento fora de ordem e confirmação tardia.
+- Fila do atendente (`crm.support_queue`, contadores, assumir sem corrida) e painel do gestor (`crm.support_desk_overview`) com definição de cada número; cada indicador abre a lista que o forma. Prazos de 1ª resposta e de resolução separados, por empresa.
+- Saúde dos canais: e-mail (a partir do cursor de leitura existente), WhatsApp e Instagram **"Não configurado"**. Confirmação automática aparece como **"Não habilitada"**: não existe.
+- A RPC antiga `update_inbox_conversation` não conclui sem justificativa e não permite mexer no atendimento de outra pessoa (achado da revisão do Codex).
+
+**Não existe ainda (não afirmar como funcionando):** e-mail espontâneo, WhatsApp, Instagram, confirmação automática, eventos de entrega/leitura do provedor, vários assuntos por conversa (uma conversa por contato e canal), contato sem lead, ligação persistente entre atendimento e demanda.
+
+**Limites conhecidos:** a caixa de leitura Microsoft é global; o painel mostra mensagem genérica de falha. Um contato que volta a escrever reabre a mesma conversa (sem separar assuntos). Horas corridas, sem dias úteis.
+
+**Revisão independente:** o Codex CLI revisou a migration em modo somente leitura; os achados de gravidade alta/média (bypass pela RPC antiga, confirmação tardia, reabertura, regexp frágil) foram corrigidos e cobertos por teste.
+
+**Implantação:** aplicar `20261108190000` no schema CRM (a migration aborta se alguma troca de `tenant_member` ficar incompleta) e em seguida publicar o frontend. Depois, um administrador atribui o perfil Suporte a uma pessoa de teste e valida com dois usuários e duas empresas.

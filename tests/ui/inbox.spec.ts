@@ -11,6 +11,10 @@ test('Inbox keeps replies, ownership and notes within the selected company',asyn
  await page.getByRole('button',{name:'Salvar nota'}).click();
  await expect(page.getByText('Telefonar amanhã às 10h.')).toBeVisible();
  await page.getByLabel('Estado').selectOption('CLOSED');
+ await expect(page.getByRole('button',{name:'Concluir atendimento'})).toBeDisabled();
+ await page.getByLabel('Justificativa da conclusão (obrigatória)').fill('Guia enviada e confirmada pelo cliente.');
+ await page.getByRole('button',{name:'Concluir atendimento'}).click();
+ await expect(page.locator('body')).toHaveAttribute('data-resolve-note','Guia enviada e confirmada pelo cliente.');
  await expect(page.getByLabel('Estado')).toHaveValue('CLOSED');
  await expect(page.getByRole('button',{name:/Empresa Exemplo.*Concluída/})).toBeVisible();
  await page.getByRole('button',{name:'Outra empresa'}).click();
