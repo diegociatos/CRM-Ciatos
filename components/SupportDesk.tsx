@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { supabase } from '../lib/supabase';
-import { channelNames, channelStatusLabels, formatWait, periodLabels, periodRange, scopeLabels } from '../lib/supportDesk';
-import type { DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
+import { ackBadge, channelNames, channelStatusLabels, formatWait, periodLabels, periodRange, scopeLabels } from '../lib/supportDesk';
+import type { ChannelConfig, DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
 import { UserRole } from '../types';
 import type { User } from '../types';
 import './SupportDesk.css';
@@ -99,13 +99,14 @@ function CaseList({ organizationId, users, client, scope, onOpen, onChanged, ass
       <><p className="desk-count" aria-live="polite">{data.total} {data.total === 1 ? 'atendimento' : 'atendimentos'} em “{scopeLabels[scope]}”</p>
         <ul>{data.rows.map(row => <li key={row.id} className="desk-row">
           <div className="desk-row-main">
-            <strong>{row.empresa || row.nome || 'Contato'}</strong><span className="desk-subject">{row.subject || '(sem assunto)'}</span>
+            <strong>{row.empresa || row.nome || row.email || 'Contato'}{row.protocol && <small className="desk-protocol"> · {row.protocol}</small>}</strong><span className="desk-subject">{row.subject || '(sem assunto)'}</span>
             {row.last_text && <span className="desk-snippet">{row.last_text}</span>}
             <div className="desk-badges">
               {row.status === 'CLOSED' ? <em className="b-ok">Concluído</em> : !row.assigned_to ? <em className="b-warn">Sem responsável</em> : <em className="b-neutral">Com {nameOf(row.assigned_to)}</em>}
               {row.awaiting_human && row.status !== 'CLOSED' && <em className={row.reply_overdue ? 'b-alert' : 'b-warn'}>{row.first_human_reply_at ? 'Aguardando retorno' : 'Aguardando 1ª resposta'} há {formatWait(row.last_customer_message_at || row.created_at)}{row.reply_overdue ? ' · prazo vencido' : ''}</em>}
               {row.resolution_overdue && <em className="b-alert">Resolução atrasada</em>}
               {row.uncertain_send && <em className="b-alert">Envio sem confirmação: confira na caixa Microsoft 365</em>}
+              {row.ack_status && row.ack_status !== 'CANCELLED' && <em className={row.ack_status === 'FAILED' || row.ack_status === 'UNCERTAIN' ? 'b-alert' : row.ack_status === 'ACCEPTED' ? 'b-neutral' : 'b-warn'}>{ackBadge[row.ack_status].text}</em>}
               {row.reopen_count > 0 && <em className="b-neutral">Reaberto {row.reopen_count}×</em>}
               {row.opt_out && <em className="b-neutral">Não contatar</em>}
             </div>
@@ -129,6 +130,8 @@ const metrics: Metric[] = [
   { scope: 'overdue_resolution', key: 'overdue_resolution', label: 'Resolução atrasada', help: 'Abertos além do prazo de resolução da empresa.' },
   { scope: 'uncertain', key: 'uncertain', label: 'Envios a conferir', help: 'Resposta enviada sem confirmação do provedor.' },
   { scope: 'reopened', key: 'reopened', label: 'Reabertos no período', help: 'Atendimentos concluídos que voltaram a abrir.' },
+  { scope: 'ack_pending', key: 'ack_pending', label: 'Confirmações pendentes', help: 'Na fila ou em envio. Ainda não aceitas pelo provedor.' },
+  { scope: 'ack_failed', key: 'ack_failed', label: 'Confirmações com falha ou incertas', help: 'Exigem conferência; nada é reenviado sem decisão.' },
 ];
 
 function ManagerView({ organizationId, users, client, onOpen }: { organizationId: string; users: User[]; client: Client; onOpen: (id: string) => void }) {
@@ -164,11 +167,11 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
       <small>Recebidos, tempos e reabertos usam o período. As demais contagens mostram a situação de agora.</small>
     </div>
     <ul className="desk-metrics" aria-label="Indicadores">
-      {metrics.map(m => <li key={m.scope}><button aria-pressed={scope === m.scope} className={`${scope === m.scope ? 'is-on' : ''} ${(m.scope === 'attention' || m.scope === 'overdue_resolution' || m.scope === 'uncertain') && Number(overview[m.key]) > 0 ? 'is-alert' : ''}`} onClick={() => setScope(m.scope)} aria-label={`${m.label}: ${String(overview[m.key])}. Abrir lista`}>
+      {metrics.map(m => <li key={m.scope}><button aria-pressed={scope === m.scope} className={`${scope === m.scope ? 'is-on' : ''} ${(m.scope === 'attention' || m.scope === 'overdue_resolution' || m.scope === 'uncertain' || m.scope === 'ack_failed') && Number(overview[m.key]) > 0 ? 'is-alert' : ''}`} onClick={() => setScope(m.scope)} aria-label={`${m.label}: ${String(overview[m.key])}. Abrir lista`}>
         <strong>{String(overview[m.key])}</strong><span>{m.label}</span><small>{m.help}</small></button></li>)}
       <li><div className="desk-metric-static"><strong>{hours(overview.avg_first_response_hours)}</strong><span>Tempo médio até a 1ª resposta</span><small>Só atendimentos do período com resposta humana aceita.</small></div></li>
       <li><div className="desk-metric-static"><strong>{hours(overview.avg_resolution_hours)}</strong><span>Tempo médio de resolução</span><small>Atendimentos concluídos no período.</small></div></li>
-      <li><div className="desk-metric-static"><strong>Não habilitada</strong><span>Confirmação automática</span><small>{overview.auto_confirmation.note}</small></div></li>
+      <li><div className="desk-metric-static"><strong>{overview.auto_confirmation.enabled ? 'Habilitada' : 'Não habilitada'}</strong><span>Confirmação automática</span><small>{overview.auto_confirmation.note}</small></div></li>
     </ul>
     <h2 className="desk-h2">{scopeLabels[scope]}</h2>
     <CaseList organizationId={organizationId} users={users} client={client} scope={scope} assignee={assignee || undefined} range={range} onOpen={onOpen} onChanged={() => setVersion(v => v + 1)} />
@@ -176,13 +179,14 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
       <div className="desk-panel"><h2>Carga por atendente</h2>
         {!overview.by_assignee.length ? <p className="desk-empty">Sem atendimentos abertos.</p> : <ul>{overview.by_assignee.map(row => <li key={row.assigned_to || 'none'}><span>{nameOf(row.assigned_to)}</span><span>{row.open} abertos · {row.waiting} aguardando retorno</span></li>)}</ul>}</div>
       <div className="desk-panel"><h2>Saúde e cobertura dos canais</h2>
-        <ul>{overview.channels.map(channel => <li key={channel.channel} className="desk-channel"><div><strong>{channelNames[channel.channel]}</strong><em className={`ch-${channel.status}`}>{channelStatusLabels[channel.status]}</em></div>
+        <ul>{overview.channels.map(channel => <li key={channel.channel} className="desk-channel"><div><strong>{channel.label || channelNames[channel.channel]}</strong><em className={`ch-${channel.status}`}>{channelStatusLabels[channel.status]}</em></div>
           <small>{channel.coverage}</small>
           {channel.last_sync_at && <small>Última sincronização: {new Date(channel.last_sync_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</small>}
           {channel.last_error && <small className="desk-error-text">Falha: {channel.last_error}</small>}</li>)}</ul>
         <p className="desk-fine">“Nenhum atendimento” só significa ausência de mensagens importadas; confira o estado do canal acima.</p></div>
     </div>
     <DeskSettingsPanel organizationId={organizationId} users={users} client={client} settings={settings} onSaved={() => setVersion(v => v + 1)} />
+    <ChannelPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={() => setVersion(v => v + 1)} />
   </>;
 }
 
@@ -221,5 +225,58 @@ function DeskSettingsPanel({ organizationId, users, client, settings, onSaved }:
         <button className="desk-secondary" disabled={busy || !person} onClick={() => void run(() => client.rpc('set_support_profile', { org: organizationId, person, enabled: true, fallback_role: 'SDR' }), 'Perfil de Suporte atribuído. O acesso muda no próximo carregamento da pessoa.')}>Atribuir perfil</button></div>
     </div>
     {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
+  </details>;
+}
+
+const sampleText = (text: string) => text.replace('{{protocolo}}', 'ATD-000123').replace('{{nome}}', 'Maria');
+function ChannelPanel({ organizationId, client, reloadKey, onSaved }: { organizationId: string; client: Client; reloadKey: number; onSaved: () => void }) {
+  const [config, setConfig] = useState<ChannelConfig | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [mailbox, setMailbox] = useState('');
+  const [ingest, setIngest] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [failure, setFailure] = useState('');
+  useEffect(() => {
+    let active = true;
+    void client.rpc('get_support_channel', { org: organizationId }).then(({ data, error }: any) => {
+      if (!active) return;
+      if (error) { setLoadError('Não foi possível carregar o canal de e-mail de suporte.'); return; }
+      const c = data as ChannelConfig; setLoadError(''); setConfig(c);
+      setMailbox(c.account.mailbox || ''); setIngest(c.account.ingest_enabled); setAck(c.account.auto_ack_enabled);
+      setSubject(c.template.subject || 'Recebemos sua mensagem · protocolo {{protocolo}}');
+      setBody(c.template.body || 'Olá {{nome}}, recebemos sua mensagem e ela foi registrada com o protocolo {{protocolo}}. Uma pessoa da equipe vai analisar e retornar.');
+    });
+    return () => { active = false; };
+  }, [client, organizationId, reloadKey]);
+  const run = async (fn: () => PromiseLike<{ error: unknown }>, done: string) => {
+    if (busy) return; setBusy(true); setMessage(''); setFailure('');
+    const { error } = await fn(); setBusy(false);
+    if (error) setFailure((error as { message?: string }).message || 'Não foi possível salvar.'); else { setMessage(done); onSaved(); }
+  };
+  if (loadError) return <p className="desk-error" role="alert">{loadError}</p>;
+  if (!config) return null;
+  const canEdit = config.can_manage;
+  const status = config.template.status;
+  return <details className="desk-settings"><summary>E-mail de suporte e confirmação automática</summary>
+    <p className="desk-fine">A leitura começa na ativação e importa só mensagens novas da caixa de entrada; não importa histórico. Nada é lido nem enviado enquanto as chaves do servidor não estiverem ligadas e a caixa Microsoft 365 não estiver autorizada. A confirmação nunca promete prazo e só vale com o texto aprovado.</p>
+    <div className="desk-field-pair">
+      <label>Caixa de suporte da empresa<input aria-label="Caixa de suporte" type="email" value={mailbox} disabled={!canEdit} onChange={e => setMailbox(e.target.value)} placeholder="suporte@suaempresa.com.br" /></label>
+      <div><label className="desk-check"><input type="checkbox" checked={ingest} disabled={!canEdit} onChange={e => { setIngest(e.target.checked); if (!e.target.checked) setAck(false); }} /> Ler a caixa de suporte</label>
+        <label className="desk-check"><input type="checkbox" checked={ack} disabled={!canEdit || !ingest || status !== 'APPROVED'} onChange={e => setAck(e.target.checked)} /> Enviar confirmação automática</label></div>
+    </div>
+    {canEdit && <button className="desk-primary" disabled={busy} onClick={() => void run(() => client.rpc('save_support_channel', { org: organizationId, box: mailbox, ingest, ack }), 'Canal salvo. Só começa a valer quando o servidor estiver autorizado e ligado.')}>Salvar canal</button>}
+    <h3>Texto da confirmação <em className={`desk-state s-${status.toLowerCase()}`}>{status === 'APPROVED' ? 'Aprovado' : status === 'DRAFT' ? 'Rascunho: aprove para habilitar' : 'Não criado'}</em></h3>
+    <div className="desk-field-pair"><label>Assunto<input aria-label="Assunto da confirmação" value={subject} disabled={!canEdit} onChange={e => setSubject(e.target.value)} /></label></div>
+    <label className="desk-textarea">Mensagem<textarea aria-label="Mensagem da confirmação" rows={5} value={body} disabled={!canEdit} onChange={e => setBody(e.target.value)} /></label>
+    <p className="desk-fine">Use {'{{protocolo}}'} (obrigatório) e {'{{nome}}'}. Não prometa prazo em horas ou dias.</p>
+    <div className="desk-preview" aria-label="Prévia da confirmação"><strong>Prévia (exemplo)</strong><span>Assunto: {sampleText(subject)}</span><p>{sampleText(body)}</p></div>
+    {canEdit && <div className="desk-row-actions"><button className="desk-secondary" disabled={busy} onClick={() => void run(() => client.rpc('save_support_ack_template', { org: organizationId, tpl_subject: subject, tpl_body: body }), 'Texto salvo como rascunho. Aprove para poder habilitar.')}>Salvar texto</button>
+      <button className="desk-primary" disabled={busy || status !== 'DRAFT'} onClick={() => void run(() => client.rpc('approve_support_ack_template', { org: organizationId }), 'Texto aprovado.')}>Aprovar texto</button></div>}
+    {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
+    {!canEdit && <p className="desk-fine">Somente administradores alteram o canal e o texto.</p>}
   </details>;
 }

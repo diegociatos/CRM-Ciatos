@@ -63,3 +63,14 @@
 .desk-support-people { margin-top: 18px; border-top: 1px solid #eef2f6; padding-top: 14px; }
 .desk-support-people li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; }
 @media (max-width: 640px) { .desk-row-actions { width: 100%; } .desk-row-actions button { flex: 1; } }
+
+.desk-protocol { font-weight: 600; color: #6b7785; font-size: 12px; }
+.desk-check { flex-direction: row !important; align-items: center; gap: 8px !important; font-weight: 600; }
+.desk-check input { width: auto; }
+.desk-textarea { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 650; margin-bottom: 8px; }
+.desk textarea { padding: 10px 12px; border: 1px solid #d6dee6; border-radius: 8px; font: inherit; font-size: 13px; width: 100%; resize: vertical; }
+.desk-preview { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px dashed #c5a059; border-radius: 10px; background: #fbf8f1; font-size: 13px; margin: 8px 0 12px; }
+.desk-preview p { margin: 0; white-space: pre-wrap; }
+.desk-state { font-style: normal; font-size: 11px; padding: 2px 9px; border-radius: 12px; background: #eef2f6; margin-left: 8px; }
+.s-approved { background: #e3f4ea; color: #17613a; } .s-draft { background: #fdf1d9; color: #7a5410; }
+.desk-settings h3 { font-size: 14px; font-weight: 750; margin: 16px 0 8px; }

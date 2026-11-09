@@ -88,7 +88,7 @@ export async function accessToken(env: Env, c: Integracao, salvarRefresh: (cif: 
   return j.access_token;
 }
 
-export interface Mensagem { from: string; fromName?: string | null; to: string; subject: string; html?: string; text?: string; replyTo?: string | null }
+export interface Mensagem { from: string; fromName?: string | null; to: string; subject: string; html?: string; text?: string; replyTo?: string | null; headers?: Record<string, string> }
 
 /** Envia pela caixa `from` (a conectada ou uma com "Enviar como"). Graph não devolve id: 202 = aceito. */
 export async function enviarGraph(token: string, m: Mensagem, request: Requester = fetch) {
@@ -99,6 +99,9 @@ export async function enviarGraph(token: string, m: Mensagem, request: Requester
     from: { emailAddress: { address: m.from, ...(m.fromName ? { name: m.fromName } : {}) } },
   };
   if (m.replyTo) message.replyTo = [{ emailAddress: { address: m.replyTo } }];
+  // O Graph so aceita cabecalhos personalizados iniciados por x-.
+  const extra = Object.entries(m.headers || {}).filter(([k]) => /^x-[a-z0-9-]+$/i.test(k));
+  if (extra.length) message.internetMessageHeaders = extra.map(([name, value]) => ({ name, value }));
   const r = await request(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(m.from)}/sendMail`, {
     method: 'POST', signal: AbortSignal.timeout(20000),
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

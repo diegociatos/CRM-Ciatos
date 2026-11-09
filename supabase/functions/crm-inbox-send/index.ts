@@ -26,7 +26,9 @@ Deno.serve(async req=>{
  // ambiguous pending message. No Graph send occurs until the reservation.
  let sender:Awaited<ReturnType<typeof abrirRemetente>>;
  try{sender=await abrirRemetente(env,db);}catch{return respond({error:'Caixa Microsoft 365 indisponível ou envio desativado.'},503);}
- const {data:reserved,error:reserveError}=await db.rpc('reserve_inbox_reply',{cid,actor:user.id,rid,reply_body:body});
+ // Conversa de pessoa sem lead usa a caixa de suporte da empresa; a de cadencia mantem o fluxo atual.
+ const {data:conv}=await db.from('inbox_conversations').select('person_id').eq('id',cid).maybeSingle();
+ const {data:reserved,error:reserveError}=await db.rpc(conv?.person_id?'reserve_support_reply':'reserve_inbox_reply',{cid,actor:user.id,rid,reply_body:body});
  if(reserveError)return respond({error:reserveError.message||'Não foi possível preparar a resposta.'},403);
  if(!reserved?.send)return respond({status:reserved?.status||'REVIEW',message_id:reserved?.message_id});
  try{

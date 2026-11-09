@@ -66,3 +66,26 @@ Migration `20261108190000_support_desk_foundation.sql` (incremental; não altera
 **Revisão independente:** o Codex CLI revisou a migration em modo somente leitura; os achados de gravidade alta/média (bypass pela RPC antiga, confirmação tardia, reabertura, regexp frágil) foram corrigidos e cobertos por teste.
 
 **Implantação:** aplicar `20261108190000` no schema CRM (a migration aborta se alguma troca de `tenant_member` ficar incompleta) e em seguida publicar o frontend. Depois, um administrador atribui o perfil Suporte a uma pessoa de teste e valida com dois usuários e duas empresas.
+
+## 7. Fase B: e-mail de suporte espontâneo e confirmação controlada
+
+Migration `20261109120000_support_email_intake.sql`, módulo `supabase/functions/_shared/supportMail.ts` e função `crm-support-mail`. **Tudo desligado por padrão.** Nada é lido nem enviado até um administrador habilitar o canal no app **e** as chaves de servidor serem ligadas.
+
+**O que existe (testado em banco descartável e com transporte simulado):**
+- Contato sem lead: `crm.support_people`, identidade por e-mail exato dentro da empresa (nunca fundida por nome parecido, nunca vira lead).
+- Um assunto = um atendimento (`thread_key` do e-mail). Mensagens repetidas do mesmo assunto entram na mesma conversa; assuntos diferentes da mesma pessoa ficam separados. Protocolo sequencial por empresa (`ATD-000001`).
+- Ingestão idempotente por id externo; ignora rascunhos, automáticas (`Auto-Submitted`, `X-Auto-Response-Suppress`, `Precedence`, listas), `no-reply` e a própria caixa. A caixa pertence a uma única empresa.
+- Confirmação automática: texto por empresa, com aprovação explícita; editar volta a rascunho e desliga o envio; sem prazo numérico (checagem simples, não substitui revisão humana). Uma confirmação por atendimento e por remetente a cada 24 h, limite diário, cancelada se já houve resposta humana aceita ou o atendimento foi concluído. Ela **não conta** como resposta humana.
+- Estados com evidência: na fila, enviando, aceita pelo provedor (entrega **não informada** pelo canal), falhou, incerta, cancelada. 4xx definitivo = falha; timeout/5xx = incerta, nunca reenviada sozinha. Incerta é reconciliada em Itens Enviados (cabeçalho `X-Ciatos-Outbox`); só vira falha após 15 min com listagem completa; reenvio só por decisão do gestor.
+- Resposta humana a pessoa sem lead pela caixa da empresa (`reserve_support_reply`), idempotente.
+- Privacidade: exportação e exclusão de uma pessoa do suporte (administrador). Bloqueios de marketing não são enfraquecidos: o fluxo de campanhas segue como antes; o atendimento solicitado pelo cliente é um fluxo separado e não usa listas de marketing.
+- Painel: confirmações pendentes/falhas viram indicadores com lista; canais mostram "E-mail de suporte" separado do "E-mail de cadências".
+
+**Para ligar (depende de você; nada disto foi feito):**
+1. Publicar a função `crm-support-mail` e agendá-la (ex.: a cada 2 min) com `CRM_WORKER_SECRET`.
+2. Autorizar leitura da caixa de suporte (Mail.Read.Shared) e envio (Mail.Send.Shared) para a conexão Microsoft e definir `CRM_SUPPORT_MAIL_ENABLED=true`; o envio da confirmação ainda exige `CRM_LIVE_SEND_ENABLED=true`.
+3. No app: informar a caixa, aprovar o texto, ler a caixa e só então habilitar a confirmação. Começar por uma empresa piloto e uma conversa real controlada.
+
+**Limites:** só caixa de entrada e mensagens novas (sem histórico); a conexão Microsoft continua global; horas corridas; "aceita pelo provedor" não prova entrega; WhatsApp e Instagram seguem sem conexão.
+
+**Ajustes da revisão independente (Codex) na Fase B:** a leitura só grava se a caixa lida ainda for a caixa atual da empresa; cada confirmação fica presa à caixa de origem (cancelada se a caixa mudar); a confirmação só é enfileirada para remetente autenticado (DMARC/CompAuth do Exchange), para não escrever a um endereço falsificado; ausência em Itens Enviados **não** autoriza reenvio (permanece incerta até conferência humana); outro participante no mesmo thread vira atendimento próprio; a confirmação sai com `X-Auto-Response-Suppress`. **Risco que permanece:** mensagens de remetentes desconhecidos são sempre gravadas (não descartamos mensagem de cliente), então um flood cria atendimentos; só as confirmações têm limite (uma por remetente a cada 24 h, 200 por dia).

@@ -36,7 +36,9 @@ test('gestor: indicadores abrem a lista, canais sem prometer cobertura e perfil 
   await expect(page.getByText('Conectado', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Com erro')).toBeVisible();
   await expect(page.getByText('Falha: Não foi possível ler respostas.')).toBeVisible();
-  await expect(page.getByText('Não configurado')).toHaveCount(2);
+  await expect(page.getByText('Não configurado')).toHaveCount(3);
+  await expect(page.getByText('E-mail de suporte (caixa da empresa)')).toBeVisible();
+  await expect(page.getByText('Não habilitada')).toBeVisible();
   await metrics.getByRole('button', { name: /Sem responsável: 2/ }).click();
   await expect(page.getByRole('heading', { name: 'Sem responsável' })).toBeVisible();
   await expect(page.getByText('2 atendimentos em “Sem responsável”')).toBeVisible();
@@ -52,4 +54,32 @@ test('gestor: indicadores abrem a lista, canais sem prometer cobertura e perfil 
   await expect(page.getByRole('status').filter({ hasText: 'Perfil de Suporte atribuído' })).toBeVisible();
   await page.getByRole('button', { name: 'Ver chamadas de perfil' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-profile-calls', /"person":"user-bruno","enabled":true/);
+});
+
+test('gestor: texto da confirmação exige aprovação antes de habilitar o envio, sem prometer prazo', async ({ page }) => {
+  await page.goto('/tests/ui/?desk-manager');
+  await page.getByRole('tab', { name: 'Visão do gestor' }).click();
+  await page.getByText('E-mail de suporte e confirmação automática').click();
+  await expect(page.getByText('Não criado')).toBeVisible();
+  await expect(page.getByLabel('Prévia da confirmação')).toContainText('ATD-000123');
+  const ack = page.getByLabel('Enviar confirmação automática');
+  await expect(ack).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Aprovar texto' })).toBeDisabled();
+  await page.getByLabel('Mensagem da confirmação').fill('Recebemos sua mensagem, obrigado pelo contato com a equipe.');
+  await page.getByRole('button', { name: 'Salvar texto' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'protocolo' })).toBeVisible();
+  await page.getByLabel('Mensagem da confirmação').fill('Olá {{nome}}, recebemos sua mensagem com o protocolo {{protocolo}} e uma pessoa vai retornar.');
+  await page.getByRole('button', { name: 'Salvar texto' }).click();
+  await expect(page.getByText('Rascunho: aprove para habilitar')).toBeVisible();
+  await expect(ack).toBeDisabled();
+  await page.getByRole('button', { name: 'Aprovar texto' }).click();
+  await expect(page.getByText('Aprovado', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Caixa de suporte' }).fill('suporte@empresa.test');
+  await page.getByLabel('Ler a caixa de suporte').check();
+  await expect(ack).toBeEnabled();
+  await ack.check();
+  await page.getByRole('button', { name: 'Salvar canal' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Canal salvo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ver chamadas de canal' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-channel-calls', /"box":"suporte@empresa.test","ingest":true,"ack":true/);
 });

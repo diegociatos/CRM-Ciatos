@@ -21,6 +21,8 @@ const inScope = (c: any, scope: string) => ({
   awaiting_first: c.awaiting_human && !c.first_human_reply_at, awaiting_reply: c.awaiting_human, attention: c.reply_overdue || c.uncertain_send || c.resolution_overdue,
   overdue_resolution: c.resolution_overdue, uncertain: c.uncertain_send, reopened: c.reopen_count > 0, received: true, open: c.status !== 'CLOSED', closed: c.status === 'CLOSED', all: true,
 } as any)[scope];
+const channel: any = { can_manage: true, account: { mailbox: null, ingest_enabled: false, auto_ack_enabled: false, last_sync_at: null }, template: { subject: null, body: null, status: 'NONE', approved_at: null } };
+const channelCalls: any[] = [];
 let fail = false; let assumeTaken = false; const profileCalls: any[] = [];
 const fake = {
   async rpc(name: string, args: any) {
@@ -34,13 +36,17 @@ const fake = {
     if (name === 'support_assume') { const c = cases.find(x => x.id === args.cid)!; if (assumeTaken) { c.assigned_to = 'user-ana'; return { data: false, error: null }; } c.assigned_to = 'user-one'; c.status = 'IN_PROGRESS'; return { data: true, error: null }; }
     if (name === 'get_support_desk_settings') return { data: { first_response_hours: 4, resolution_hours: 72, can_manage: true }, error: null };
     if (name === 'save_support_desk_settings') return { data: null, error: null };
+    if (name === 'get_support_channel') return { data: structuredClone(channel), error: null };
+    if (name === 'save_support_ack_template') { if (!String(args.tpl_body).includes('{{protocolo}}')) return { data: null, error: { message: 'O texto precisa conter {{protocolo}}' } }; channel.template = { subject: args.tpl_subject, body: args.tpl_body, status: 'DRAFT', approved_at: null }; channel.account.auto_ack_enabled = false; return { data: null, error: null }; }
+    if (name === 'approve_support_ack_template') { channel.template.status = 'APPROVED'; return { data: null, error: null }; }
+    if (name === 'save_support_channel') { channelCalls.push(args); channel.account = { ...channel.account, mailbox: args.box, ingest_enabled: args.ingest, auto_ack_enabled: args.ack }; return { data: null, error: null }; }
     if (name === 'set_support_profile') { profileCalls.push(args); return { data: null, error: null }; }
     if (name === 'support_desk_overview') {
       const n = (s: string) => cases.filter(c => inScope(c, s)).length;
       return { data: { period: { from: args.from_at, to: args.to_at }, received: n('received'), awaiting_first: n('awaiting_first'), awaiting_reply: n('awaiting_reply'), unassigned: n('unassigned'), attention: n('attention'), overdue_resolution: 0, uncertain: n('uncertain'), reopened: n('reopened'),
-        avg_first_response_hours: null, avg_resolution_hours: 12.5, auto_confirmation: { enabled: false, note: 'Confirmação automática de recebimento ainda não existe. Nenhuma foi enviada.' },
+        ack_pending: 1, ack_failed: 1, avg_first_response_hours: null, avg_resolution_hours: 12.5, auto_confirmation: { enabled: false, note: 'Confirmação automática de recebimento ainda não existe. Nenhuma foi enviada.' },
         by_assignee: [{ assigned_to: 'user-ana', open: 1, waiting: 1 }, { assigned_to: null, open: 2, waiting: 2 }],
-        channels: [{ channel: 'email', status: 'error', last_error: 'Não foi possível ler respostas.', last_sync_at: iso(3), coverage: 'Somente respostas a cadências desta empresa.' }, { channel: 'whatsapp', status: 'not_configured', coverage: 'Não conectado.' }, { channel: 'instagram', status: 'not_configured', coverage: 'Não conectado.' }] }, error: null };
+        channels: [{ channel: 'email', label: 'E-mail de suporte (caixa da empresa)', status: 'not_configured', coverage: 'Mensagens novas da caixa de entrada a partir da ativação.' }, { channel: 'email', label: 'E-mail (respostas a cadências)', status: 'error', last_error: 'Não foi possível ler respostas.', last_sync_at: iso(3), coverage: 'Somente respostas a cadências desta empresa.' }, { channel: 'whatsapp', status: 'not_configured', coverage: 'Não conectado.' }, { channel: 'instagram', status: 'not_configured', coverage: 'Não conectado.' }] }, error: null };
     }
     return { data: null, error: { message: 'Unknown RPC' } };
   },
@@ -51,6 +57,7 @@ export default function SupportDeskFixture({ manager }: { manager: boolean }) {
     <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
       <button onClick={() => { fail = true; }}>Falhar fila</button><button onClick={() => { fail = false; }}>Recuperar fila</button>
       <button onClick={() => { assumeTaken = true; }}>Outra pessoa assume</button>
+      <button onClick={() => { document.body.dataset.channelCalls = JSON.stringify(channelCalls); }}>Ver chamadas de canal</button>
       <button onClick={() => { document.body.dataset.profileCalls = JSON.stringify(profileCalls); }}>Ver chamadas de perfil</button>
       {opened && <span role="status">Conversa aberta: {opened}</span>}
     </div>
