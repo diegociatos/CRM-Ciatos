@@ -7,7 +7,7 @@ export type DeskCase = {
   nome: string | null; empresa: string | null; email: string | null; opt_out: boolean;
   reply_due_at: string; resolution_due_at: string; reply_overdue: boolean; resolution_overdue: boolean;
   uncertain_send: boolean; last_text: string | null;
-  protocol?: string | null; source?: 'campaign' | 'support_mail'; person_id?: string | null; ack_status?: 'QUEUED' | 'SENDING' | 'ACCEPTED' | 'FAILED' | 'UNCERTAIN' | 'CANCELLED' | null;
+  protocol?: string | null; source?: 'campaign' | 'support_mail' | 'whatsapp' | 'instagram'; channel?: 'email' | 'whatsapp' | 'instagram'; whatsapp_id?: string | null; person_id?: string | null; ack_status?: 'QUEUED' | 'SENDING' | 'ACCEPTED' | 'FAILED' | 'UNCERTAIN' | 'CANCELLED' | null;
 };
 export type DeskQueue = { total: number; rows: DeskCase[] };
 export type DeskCounts = Partial<Record<'mine' | 'unassigned' | 'awaiting_first' | 'awaiting_reply' | 'attention' | 'open', number>>;
@@ -61,3 +61,5 @@ export const ackBadge: Record<AckStatus, { text: string; tone: 'neutral' | 'warn
   FAILED: { text: 'Confirmação falhou', tone: 'alert' }, UNCERTAIN: { text: 'Confirmação incerta: conferir', tone: 'alert' }, CANCELLED: { text: 'Confirmação cancelada', tone: 'neutral' },
 };
 export type ChannelConfig = { can_manage: boolean; account: { mailbox: string | null; ingest_enabled: boolean; auto_ack_enabled: boolean; last_sync_at: string | null }; template: { subject: string | null; body: string | null; status: 'NONE' | 'DRAFT' | 'APPROVED'; approved_at: string | null } };
+export type MetaAccount = { channel: 'whatsapp' | 'instagram'; account_id: string | null; display_name: string | null; enabled: boolean; verified: boolean; last_event_at: string | null; last_error: string | null; token_ref: string };
+export type MetaAccountsConfig = { can_manage: boolean; accounts: MetaAccount[] };

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { supabase } from '../lib/supabase';
 import { ackBadge, channelNames, channelStatusLabels, formatWait, periodLabels, periodRange, scopeLabels } from '../lib/supportDesk';
-import type { ChannelConfig, DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
+import type { ChannelConfig, MetaAccountsConfig, DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
 import { UserRole } from '../types';
 import type { User } from '../types';
 import './SupportDesk.css';
@@ -19,7 +19,7 @@ export default function SupportDesk({ organizationId, users, currentUser, client
   return <section className="desk" aria-label="Atendimento">
     <header className="desk-header">
       <div><p className="desk-eyebrow">ATENDIMENTO · EMPRESA SELECIONADA</p><h1>Atendimento<span>.</span></h1>
-        <p>O que chegou pelos canais conectados, quem está cuidando e o que ainda espera retorno. Hoje só entram respostas de e-mail a cadências da empresa.</p></div>
+        <p>O que chegou pelos canais conectados, quem está cuidando e o que ainda espera retorno. Entram as respostas a cadências e, só se a empresa configurar, o e-mail de suporte, o WhatsApp e o Instagram dela.</p></div>
       {manager && <div className="desk-tabs" role="tablist" aria-label="Visão">
         <button role="tab" aria-selected={tab === 'queue'} className={tab === 'queue' ? 'is-on' : ''} onClick={() => setTab('queue')}>Minha fila</button>
         <button role="tab" aria-selected={tab === 'manager'} className={tab === 'manager' ? 'is-on' : ''} onClick={() => setTab('manager')}>Visão do gestor</button>
@@ -99,7 +99,7 @@ function CaseList({ organizationId, users, client, scope, onOpen, onChanged, ass
       <><p className="desk-count" aria-live="polite">{data.total} {data.total === 1 ? 'atendimento' : 'atendimentos'} em “{scopeLabels[scope]}”</p>
         <ul>{data.rows.map(row => <li key={row.id} className="desk-row">
           <div className="desk-row-main">
-            <strong>{row.empresa || row.nome || row.email || 'Contato'}{row.protocol && <small className="desk-protocol"> · {row.protocol}</small>}</strong><span className="desk-subject">{row.subject || '(sem assunto)'}</span>
+            <strong>{row.empresa || row.nome || row.email || (row.whatsapp_id ? `+${row.whatsapp_id}` : 'Contato')}{row.protocol && <small className="desk-protocol"> · {row.protocol}</small>}{row.channel && row.channel !== 'email' && <small className="desk-protocol"> · {channelNames[row.channel]}</small>}</strong><span className="desk-subject">{row.subject || '(sem assunto)'}</span>
             {row.last_text && <span className="desk-snippet">{row.last_text}</span>}
             <div className="desk-badges">
               {row.status === 'CLOSED' ? <em className="b-ok">Concluído</em> : !row.assigned_to ? <em className="b-warn">Sem responsável</em> : <em className="b-neutral">Com {nameOf(row.assigned_to)}</em>}
@@ -187,6 +187,7 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
     </div>
     <DeskSettingsPanel organizationId={organizationId} users={users} client={client} settings={settings} onSaved={() => setVersion(v => v + 1)} />
     <ChannelPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={() => setVersion(v => v + 1)} />
+    <MetaPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={() => setVersion(v => v + 1)} />
   </>;
 }
 
@@ -278,5 +279,70 @@ function ChannelPanel({ organizationId, client, reloadKey, onSaved }: { organiza
       <button className="desk-primary" disabled={busy || status !== 'DRAFT'} onClick={() => void run(() => client.rpc('approve_support_ack_template', { org: organizationId }), 'Texto aprovado.')}>Aprovar texto</button></div>}
     {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
     {!canEdit && <p className="desk-fine">Somente administradores alteram o canal e o texto.</p>}
+  </details>;
+}
+
+const metaHelp = {
+  whatsapp: { title: 'WhatsApp (API oficial da Meta)', idLabel: 'Identificador do número (Phone number ID)', note: 'Use o Phone number ID mostrado no WhatsApp Manager da sua conta Meta Business, não o telefone.' },
+  instagram: { title: 'Instagram (mensagens diretas)', idLabel: 'ID da conta profissional do Instagram', note: 'A conta precisa ser profissional e estar vinculada à sua conta Meta Business.' },
+} as const;
+const webhookUrl = () => `${(import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://SEU-PROJETO.supabase.co'}/functions/v1/crm-support-meta`;
+function MetaPanel({ organizationId, client, reloadKey, onSaved }: { organizationId: string; client: Client; reloadKey: number; onSaved: () => void }) {
+  const [config, setConfig] = useState<MetaAccountsConfig | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, { id: string; name: string; enabled: boolean }>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [failure, setFailure] = useState('');
+  useEffect(() => {
+    let active = true;
+    void client.rpc('get_support_meta_accounts', { org: organizationId }).then(({ data, error }: any) => {
+      if (!active) return;
+      if (error) { setLoadError('Não foi possível carregar os canais WhatsApp e Instagram.'); return; }
+      const c = data as MetaAccountsConfig; setLoadError(''); setConfig(c);
+      setDrafts(Object.fromEntries(c.accounts.map(a => [a.channel, { id: a.account_id || '', name: a.display_name || '', enabled: a.enabled }])));
+    });
+    return () => { active = false; };
+  }, [client, organizationId, reloadKey]);
+  if (loadError) return <p className="desk-error" role="alert">{loadError}</p>;
+  if (!config) return null;
+  const verify = async (channel: 'whatsapp' | 'instagram') => {
+    if (busy) return; setBusy(true); setMessage(''); setFailure('');
+    const { data, error } = await client.functions.invoke('crm-support-meta-verify', { body: { organization_id: organizationId, channel } });
+    setBusy(false);
+    const status = (data as { status?: string } | null)?.status;
+    if (status === 'verified') { setMessage('Conta verificada: o token desta empresa acessa a conta na Meta.'); onSaved(); }
+    else if (status === 'rejected') setFailure('A Meta não confirmou esta conta com o token desta empresa. Confira o identificador e o segredo no servidor.');
+    else setFailure(error || (data as { error?: string } | null)?.error ? 'Não foi possível verificar agora. Confira se o servidor está ligado e o segredo do token foi criado.' : 'Não foi possível verificar agora. Tente novamente.');
+  };
+  const save = async (channel: 'whatsapp' | 'instagram') => {
+    if (busy) return; setBusy(true); setMessage(''); setFailure('');
+    const d = drafts[channel];
+    const { error } = await client.rpc('save_support_meta_account', { org: organizationId, chan: channel, acct: d.id, name: d.name, enable: d.enabled });
+    setBusy(false);
+    if (error) setFailure((error as { message?: string }).message || 'Não foi possível salvar.'); else { setMessage(`${metaHelp[channel].title.split(' ')[0]} salvo. Só começa a valer com a conta Meta autorizada e o servidor ligado.`); onSaved(); }
+  };
+  return <details className="desk-settings"><summary>WhatsApp e Instagram desta empresa</summary>
+    <p className="desk-fine">Cada empresa usa a própria conta. Nada é recebido nem enviado até a conta Meta ser conectada ao servidor e o canal ser habilitado aqui. O token da Meta nunca é digitado nesta tela: ele fica como segredo do servidor, no nome indicado abaixo. Respostas livres só são possíveis até 24 horas depois da última mensagem do cliente; fora disso o canal exige modelo aprovado, ainda não suportado.</p>
+    <p className="desk-fine">Endereço do webhook para cadastrar na Meta: <code>{webhookUrl()}</code></p>
+    {config.accounts.map(a => {
+      const help = metaHelp[a.channel]; const d = drafts[a.channel] || { id: '', name: '', enabled: false };
+      const set = (patch: Partial<typeof d>) => setDrafts(old => ({ ...old, [a.channel]: { ...d, ...patch } }));
+      return <fieldset key={a.channel} className="desk-meta" disabled={!config.can_manage}><legend>{help.title}</legend>
+        <div className="desk-field-pair">
+          <label>{help.idLabel}<input aria-label={`${help.title}: identificador`} inputMode="numeric" value={d.id} onChange={e => set({ id: e.target.value.trim() })} placeholder="somente números" /></label>
+          <label>Nome para exibição (opcional)<input aria-label={`${help.title}: nome`} maxLength={120} value={d.name} onChange={e => set({ name: e.target.value })} /></label>
+        </div>
+        <p className="desk-fine">{help.note}</p>
+        <p className="desk-fine">Segredo do token no servidor: <code>{a.token_ref}</code></p>
+        <label className="desk-check"><input type="checkbox" checked={d.enabled} onChange={e => set({ enabled: e.target.checked })} /> Habilitar este canal</label>
+        <p className="desk-fine">{!a.account_id ? 'Não habilitado.' : a.verified ? 'Conta verificada com o token desta empresa.' : 'Conta ainda NÃO verificada: nenhuma mensagem é recebida ou enviada até a verificação (salve, crie o segredo no servidor e clique em Verificar conta).'}</p>
+        <p className="desk-fine">{a.last_error ? `Falha registrada: ${a.last_error}` : a.last_event_at ? `Última mensagem recebida: ${new Date(a.last_event_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : a.enabled ? 'Habilitado, ainda sem nenhuma mensagem recebida.' : 'Não habilitado.'}</p>
+        {config.can_manage && <div className="desk-row-actions"><button type="button" className="desk-primary" disabled={busy} onClick={() => void save(a.channel)}>Salvar {help.title.split(' ')[0]}</button>
+          {a.account_id && !a.verified && <button type="button" className="desk-secondary" disabled={busy} onClick={() => void verify(a.channel)}>Verificar conta {help.title.split(' ')[0]}</button>}</div>}
+      </fieldset>;
+    })}
+    {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
+    {!config.can_manage && <p className="desk-fine">Somente administradores alteram os canais.</p>}
   </details>;
 }

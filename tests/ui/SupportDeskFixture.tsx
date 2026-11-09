@@ -23,8 +23,10 @@ const inScope = (c: any, scope: string) => ({
 } as any)[scope];
 const channel: any = { can_manage: true, account: { mailbox: null, ingest_enabled: false, auto_ack_enabled: false, last_sync_at: null }, template: { subject: null, body: null, status: 'NONE', approved_at: null } };
 const channelCalls: any[] = [];
+const metaCalls: any[] = []; const metaAccounts: Record<string, { id: string; name: string; enabled: boolean; verified?: boolean }> = {}; const verifyCalls: any[] = [];
 let fail = false; let assumeTaken = false; const profileCalls: any[] = [];
 const fake = {
+  functions: { async invoke(_name: string, opts: any) { verifyCalls.push(opts.body); const c = opts.body.channel; if (metaAccounts[c]) metaAccounts[c].verified = true; return { data: { status: 'verified' }, error: null }; } },
   async rpc(name: string, args: any) {
     if (fail && name === 'support_queue') return { data: null, error: { message: 'Falha simulada' } };
     if (name === 'support_queue_counts') { const r: any = {}; for (const k of ['mine', 'unassigned', 'awaiting_first', 'awaiting_reply', 'attention', 'open']) r[k] = cases.filter(c => inScope(c, k)).length; return { data: r, error: null }; }
@@ -40,6 +42,8 @@ const fake = {
     if (name === 'save_support_ack_template') { if (!String(args.tpl_body).includes('{{protocolo}}')) return { data: null, error: { message: 'O texto precisa conter {{protocolo}}' } }; channel.template = { subject: args.tpl_subject, body: args.tpl_body, status: 'DRAFT', approved_at: null }; channel.account.auto_ack_enabled = false; return { data: null, error: null }; }
     if (name === 'approve_support_ack_template') { channel.template.status = 'APPROVED'; return { data: null, error: null }; }
     if (name === 'save_support_channel') { channelCalls.push(args); channel.account = { ...channel.account, mailbox: args.box, ingest_enabled: args.ingest, auto_ack_enabled: args.ack }; return { data: null, error: null }; }
+    if (name === 'get_support_meta_accounts') return { data: { can_manage: true, accounts: ['instagram', 'whatsapp'].map(c => ({ channel: c, account_id: metaAccounts[c]?.id ?? null, display_name: metaAccounts[c]?.name ?? null, enabled: !!metaAccounts[c]?.enabled, verified: !!metaAccounts[c]?.verified, last_event_at: null, last_error: null, token_ref: `META_TOKEN_${c.toUpperCase()}_0A1B2C3D4E5F0A1B2C3D4E5F0A1B2C3D` })) }, error: null };
+    if (name === 'save_support_meta_account') { if (args.enable && !args.acct) return { data: null, error: { message: 'Informe o identificador da conta' } }; metaCalls.push(args); metaAccounts[args.chan] = { id: args.acct, name: args.name, enabled: args.enable, verified: metaAccounts[args.chan]?.id === args.acct && !!metaAccounts[args.chan]?.verified }; return { data: null, error: null }; }
     if (name === 'set_support_profile') { profileCalls.push(args); return { data: null, error: null }; }
     if (name === 'support_desk_overview') {
       const n = (s: string) => cases.filter(c => inScope(c, s)).length;
@@ -58,6 +62,7 @@ export default function SupportDeskFixture({ manager }: { manager: boolean }) {
       <button onClick={() => { fail = true; }}>Falhar fila</button><button onClick={() => { fail = false; }}>Recuperar fila</button>
       <button onClick={() => { assumeTaken = true; }}>Outra pessoa assume</button>
       <button onClick={() => { document.body.dataset.channelCalls = JSON.stringify(channelCalls); }}>Ver chamadas de canal</button>
+      <button onClick={() => { document.body.dataset.metaCalls = JSON.stringify(metaCalls); document.body.dataset.verifyCalls = JSON.stringify(verifyCalls); }}>Ver chamadas Meta</button>
       <button onClick={() => { document.body.dataset.profileCalls = JSON.stringify(profileCalls); }}>Ver chamadas de perfil</button>
       {opened && <span role="status">Conversa aberta: {opened}</span>}
     </div>

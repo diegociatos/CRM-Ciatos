@@ -2,6 +2,7 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.117.2';
 import {env,service,bodyLimited} from '../_shared/runtime.ts';
 import {abrirRemetente} from '../_shared/ms365.ts';
+import {sendSupportMetaReply} from '../_shared/supportMeta.ts';
 
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type, x-supabase-api-version','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -22,12 +23,21 @@ Deno.serve(async req=>{
  const {data:visible}=await caller.from('inbox_conversations').select('id').eq('id',cid).maybeSingle();
  if(!visible)return respond({error:'Conversa indisponível nesta empresa.'},403);
  const db=service();
+ // WhatsApp/Instagram: janela de 24 h, token so no servidor e resultado incerto nunca reenviado.
+ const {data:conv}=await db.from('inbox_conversations').select('person_id,channel').eq('id',cid).maybeSingle();
+ if(conv&&(conv.channel==='whatsapp'||conv.channel==='instagram')){
+  if(env('CRM_SUPPORT_META_ENABLED')!=='true')return respond({error:'Canal desativado no servidor.'},403);
+  const {data:reserved,error:reserveError}=await db.rpc('reserve_support_meta_reply',{cid,actor:user.id,rid,reply_body:body});
+  if(reserveError)return respond({error:reserveError.message||'Não foi possível preparar a resposta.'},403);
+  if(!reserved?.send)return respond({status:reserved?.status||'REVIEW',message_id:reserved?.message_id});
+  const status=await sendSupportMetaReply(db,env,rid,reserved);
+  return respond({status,message_id:reserved.message_id});
+ }
  // Resolve credentials before reservation. A failure here cannot leave an
  // ambiguous pending message. No Graph send occurs until the reservation.
  let sender:Awaited<ReturnType<typeof abrirRemetente>>;
  try{sender=await abrirRemetente(env,db);}catch{return respond({error:'Caixa Microsoft 365 indisponível ou envio desativado.'},503);}
  // Conversa de pessoa sem lead usa a caixa de suporte da empresa; a de cadencia mantem o fluxo atual.
- const {data:conv}=await db.from('inbox_conversations').select('person_id').eq('id',cid).maybeSingle();
  const {data:reserved,error:reserveError}=await db.rpc(conv?.person_id?'reserve_support_reply':'reserve_inbox_reply',{cid,actor:user.id,rid,reply_body:body});
  if(reserveError)return respond({error:reserveError.message||'Não foi possível preparar a resposta.'},403);
  if(!reserved?.send)return respond({status:reserved?.status||'REVIEW',message_id:reserved?.message_id});

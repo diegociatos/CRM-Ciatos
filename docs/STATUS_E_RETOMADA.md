@@ -7,8 +7,8 @@ Atualizado em 2026-11-09. Repositório: diegociatos/CRM-Ciatos, branch `main`. S
 ```bash
 git clone https://github.com/diegociatos/CRM-Ciatos.git   # ou git pull, se já existir
 npm install
-npx tsx --test tests/*.test.ts      # 84 testes de banco/lógica (PGlite)
-npx playwright test                 # 54 testes de navegador
+npx tsx --test tests/*.test.ts      # testes de banco/lógica (PGlite)
+npx playwright test                 # testes de navegador
 npm run build
 ```
 

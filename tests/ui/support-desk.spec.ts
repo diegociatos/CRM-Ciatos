@@ -83,3 +83,29 @@ test('gestor: texto da confirmação exige aprovação antes de habilitar o envi
   await page.getByRole('button', { name: 'Ver chamadas de canal' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-channel-calls', /"box":"suporte@empresa.test","ingest":true,"ack":true/);
 });
+
+test('gestor: WhatsApp e Instagram por empresa, sem campo de token e com o nome do segredo no servidor', async ({ page }) => {
+  await page.goto('/tests/ui/?desk-manager');
+  await page.getByRole('tab', { name: 'Visão do gestor' }).click();
+  await page.getByText('WhatsApp e Instagram desta empresa').click();
+  await expect(page.getByText('META_TOKEN_WHATSAPP_0A1B2C3D4E5F0A1B2C3D4E5F0A1B2C3D')).toBeVisible();
+  await expect(page.getByText('META_TOKEN_INSTAGRAM_0A1B2C3D4E5F0A1B2C3D4E5F0A1B2C3D')).toBeVisible();
+  await expect(page.getByLabel(/token/i)).toHaveCount(0);
+  await expect(page.getByText('/functions/v1/crm-support-meta')).toBeVisible();
+  const wa = page.getByRole('group', { name: /WhatsApp \(API oficial/ });
+  await wa.getByLabel(/identificador/).fill('abc');
+  await wa.getByRole('checkbox', { name: /Habilitar/ }).check();
+  await wa.getByLabel(/identificador/).fill('');
+  await wa.getByRole('button', { name: /Salvar WhatsApp/ }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Informe o identificador' })).toBeVisible();
+  await wa.getByLabel(/identificador/).fill('109876543210');
+  await wa.getByRole('button', { name: /Salvar WhatsApp/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'WhatsApp salvo' })).toBeVisible();
+  await expect(wa.getByText(/Conta ainda NÃO verificada/)).toBeVisible();
+  await wa.getByRole('button', { name: /Verificar conta WhatsApp/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Conta verificada' })).toBeVisible();
+  await expect(wa.getByText('Conta verificada com o token desta empresa.')).toBeVisible();
+  await expect(wa.getByText('Habilitado, ainda sem nenhuma mensagem recebida.')).toBeVisible();
+  await page.getByRole('button', { name: 'Ver chamadas Meta' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-meta-calls', /"chan":"whatsapp","acct":"109876543210".*"enable":true/);
+});
