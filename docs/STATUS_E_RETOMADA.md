@@ -21,15 +21,16 @@ Detalhes de cada fase: [ATENDIMENTO_DIAGNOSTICO.md](ATENDIMENTO_DIAGNOSTICO.md) 
 | Fase 1 (migrations 20261108120910, 20261108150000) | Aplicada e verificada |
 | Fase A: perfil Suporte, fila, painel do gestor (20261108190000) | Aplicada e verificada; frontend publicado |
 | Fase B: e-mail espontâneo, protocolo, confirmação controlada (20261109120000) | Aplicada em 2026-11-09 e verificada (5 tabelas, RLS ligado, `ingest_support_email`, colunas das conversas); frontend enviado à `main` no commit 3ce2b80 |
+| Fase C: WhatsApp e Instagram por empresa (20261110120000) | Aplicada em 2026-11-09 e verificada só com leitura (2 tabelas com RLS, 12 funções, colunas de evidência de entrega, sem execução para anon/public); frontend no commit 0324e4c, deploy do Cloudflare Pages concluído com sucesso |
 
-Ainda não confirmado: se o deploy do Cloudflare Pages do commit 3ce2b80 terminou. Abra o Inbox e o Atendimento para conferir.
+Comprovado: banco, código e deploy. Não comprovado: nenhuma conta Meta conectada, função `crm-support-meta` não publicada, nenhuma mensagem real recebida ou enviada. A Fase C só foi testada com transporte simulado.
 
 ## O que está desligado (nada conectado)
 
 - Nenhuma caixa de e-mail lida; confirmação automática não envia.
 - Função `crm-support-mail` não publicada nem agendada.
 - Ninguém tem o perfil Suporte ainda.
-- WhatsApp e Instagram: não construídos (dependem de contas Meta).
+- WhatsApp e Instagram: construídos e aplicados no banco, mas desligados; faltam as contas Meta, os segredos e a publicação de `crm-support-meta` e `crm-support-meta-verify` (seção 8 do diagnóstico).
 
 ## O que só o dono pode autorizar ou fornecer
 
