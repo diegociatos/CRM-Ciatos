@@ -49,6 +49,10 @@ Passo a passo do e-mail: seção 7 do documento de diagnóstico.
 - Uma conversa real controlada por canal autorizado.
 - Conferir o deploy e o Inbox em produção.
 
+## Ampliação do help desk em 11 de novembro
+
+Registro manual de atendimentos e ligações integrado à Central de demandas implementado na branch codex/helpdesk-manual-intake. Migração incremental 20261111201959_support_manual_intake.sql e guia [HELPDESK_OPERACAO.md](HELPDESK_OPERACAO.md). Implantação ainda em validação; não confundir registro manual de WhatsApp/ligação com conexão à Meta/PABX. A base comercial é preservada.
+
 ## Próximas fases
 
 - Fase C: WhatsApp Cloud API e Instagram (só com contas reais), IA para classificar, resumir e sugerir resposta com revisão humana e base de conhecimento por empresa.

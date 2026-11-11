@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../lib/useDialog';
 import SupportDemandsOverview from './SupportDemandsOverview';
+import SupportIntakeSummary from './SupportIntakeSummary';
 import { activeDemandStatuses, demandDate, demandError, demandPriorities, demandStatuses, isDefiniteDemandRejection, isDemandOverdue, toDeadline, toLocalDeadline } from '../lib/supportDemands';
 import type { DemandActivity, DemandPriority, DemandStatus, SupportDemand } from '../lib/supportDemands';
 import type { Lead, User } from '../types';
@@ -9,12 +10,12 @@ import './SupportDemands.css';
 
 type Props = {
   organizationId: string; users: User[]; leads: Lead[]; currentUser: User;
-  onOpenLead: (id: string) => void; client?: typeof supabase;
-  initialLeadId?: string; initialTitle?: string; onClearInitial?: () => void;
+  onOpenLead?: (id: string) => void; client?: typeof supabase;
+  initialDemandId?: string; initialLeadId?: string; initialTitle?: string; onClearInitial?: () => void;
 };
 type Draft = { title: string; description: string; lead_id: string; status: DemandStatus; priority: DemandPriority; assigned_to: string; due_at: string };
 const pageSize = 25;
-const columns = 'id,organization_id,lead_id,title,description,status,priority,due_at,assigned_to,created_by,created_at,updated_at,resolved_at,version,confidential';
+const columns = 'id,organization_id,lead_id,title,description,status,priority,due_at,assigned_to,created_by,created_at,updated_at,resolved_at,version,confidential,intake';
 const emptyDraft = (): Draft => ({ title: '', description: '', lead_id: '', status: 'OPEN', priority: 'NORMAL', assigned_to: '', due_at: '' });
 const draftFrom = (row: SupportDemand): Draft => ({ title: row.title, description: row.description, lead_id: row.lead_id || '', status: row.status, priority: row.priority, assigned_to: row.assigned_to || '', due_at: toLocalDeadline(row.due_at) });
 const contactName = (lead: Lead) => lead.company || lead.name || lead.email || 'Contato sem nome';
@@ -24,7 +25,7 @@ export default function SupportDemands(props: Props) {
   return <DemandWorkspace key={`${props.organizationId}:${props.currentUser.id}`} {...props} client={props.client || supabase} />;
 }
 
-function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead, client, initialLeadId, initialTitle, onClearInitial }: Props) {
+function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead, client, initialDemandId, initialLeadId, initialTitle, onClearInitial }: Props) {
   const [rows, setRows] = useState<SupportDemand[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -33,7 +34,8 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [revision, setRevision] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialDemandId||null);
+  useEffect(()=>{if(initialDemandId)onClearInitial?.();},[initialDemandId,onClearInitial]);
   const [creating, setCreating] = useState(!!initialLeadId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,7 +73,7 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
     {error && <p className="demands-error" role="alert">{error}</p>}
     <div className={`demands-layout ${selected ? 'has-detail' : ''}`}>
       <div className="demands-list"><div className="demands-list-caption"><h2>Fila de trabalho</h2><span>{loading ? 'Carregando…' : `${count} ${count === 1 ? 'demanda' : 'demandas'}`}</span></div>
-        {loading ? <p className="demands-empty">Carregando demandas…</p> : !rows.length ? <div className="demands-empty"><strong>{error ? 'Lista indisponível' : 'Nenhuma demanda nesta visão.'}</strong><p>{error ? 'Tente atualizar a lista.' : 'Crie uma solicitação ou altere os filtros para encontrar o que precisa.'}</p></div> : <ul>{rows.map(row => <li key={row.id}><button className={`demand-row ${selected === row.id ? 'selected' : ''}`} onClick={() => setSelected(row.id)} aria-current={selected === row.id ? 'true' : undefined}><div className="demand-row-top"><span className={`demand-priority ${row.priority.toLowerCase()}`}>{demandPriorities[row.priority]}</span>{row.confidential && <span className="demand-confidential" title="Visível só para quem criou, o responsável e administradores">🔒 Confidencial</span>}<span>{demandStatuses[row.status]}</span></div><strong>{row.title}</strong><span>{row.lead_id ? contactName(leads.find(l => l.id === row.lead_id) || { name: 'Contato vinculado' } as Lead) : 'Demanda interna'}</span><div className="demand-row-bottom"><span>{users.find(u => u.id === row.assigned_to)?.name || (row.assigned_to ? 'Responsável indisponível' : 'Sem responsável')}</span><span className={isDemandOverdue(row) ? 'demand-overdue' : ''}>{row.due_at ? `${isDemandOverdue(row) ? 'Atrasada · ' : ''}${demandDate(row.due_at)}` : 'Sem prazo'}</span></div></button></li>)}</ul>}
+        {loading ? <p className="demands-empty">Carregando demandas…</p> : !rows.length ? <div className="demands-empty"><strong>{error ? 'Lista indisponível' : 'Nenhuma demanda nesta visão.'}</strong><p>{error ? 'Tente atualizar a lista.' : 'Crie uma solicitação ou altere os filtros para encontrar o que precisa.'}</p></div> : <ul>{rows.map(row => <li key={row.id}><button className={`demand-row ${selected === row.id ? 'selected' : ''}`} onClick={() => setSelected(row.id)} aria-current={selected === row.id ? 'true' : undefined}><div className="demand-row-top"><span className={`demand-priority ${row.priority.toLowerCase()}`}>{demandPriorities[row.priority]}</span>{row.confidential && <span className="demand-confidential" title="Visível só para quem criou, o responsável e administradores">🔒 Confidencial</span>}<span>{demandStatuses[row.status]}</span></div><strong>{row.title}</strong><span>{row.lead_id ? contactName(leads.find(l => l.id === row.lead_id) || { name: 'Contato vinculado' } as Lead) : row.intake?.source==='manual' ? (row.intake?.name||'Solicitante')+' · Atendimento manual' : 'Demanda interna'}</span><div className="demand-row-bottom"><span>{users.find(u => u.id === row.assigned_to)?.name || (row.assigned_to ? 'Responsável indisponível' : 'Sem responsável')}</span><span className={isDemandOverdue(row) ? 'demand-overdue' : ''}>{row.due_at ? `${isDemandOverdue(row) ? 'Atrasada · ' : ''}${demandDate(row.due_at)}` : 'Sem prazo'}</span></div></button></li>)}</ul>}
         <div className="demands-pagination"><button disabled={loading || page === 0} onClick={() => setPage(v => v - 1)}>Anterior</button><span>Página {page + 1}</span><button disabled={loading || (page + 1) * pageSize >= count} onClick={() => setPage(v => v + 1)}>Próxima</button></div>
       </div>
       {selected && <DemandDetail key={selected} id={selected} organizationId={organizationId} users={users} leads={leads} currentUser={currentUser} client={client} onOpenLead={onOpenLead} onChanged={refresh} onClose={() => setSelected(null)} />}
@@ -80,12 +82,12 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
   </section>;
 }
 
-function DraftFields({ draft, setDraft, users, leads, editing = false }: { draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>>; users: User[]; leads: Lead[]; editing?: boolean }) {
+function DraftFields({ draft, setDraft, users, leads, editing = false, manual = false }: { draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>>; users: User[]; leads: Lead[]; editing?: boolean;manual?:boolean }) {
   const change = (key: keyof Draft, value: string) => setDraft(old => ({ ...old, [key]: value }));
   return <>
     <label>Título<input required minLength={2} maxLength={160} value={draft.title} onChange={e => change('title', e.target.value)} /></label>
     <label>Descrição<textarea aria-label="Descrição" rows={3} maxLength={8000} value={draft.description} onChange={e => change('description', e.target.value)} placeholder="Qual é a solicitação e qual o próximo passo?" /></label>
-    <label>Cliente ou contato<select aria-label="Cliente ou contato" disabled={editing} value={draft.lead_id} onChange={e => change('lead_id', e.target.value)}><option value="">Demanda interna, sem contato</option>{draft.lead_id && !leads.some(l => l.id === draft.lead_id) && <option value={draft.lead_id}>Contato vinculado</option>}{leads.map(lead => <option key={lead.id} value={lead.id}>{contactName(lead)}{lead.name && lead.company ? ` · ${lead.name}` : ''}</option>)}</select>{editing && <small>Vínculo definido na criação. Para outro contato, abra uma nova demanda.</small>}</label>
+    <label>Cliente ou contato<select aria-label="Cliente ou contato" disabled={editing} value={draft.lead_id} onChange={e => change('lead_id', e.target.value)}><option value="">{manual?'Solicitante registrado no atendimento (sem lead)':'Demanda interna, sem contato'}</option>{draft.lead_id && !leads.some(l => l.id === draft.lead_id) && <option value={draft.lead_id}>Contato vinculado</option>}{leads.map(lead => <option key={lead.id} value={lead.id}>{contactName(lead)}{lead.name && lead.company ? ` · ${lead.name}` : ''}</option>)}</select>{editing && <small>Vínculo definido na criação. Para outro contato, abra uma nova demanda.</small>}</label>
     <div className="demands-field-pair"><label>Responsável<select aria-label="Responsável" value={draft.assigned_to} onChange={e => change('assigned_to', e.target.value)}><option value="">Sem responsável</option>{draft.assigned_to && !users.some(u => u.id === draft.assigned_to) && <option value={draft.assigned_to}>Responsável indisponível</option>}{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label><label>Prioridade da demanda<select aria-label="Prioridade da demanda" value={draft.priority} onChange={e => change('priority', e.target.value)}>{Object.entries(demandPriorities).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label></div>
     <div className="demands-field-pair"><label>Prazo<input type="datetime-local" value={draft.due_at} onChange={e => change('due_at', e.target.value)} /><small>Horário local deste dispositivo. Em branco, usa o prazo da prioridade, contado desde a abertura.</small></label>{editing && <label>Estado<select aria-label="Estado" value={draft.status} onChange={e => change('status', e.target.value)}>{Object.entries(demandStatuses).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>}</div>
   </>;
@@ -210,8 +212,9 @@ function DemandDetail({ id, organizationId, users, leads, currentUser, client, o
     {error && <p className="demands-error" role="alert">{error}</p>}{notice && <p className="demands-notice" role="status">{notice}</p>}
     {loading ? <p>Carregando demanda…</p> : row ? <>
       <p className="demand-meta">Criada em {demandDate(row.created_at)} · Versão {row.version}</p>
-      {row.lead_id && <button className="demands-contact" onClick={() => onOpenLead(row.lead_id!)}>Abrir cadastro do contato ↗</button>}
-      <form onSubmit={save}><fieldset disabled={busy}><DraftFields draft={draft} setDraft={setDraft} users={users} leads={leads} editing /><div className="demands-actions"><button type="button" className="demands-secondary" onClick={() => setDraft(old => ({ ...old, assigned_to: currentUser.id, status: 'IN_PROGRESS' }))}>Atribuir a mim</button><button className="btn-navy" disabled={!draft.title.trim()}>{busy ? 'Salvando…' : 'Salvar alterações'}</button></div></fieldset></form>
+      <SupportIntakeSummary intake={row.intake}/>
+      {row.lead_id && onOpenLead && <button className="demands-contact" onClick={() => onOpenLead(row.lead_id!)}>Abrir cadastro do contato ↗</button>}
+      <form onSubmit={save}><fieldset disabled={busy}><DraftFields draft={draft} setDraft={setDraft} users={users} leads={leads} editing manual={row.intake?.source==='manual'} /><div className="demands-actions"><button type="button" className="demands-secondary" onClick={() => setDraft(old => ({ ...old, assigned_to: currentUser.id, status: 'IN_PROGRESS' }))}>Atribuir a mim</button><button className="btn-navy" disabled={!draft.title.trim()}>{busy ? 'Salvando…' : 'Salvar alterações'}</button></div></fieldset></form>
       <form className="demand-note" onSubmit={addNote}><label>Nota interna<textarea aria-label="Nota interna" rows={3} maxLength={4000} value={note} disabled={busy || notePending} onChange={e => setNote(e.target.value)} placeholder="Registre uma atualização para a equipe." /></label>{notePending && !busy && <p>A confirmação não chegou. Tente registrar a mesma nota novamente; a solicitação é única e não será duplicada.</p>}<button className="demands-secondary" disabled={busy || !note.trim()}>Adicionar nota</button></form>
       <section className="demand-history" aria-label="Histórico da demanda"><header><h3>Histórico interno</h3><button disabled={historyLoading} onClick={refreshHistory}>Atualizar histórico</button></header>{historyError && <p role="alert">{historyError}</p>}{historyLoading && <p>Carregando histórico…</p>}<ol>{activities.map(item => <li key={item.id}><div><strong>{item.kind === 'CREATED' ? 'Demanda criada' : item.kind === 'NOTE' ? 'Nota interna' : 'Demanda atualizada'}</strong><time>{demandDate(item.created_at)}</time></div><small>{users.find(user => user.id === item.actor_id)?.name || 'Equipe'}</small>{item.body && <p>{item.body}</p>}{item.kind === 'UPDATED' && <ActivityChanges changes={item.changes} users={users} leads={leads} />}</li>)}</ol>{!historyLoading && !activities.length && !historyError && <p>Nenhum registro no histórico.</p>}{(historyPage + 1) * pageSize < activityCount && <button disabled={historyLoading || !!historyError} onClick={() => setHistoryPage(v => v + 1)}>Carregar histórico anterior</button>}</section>
     </> : null}
