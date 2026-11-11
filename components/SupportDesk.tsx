@@ -1,31 +1,38 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { supabase } from '../lib/supabase';
 import { ackBadge, channelNames, channelStatusLabels, formatWait, periodLabels, periodRange, scopeLabels } from '../lib/supportDesk';
 import type { ChannelConfig, MetaAccountsConfig, DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
 import { UserRole } from '../types';
 import type { User } from '../types';
 import './SupportDesk.css';
+import SupportIntake from './SupportIntake';
+const SupportDemands=lazy(()=>import('./SupportDemands'));
 
 type Client = typeof supabase;
-type Props = { organizationId: string; users: User[]; currentUser: User; client: Client; onOpenConversation: (id: string) => void };
+type Props = { organizationId: string; users: User[]; currentUser: User; client: Client; onOpenConversation: (id: string) => void; onOpenDemand?:(id:string)=>void };
 const PAGE = 25;
 const agentScopes: DeskScope[] = ['mine', 'unassigned', 'awaiting_first', 'awaiting_reply', 'attention', 'open'];
 const fail = (error: unknown, fallback: string) => (error as { message?: string })?.message?.includes('Forbidden') ? 'Você não tem permissão para ver isto nesta empresa.' : fallback;
 
 /** Atendimento: fila do atendente e visão do gestor. Os dados vêm de funções do banco que aplicam o perfil e a empresa. */
-export default function SupportDesk({ organizationId, users, currentUser, client, onOpenConversation }: Props) {
+export default function SupportDesk(props:Props){return <DeskWorkspace key={`${props.organizationId}:${props.currentUser.id}`} {...props}/>;}
+function DeskWorkspace({ organizationId, users, currentUser, client, onOpenConversation,onOpenDemand }: Props) {
   const manager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
-  const [tab, setTab] = useState<'queue' | 'manager'>('queue');
+  const [tab, setTab] = useState<'queue' | 'manager' | 'demands'>('queue');
+  const [intakeOpen,setIntakeOpen]=useState(false);
   return <section className="desk" aria-label="Atendimento">
     <header className="desk-header">
       <div><p className="desk-eyebrow">ATENDIMENTO · EMPRESA SELECIONADA</p><h1>Atendimento<span>.</span></h1>
         <p>O que chegou pelos canais conectados, quem está cuidando e o que ainda espera retorno. Entram as respostas a cadências e, só se a empresa configurar, o e-mail de suporte, o WhatsApp e o Instagram dela.</p></div>
-      {manager && <div className="desk-tabs" role="tablist" aria-label="Visão">
+      <div className="desk-tabs" role="tablist" aria-label="Visão">
         <button role="tab" aria-selected={tab === 'queue'} className={tab === 'queue' ? 'is-on' : ''} onClick={() => setTab('queue')}>Minha fila</button>
-        <button role="tab" aria-selected={tab === 'manager'} className={tab === 'manager' ? 'is-on' : ''} onClick={() => setTab('manager')}>Visão do gestor</button>
-      </div>}
+        <button role="tab" aria-selected={tab === 'demands'} className={tab === 'demands' ? 'is-on' : ''} onClick={() => setTab('demands')}>Registros e demandas</button>
+        {manager&&<button role="tab" aria-selected={tab === 'manager'} className={tab === 'manager' ? 'is-on' : ''} onClick={() => setTab('manager')}>Visão do gestor</button>}
+      </div>
     </header>
-    {tab === 'queue' || !manager ? <AgentView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} /> : <ManagerView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} />}
+    <div className="desk-intake-start"><div><strong>O cliente falou com a equipe fora do sistema?</strong><p>Registre ligações, WhatsApp do aplicativo, e-mails e atendimentos presenciais. O acompanhamento continua na Central de demandas.</p></div><button type="button" className="desk-primary" onClick={()=>setIntakeOpen(true)}>Novo atendimento</button></div>
+    {intakeOpen&&<SupportIntake organizationId={organizationId} users={users} client={client} onClose={()=>setIntakeOpen(false)} onOpenDemand={onOpenDemand}/>}
+    {tab==='demands'?<Suspense fallback={<p role="status">Carregando registros…</p>}><SupportDemands organizationId={organizationId} users={users} currentUser={currentUser} leads={[]} client={client}/></Suspense>:tab === 'queue' || !manager ? <AgentView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} /> : <ManagerView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} />}
   </section>;
 }
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import SupportDesk from '../../components/SupportDesk';
+import {demandFixtureClient} from './SupportDemandsFixture';
 import { UserRole } from '../../types';
 
 const org = '00000000-0000-4000-8000-000000000001';
@@ -25,9 +26,18 @@ const channel: any = { can_manage: true, account: { mailbox: null, ingest_enable
 const channelCalls: any[] = [];
 const metaCalls: any[] = []; const metaAccounts: Record<string, { id: string; name: string; enabled: boolean; verified?: boolean }> = {}; const verifyCalls: any[] = [];
 let fail = false; let assumeTaken = false; const profileCalls: any[] = [];
+const intakeCalls:any[]=[];const intakes=new Map<string,string>();let intakeFailure='';
 const fake = {
+  from: (table:string)=>demandFixtureClient.from(table),
   functions: { async invoke(_name: string, opts: any) { verifyCalls.push(opts.body); const c = opts.body.channel; if (metaAccounts[c]) metaAccounts[c].verified = true; return { data: { status: 'verified' }, error: null }; } },
   async rpc(name: string, args: any) {
+    if(name==='create_support_intake'){
+      intakeCalls.push(structuredClone(args));document.body.dataset.intakeCalls=JSON.stringify(intakeCalls);
+      if(intakeFailure==='validation'){intakeFailure='';return {data:null,error:{code:'22023',message:'Confira os dados do contato'}};}
+      const id=intakes.get(args.request_id)||'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';intakes.set(args.request_id,id);
+      if(intakeFailure==='uncertain'){intakeFailure='';return {data:null,error:{message:'Conexão interrompida'}};}
+      return {data:id,error:null};
+    }
     if (fail && name === 'support_queue') return { data: null, error: { message: 'Falha simulada' } };
     if (name === 'support_queue_counts') { const r: any = {}; for (const k of ['mine', 'unassigned', 'awaiting_first', 'awaiting_reply', 'attention', 'open']) r[k] = cases.filter(c => inScope(c, k)).length; return { data: r, error: null }; }
     if (name === 'support_queue') {
@@ -52,13 +62,17 @@ const fake = {
         by_assignee: [{ assigned_to: 'user-ana', open: 1, waiting: 1 }, { assigned_to: null, open: 2, waiting: 2 }],
         channels: [{ channel: 'email', label: 'E-mail de suporte (caixa da empresa)', status: 'not_configured', coverage: 'Mensagens novas da caixa de entrada a partir da ativação.' }, { channel: 'email', label: 'E-mail (respostas a cadências)', status: 'error', last_error: 'Não foi possível ler respostas.', last_sync_at: iso(3), coverage: 'Somente respostas a cadências desta empresa.' }, { channel: 'whatsapp', status: 'not_configured', coverage: 'Não conectado.' }, { channel: 'instagram', status: 'not_configured', coverage: 'Não conectado.' }] }, error: null };
     }
-    return { data: null, error: { message: 'Unknown RPC' } };
+    return demandFixtureClient.rpc(name,args);
   },
 };
 export default function SupportDeskFixture({ manager }: { manager: boolean }) {
   const [opened, setOpened] = useState('');
+  const [workspace,setWorkspace]=useState(org);
   return <div className="crm-app" style={{ padding: 16 }}>
-    <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+      <button onClick={()=>setWorkspace('00000000-0000-4000-8000-000000000002')}>Trocar empresa de teste</button>
+      <button onClick={()=>{intakeFailure='uncertain';}}>Interromper registro manual</button>
+      <button onClick={()=>{intakeFailure='validation';}}>Rejeitar registro manual</button>
       <button onClick={() => { fail = true; }}>Falhar fila</button><button onClick={() => { fail = false; }}>Recuperar fila</button>
       <button onClick={() => { assumeTaken = true; }}>Outra pessoa assume</button>
       <button onClick={() => { document.body.dataset.channelCalls = JSON.stringify(channelCalls); }}>Ver chamadas de canal</button>
@@ -66,6 +80,6 @@ export default function SupportDeskFixture({ manager }: { manager: boolean }) {
       <button onClick={() => { document.body.dataset.profileCalls = JSON.stringify(profileCalls); }}>Ver chamadas de perfil</button>
       {opened && <span role="status">Conversa aberta: {opened}</span>}
     </div>
-    <SupportDesk organizationId={org} users={[me, ana, bruno]} currentUser={manager ? boss : me} client={fake as any} onOpenConversation={setOpened} />
+    <SupportDesk organizationId={workspace} users={[me, ana, bruno]} currentUser={manager ? boss : me} client={fake as any} onOpenConversation={setOpened} onOpenDemand={id=>setOpened('Demanda '+id)} />
   </div>;
 }

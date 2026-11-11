@@ -9,6 +9,7 @@ export type SupportDemand = {
   id: string; organization_id: string; lead_id: string | null; title: string; description: string;
   status: DemandStatus; priority: DemandPriority; due_at: string | null; assigned_to: string | null;
   created_by: string | null; created_at: string; updated_at: string; resolved_at: string | null; version: number; confidential?: boolean;
+  intake?: Partial<import('./supportIntake').IntakeDetails>;
 };
 export type DemandActivity = {
   id: string; demand_id: string; actor_id: string | null; kind: 'CREATED' | 'UPDATED' | 'NOTE';

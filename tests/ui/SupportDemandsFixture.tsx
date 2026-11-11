@@ -79,10 +79,11 @@ const fake = {
     return { data: null, error: { message: 'Unknown RPC' } };
   },
 };
-export default function SupportDemandsFixture() {
+export default function SupportDemandsFixture({manual=false}:{manual?:boolean}={}) {
   const [org, setOrg] = useState(orgOne);
   const [opened, setOpened] = useState('');
   const [show, setShow] = useState(true);
+  if(manual){rows.support_demands[0].lead_id=null;rows.support_demands[0].intake={source:'manual',channel:'phone',name:'Ana de teste',company:'Cliente de teste',phone:'31999999999',email:'ana@example.test',direction:'INBOUND',outcome:'CALLBACK',duration_seconds:120};}
   return <div className="crm-app" style={{ padding: 16 }}>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
       <button onClick={() => setOrg(orgOne)}>Empresa Exemplo</button><button onClick={() => setOrg(orgTwo)}>Outra empresa</button>
@@ -98,6 +99,8 @@ export default function SupportDemandsFixture() {
       <button onClick={() => { document.body.dataset.writeCount = String(writes); }}>Contar gravações</button>
       {opened && <span role="status">Cadastro aberto: {opened}</span>}
     </div>
-    {show && <SupportDemands organizationId={org} users={[user]} leads={org === orgOne ? leads : []} currentUser={user} client={fake as any} onOpenLead={setOpened} />}
+    {show && <SupportDemands organizationId={org} users={[user]} leads={org === orgOne ? leads : []} currentUser={user} client={fake as any} initialDemandId={manual?initial.id:undefined} onOpenLead={setOpened} />}
   </div>;
 }
+
+export {fake as demandFixtureClient};

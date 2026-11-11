@@ -101,7 +101,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     return v;
   });
   const [nav, setNav] = useState<NavigationState>({ view: retornoMs365 ? 'broadcasts' : onboardingLink ? 'operational_dashboard' : 'dashboard' });
-  const [demandOrigin, setDemandOrigin] = useState<{leadId:string;title:string}|null>(null);
+  const [demandOrigin, setDemandOrigin] = useState<{leadId?:string;title?:string;demandId?:string}|null>(null);
   const [inboxConversation, setInboxConversation] = useState<string|null>(null);
   useEffect(() => { if (nav.view !== 'inbox' && inboxConversation) setInboxConversation(null); }, [nav.view, inboxConversation]);
   const [demandAlerts, setDemandAlerts] = useState(0);
@@ -402,8 +402,8 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
     const view = currentUser.role === UserRole.SUPPORT && !['support', 'inbox', 'demands', 'help'].includes(nav.view) ? 'support' : nav.view;
     switch (view) {
       case 'help': return <HelpCenter onNavigate={v=>setNav({view:v})} onCreate={()=>setShowNewLeadForm(true)}/>;
-      case 'support': return company ? <SupportDesk key={company.id} organizationId={company.id} users={users} currentUser={currentUser} client={supabase} onOpenConversation={id => { setInboxConversation(id); setNav({ view: 'inbox' }); }}/> : null;
-      case 'demands': return company ? <SupportDemands organizationId={company.id} users={users} leads={leads} currentUser={currentUser} onOpenLead={id=>void openLead(id)} initialLeadId={demandOrigin?.leadId} initialTitle={demandOrigin?.title} onClearInitial={()=>setDemandOrigin(null)}/> : null;
+      case 'support': return company ? <SupportDesk key={company.id} organizationId={company.id} users={users} currentUser={currentUser} client={supabase} onOpenDemand={id=>{setDemandOrigin({demandId:id});setNav({view:'demands'});}} onOpenConversation={id => { setInboxConversation(id); setNav({ view: 'inbox' }); }}/> : null;
+      case 'demands': return company ? <SupportDemands organizationId={company.id} users={users} leads={leads} currentUser={currentUser} onOpenLead={id=>void openLead(id)} initialDemandId={demandOrigin?.demandId} initialLeadId={demandOrigin?.leadId} initialTitle={demandOrigin?.title} onClearInitial={()=>setDemandOrigin(null)}/> : null;
       case 'inbox': return company ? <Inbox key={company.id} organizationId={company.id} users={users} currentUser={currentUser} initialConversationId={inboxConversation||undefined} canOpenLead={currentUser.role !== UserRole.SUPPORT} canManage={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER} onOpenLead={id=>void openLead(id)} onCreateDemand={(leadId,title)=>{setDemandOrigin({leadId,title});setNav({view:'demands'});}}/> : null;
       case 'dashboard': return <Dashboard leads={leads} tasks={[]} notifications={[]} currentUser={currentUser} agendaEvents={events} companyId={company?.id} companyName={company?.nome} onNavigate={v => setNav({view:v})} onOpenCadences={() => setNav({view:'ai_center'})} onCreate={() => setShowNewLeadForm(true)} />;
       case 'executive_bi' as any: return <ExecutiveDashboard leads={leads} users={users} config={config} userGoals={userGoals} companyName={company?.nome} />;

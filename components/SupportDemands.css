@@ -104,3 +104,8 @@
 .demand-confidential { font-size: 11px; font-weight: 700; color: #7a4b00; background: #fff1d6; border-radius: 6px; padding: 1px 6px; }
 .demands-check { flex-direction: row !important; align-items: flex-start; gap: 8px !important; font-weight: 500 !important; }
 .demands-check input { width: auto !important; margin-top: 3px; }
+.demands-intake {background:#f2f6fa;border:1px solid #d8e2ec;border-radius:12px;padding:16px;margin:14px 0;}
+.demands-intake h3 {font-size:14px;font-weight:700;margin-bottom:10px;}
+.demands-intake dl {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+.demands-intake dt {font-size:11px;color:#657080;} .demands-intake dd {font-size:13px;overflow-wrap:anywhere;}
+.demands-intake p {font-size:11px;color:#657080;margin-top:14px;}
