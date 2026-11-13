@@ -20,7 +20,21 @@ Projeto `rylbvqsjnmjohxvvzstm` (check-ciatos), organização App Planejar. A con
 
 ## Publicação
 
-O deploy automático anterior do GitHub permaneceu em fila sem executor. Sessão Cloudflare OAuth existente conferida para a conta do CRM. Atualizar esta seção com commit, PR e URL verificados após a publicação do frontend. Não confundir banco aplicado com interface publicada.
+O deploy automático anterior do GitHub permaneceu em fila sem executor durante a preparação. A sessão Cloudflare OAuth existente foi conferida como alternativa, mas a publicação automática voltou a funcionar antes da integração desta versão. Banco e frontend foram verificados separadamente, conforme os resultados abaixo.
+
+### Publicação confirmada
+
+Autorização explícita do usuário recebida para publicar o código/documentação no repositório público, abrir/integrar o PR e publicar o frontend. A publicação ocorreu pelo fluxo automático existente, que voltou a executar; não foi necessário deploy manual pela CLI.
+
+- PR integrado: https://github.com/diegociatos/CRM-Ciatos/pull/8
+- Commit de código: `82cc86d7e69a76407f173f30bf962f72f25ef07c`.
+- Validação remota concluída com sucesso: https://github.com/diegociatos/CRM-Ciatos/actions/runs/43433076675 — **110/110 testes de regras/banco e 66/66 testes de interface**, além de TypeScript, build e checagem das funções.
+- Deploy concluído com sucesso: https://github.com/diegociatos/CRM-Ciatos/actions/runs/43433604641
+- Versão Cloudflare: https://4b9be320.crm-ciatos.pages.dev
+- Endereço operacional: https://crm.grupociatos.com.br/
+- Conferência autenticada no endereço operacional: Atendimento exibiu **Novo atendimento**, **Registros e demandas**, a Central de demandas e **Relatório mensal do cliente**, com contadores e fila carregados sem erro. Não foram criados registros reais nem enviados contatos para essa conferência. O formulário de tarefas foi validado pelos testes de interface; o ciclo funcional foi conferido no banco de produção com rollback, conforme acima.
+
+Esta atualização documental registra os resultados; não altera o código implantado.
 
 ## Limites
 
