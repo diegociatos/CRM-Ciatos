@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner } from '../types';
 import WorkspaceEmpty from './WorkspaceEmpty';
 
@@ -32,7 +32,6 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
   }, [customers, searchTerm]);
   const pageCount = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
-  useEffect(()=>setPage(0),[searchTerm]);
 
   const unifiedTimeline = useMemo(() => {
     if (!selectedCustomer) return [];
@@ -113,7 +112,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                placeholder="Pesquisar por Nome ou CNPJ..." 
                className="w-full md:w-64 px-4 py-2 text-sm outline-none"
                value={searchTerm}
-               onChange={e => setSearchTerm(e.target.value)}
+               onChange={e => {setSearchTerm(e.target.value);setPage(0);}}
              />
              <div className="bg-[#0a192f] text-[#c5a059] px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                {customers.length} Empresas
@@ -155,9 +154,9 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                       </td>
                       <td className="px-6 py-6">
                          <div className="flex items-center gap-3">
-                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            {c.healthScore != null && <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                <div className={`h-full ${c.healthScore && c.healthScore > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${c.healthScore ?? 0}%` }}></div>
-                            </div>
+                            </div>}
                             <span className="text-xs font-medium text-slate-500">{c.healthScore == null ? 'Sem avaliação' : c.healthScore + '%'}</span>
                          </div>
                       </td>
@@ -171,7 +170,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                  ))}
               </tbody>
            </table>
-           <nav className="customer-pagination" aria-label="Páginas de clientes"><span>{filteredCustomers.length} clientes · Página {currentPage + 1} de {pageCount}</span><div><button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>← Anterior</button><button disabled={currentPage>=pageCount-1} onClick={()=>setPage(currentPage+1)}>Próxima →</button></div></nav>
+           <nav className="customer-pagination" aria-label="Páginas de clientes"><span aria-live="polite">{filteredCustomers.length} {filteredCustomers.length===1?'cliente':'clientes'} · Página {currentPage + 1} de {pageCount}</span><div><button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>← Anterior</button><button disabled={currentPage>=pageCount-1} onClick={()=>setPage(currentPage+1)}>Próxima →</button></div></nav>
         </div>}
       </div>
     );

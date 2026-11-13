@@ -11,7 +11,6 @@ test('resumo da fila abre o filtro correspondente e canais respeitam o perfil',a
  await expect(page.getByText(/o cadastro atual aceita um número/)).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
  await page.getByRole('button',{name:/Configurar mensagens/}).click();
- await page.getByText('WhatsApp e Instagram desta empresa').click();
  await expect(page.getByRole('button',{name:/Salvar WhatsApp/})).toBeVisible();
 });
 test('clientes paginados preservam zero real e distinguem ausência de avaliação',async({page})=>{
@@ -24,5 +23,31 @@ test('clientes paginados preservam zero real e distinguem ausência de avaliaç�
  await expect(page.getByText('Empresa 26',{exact:true})).toBeVisible();
  await page.getByPlaceholder('Pesquisar por Nome ou CNPJ...').fill('Empresa 01');
  await expect(page.getByText('Página 1 de 1',{exact:false})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Páginas de clientes'}).getByText('1 cliente · Página 1 de 1',{exact:true})).toHaveAttribute('aria-live','polite');
  await expect(page.getByText('Empresa 01',{exact:true})).toBeVisible();
+});
+test('configuração abre diretamente e preserva rascunhos ao trocar e salvar outro canal',async({page})=>{
+ await page.goto('/tests/ui/?desk-manager');
+ await page.getByRole('tab',{name:'Canais de atendimento'}).click();
+ await expect(page.getByLabel('Caixa de suporte',{exact:true})).toBeVisible();
+ await page.getByLabel('Caixa de suporte',{exact:true}).fill('suporte@empresa.test');
+ await page.getByRole('button',{name:/Configurar mensagens/}).click();
+ const meta=page.getByRole('region',{name:'Configuração das mensagens'});
+ await expect(meta).toBeFocused();
+ const wa=meta.getByRole('group',{name:/WhatsApp \(API oficial/});
+ await wa.getByLabel(/identificador/).fill('109876543210');
+ await page.getByRole('button',{name:/Configurar e-mail/}).click();
+ await expect(page.getByLabel('Caixa de suporte',{exact:true})).toHaveValue('suporte@empresa.test');
+ await page.getByRole('button',{name:'Salvar canal',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'Canal salvo'})).toBeVisible();
+ await page.getByRole('button',{name:/Configurar mensagens/}).click();
+ await expect(wa.getByLabel(/identificador/)).toHaveValue('109876543210');
+});
+test('troca de perfil mantém uma aba válida sem exibir configurações restritas',async({page})=>{
+ await page.goto('/tests/ui/?desk-manager');
+ await page.getByRole('tab',{name:'Canais de atendimento'}).click();
+ await page.getByRole('button',{name:'Simular perfil de Suporte'}).click();
+ await expect(page.getByRole('tab',{name:'Minha fila',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('tab',{name:'Canais de atendimento'})).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Configuração do e-mail'})).toHaveCount(0);
 });

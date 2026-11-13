@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { supabase } from '../lib/supabase';
 import { ackBadge, channelNames, channelStatusLabels, formatWait, periodLabels, periodRange, scopeLabels } from '../lib/supportDesk';
 import type { ChannelConfig, MetaAccountsConfig, DeskCase, DeskCounts, DeskOverview, DeskPeriod, DeskQueue, DeskScope, DeskSettings } from '../lib/supportDesk';
@@ -16,7 +16,7 @@ const agentScopes: DeskScope[] = ['mine', 'unassigned', 'awaiting_first', 'await
 const fail = (error: unknown, fallback: string) => (error as { message?: string })?.message?.includes('Forbidden') ? 'Você não tem permissão para ver isto nesta empresa.' : fallback;
 
 /** Atendimento: fila do atendente e visão do gestor. Os dados vêm de funções do banco que aplicam o perfil e a empresa. */
-export default function SupportDesk(props:Props){return <DeskWorkspace key={`${props.organizationId}:${props.currentUser.id}`} {...props}/>;}
+export default function SupportDesk(props:Props){return <DeskWorkspace key={`${props.organizationId}:${props.currentUser.id}:${props.currentUser.role}`} {...props}/>;}
 function DeskWorkspace({ organizationId, users, currentUser, client, onOpenConversation,onOpenDemand }: Props) {
   const manager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
   const [tab, setTab] = useState<'queue' | 'manager' | 'demands' | 'channels'>('queue');
@@ -205,17 +205,25 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
 }
 
 function ChannelsWorkspace({organizationId,client}:{organizationId:string;client:Client}) {
-  const [version,setVersion]=useState(0);
+  const [versions,setVersions]=useState({email:0,meta:0});
   const [selected,setSelected]=useState<'email'|'meta'>('email');
+  const emailPanel=useRef<HTMLDivElement>(null),metaPanel=useRef<HTMLDivElement>(null);
+  const focusRequested=useRef(false);
+  const choose=(next:'email'|'meta')=>{
+    if(next===selected){(next==='email'?emailPanel:metaPanel).current?.focus();return;}
+    focusRequested.current=true;setSelected(next);
+  };
+  useEffect(()=>{if(focusRequested.current){(selected==='email'?emailPanel:metaPanel).current?.focus();focusRequested.current=false;}},[selected]);
   return <div className="desk-channel-workspace">
     <div className="channel-intro"><p className="desk-eyebrow">CONECTAR · CONFERIR · ACOMPANHAR</p><h2>Todos os caminhos até o cliente.</h2><p>Escolha o canal para revisar o cadastro e as autorizações da empresa selecionada. Salvar os dados não confirma a conexão: confira o estado do provedor antes de contar com a importação.</p></div>
     <div className="channel-choices" role="group" aria-label="Escolher canal">
-      <button aria-pressed={selected==='email'} onClick={()=>setSelected('email')}><span className="channel-icon email-icon" aria-hidden="true">@</span><strong>E-mail de atendimento</strong><small>Microsoft 365 · caixa de suporte</small><span className="channel-choice-action">Configurar e-mail →</span></button>
-      <button aria-pressed={selected==='meta'} onClick={()=>setSelected('meta')}><span className="channel-icon whatsapp-icon" aria-hidden="true">◉</span><strong>WhatsApp e Instagram</strong><small>Meta · mensagens da empresa</small><span className="channel-choice-action">Configurar mensagens →</span></button>
+      <button aria-pressed={selected==='email'} onClick={()=>choose('email')}><span className="channel-icon email-icon" aria-hidden="true">@</span><strong>E-mail de atendimento</strong><small>Microsoft 365 · caixa de suporte</small><span className="channel-choice-action">Configurar e-mail →</span></button>
+      <button aria-pressed={selected==='meta'} onClick={()=>choose('meta')}><span className="channel-icon whatsapp-icon" aria-hidden="true">◉</span><strong>WhatsApp e Instagram</strong><small>Meta · mensagens da empresa</small><span className="channel-choice-action">Configurar mensagens →</span></button>
     </div>
     <ol className="channel-steps"><li><b>1</b><span><strong>Identifique o canal</strong><small>Confira a empresa, o número ou a caixa de e-mail.</small></span></li><li><b>2</b><span><strong>Autorize o acesso</strong><small>A integração depende da conta Microsoft ou Meta e da configuração do servidor.</small></span></li><li><b>3</b><span><strong>Valide o recebimento</strong><small>Confira a verificação e a sincronização na Visão do gestor.</small></span></li></ol>
     <div className="channel-scope-note" role="note">WhatsApp: o cadastro atual aceita um número por empresa selecionada. Os cinco números do grupo ainda precisam de uma atualização da integração para coexistirem na mesma empresa. Não substitua um número ativo para cadastrar outro.</div>
-    {selected==='email'?<ChannelPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={()=>setVersion(v=>v+1)}/>:<MetaPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={()=>setVersion(v=>v+1)}/>}
+    <div ref={emailPanel} hidden={selected!=='email'} tabIndex={-1} role="region" aria-label="Configuração do e-mail" className="channel-config"><ChannelPanel organizationId={organizationId} client={client} reloadKey={versions.email} onSaved={()=>setVersions(v=>({...v,email:v.email+1}))}/></div>
+    <div ref={metaPanel} hidden={selected!=='meta'} tabIndex={-1} role="region" aria-label="Configuração das mensagens" className="channel-config"><MetaPanel organizationId={organizationId} client={client} reloadKey={versions.meta} onSaved={()=>setVersions(v=>({...v,meta:v.meta+1}))}/></div>
   </div>;
 }
 
@@ -290,7 +298,7 @@ function ChannelPanel({ organizationId, client, reloadKey, onSaved }: { organiza
   if (!config) return null;
   const canEdit = config.can_manage;
   const status = config.template.status;
-  return <details className="desk-settings"><summary>E-mail de suporte e confirmação automática</summary>
+  return <section className="desk-settings"><h2>E-mail de suporte e confirmação automática</h2>
     <p className="desk-fine">A leitura começa na ativação e importa só mensagens novas da caixa de entrada; não importa histórico. Nada é lido nem enviado enquanto as chaves do servidor não estiverem ligadas e a caixa Microsoft 365 não estiver autorizada. A confirmação nunca promete prazo e só vale com o texto aprovado.</p>
     <div className="desk-field-pair">
       <label>Caixa de suporte da empresa<input aria-label="Caixa de suporte" type="email" value={mailbox} disabled={!canEdit} onChange={e => setMailbox(e.target.value)} placeholder="suporte@suaempresa.com.br" /></label>
@@ -307,7 +315,7 @@ function ChannelPanel({ organizationId, client, reloadKey, onSaved }: { organiza
       <button className="desk-primary" disabled={busy || status !== 'DRAFT'} onClick={() => void run(() => client.rpc('approve_support_ack_template', { org: organizationId }), 'Texto aprovado.')}>Aprovar texto</button></div>}
     {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
     {!canEdit && <p className="desk-fine">Somente administradores alteram o canal e o texto.</p>}
-  </details>;
+  </section>;
 }
 
 const metaHelp = {
@@ -350,7 +358,7 @@ function MetaPanel({ organizationId, client, reloadKey, onSaved }: { organizatio
     setBusy(false);
     if (error) setFailure((error as { message?: string }).message || 'Não foi possível salvar.'); else { setMessage(`${metaHelp[channel].title.split(' ')[0]} salvo. Só começa a valer com a conta Meta autorizada e o servidor ligado.`); onSaved(); }
   };
-  return <details className="desk-settings"><summary>WhatsApp e Instagram desta empresa</summary>
+  return <section className="desk-settings"><h2>WhatsApp e Instagram desta empresa</h2>
     <p className="desk-fine">Cada empresa usa a própria conta. Nada é recebido nem enviado até a conta Meta ser conectada ao servidor e o canal ser habilitado aqui. O token da Meta nunca é digitado nesta tela: ele fica como segredo do servidor, no nome indicado abaixo. Respostas livres só são possíveis até 24 horas depois da última mensagem do cliente; fora disso o canal exige modelo aprovado, ainda não suportado.</p>
     <p className="desk-fine">Endereço do webhook para cadastrar na Meta: <code>{webhookUrl()}</code></p>
     {config.accounts.map(a => {
@@ -372,5 +380,5 @@ function MetaPanel({ organizationId, client, reloadKey, onSaved }: { organizatio
     })}
     {failure && <p className="desk-error" role="alert">{failure}</p>}{message && <p className="desk-notice" role="status">{message}</p>}
     {!config.can_manage && <p className="desk-fine">Somente administradores alteram os canais.</p>}
-  </details>;
+  </section>;
 }
