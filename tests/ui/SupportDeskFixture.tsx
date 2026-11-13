@@ -68,9 +68,11 @@ const fake = {
 export default function SupportDeskFixture({ manager }: { manager: boolean }) {
   const [opened, setOpened] = useState('');
   const [workspace,setWorkspace]=useState(org);
+  const [supportRole,setSupportRole]=useState(false);
   return <div className="crm-app" style={{ padding: 16 }}>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
       <button onClick={()=>setWorkspace('00000000-0000-4000-8000-000000000002')}>Trocar empresa de teste</button>
+      {manager&&<button onClick={()=>setSupportRole(true)}>Simular perfil de Suporte</button>}
       <button onClick={()=>{intakeFailure='uncertain';}}>Interromper registro manual</button>
       <button onClick={()=>{intakeFailure='validation';}}>Rejeitar registro manual</button>
       <button onClick={() => { fail = true; }}>Falhar fila</button><button onClick={() => { fail = false; }}>Recuperar fila</button>
@@ -80,6 +82,6 @@ export default function SupportDeskFixture({ manager }: { manager: boolean }) {
       <button onClick={() => { document.body.dataset.profileCalls = JSON.stringify(profileCalls); }}>Ver chamadas de perfil</button>
       {opened && <span role="status">Conversa aberta: {opened}</span>}
     </div>
-    <SupportDesk organizationId={workspace} users={[me, ana, bruno]} currentUser={manager ? boss : me} client={fake as any} onOpenConversation={setOpened} onOpenDemand={id=>setOpened('Demanda '+id)} />
+    <SupportDesk organizationId={workspace} users={[me, ana, bruno]} currentUser={supportRole ? {...boss,role:UserRole.SUPPORT} : manager ? boss : me} client={fake as any} onOpenConversation={setOpened} onOpenDemand={id=>setOpened('Demanda '+id)} />
   </div>;
 }

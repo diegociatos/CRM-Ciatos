@@ -22,7 +22,7 @@ Permanecem como próximos trabalhos funcionais: conexão guiada por autorizaçã
 
 Revisão visual no navegador em computador e celular de 390 px. Testes cobrem navegação da fila, configurações, rascunho e repetição segura do registro manual; testes adicionais verificam filtro pelos cartões, restrição da aba por perfil, ausência de transbordamento horizontal e paginação com avaliação ausente versus zero real.
 
-Revisão pelo Claude solicitada; o envio das novas alterações depende da autorização específica exigida pela análise automática. Não descrever como revisão concluída enquanto isso não ocorrer.
+Revisão pelo Claude Code concluída após autorização específica do usuário para as novas alterações de interface e estilos. Foram enviados somente código e estilos, sem credenciais nem dados de clientes. Os apontamentos foram conferidos contra o código antes de gerar correções.
 
 ## Publicação em 13/11/2026
 
@@ -33,3 +33,14 @@ Revisão pelo Claude solicitada; o envio das novas alterações depende da autor
 [Publicação](https://github.com/diegociatos/CRM-Ciatos/actions/runs/43449487868) concluída. Conferidos no navegador autenticado de produção os cartões da fila e a aba de canais. Em viewport de 390 px, a página de canais não apresentou transbordamento horizontal. Restaurado o tamanho original do navegador.
 
 A validação também identificou e corrigiu a busca inicial que podia desfazer a página escolhida na fila de demandas, além de tornar o teste de tarefas explícito sobre aguardar o resultado persistido na lista.
+
+## Correções da revisão pelo Claude
+
+- Painéis de e-mail e Meta permanecem montados ao alternar o canal. Cada um tem sua própria revisão de dados: salvar um canal não recarrega nem descarta o rascunho do outro.
+- Escolher um canal abre diretamente sua configuração, sem outra expansão. O foco acompanha o formulário selecionado.
+- Alterar o perfil reinicia o atendimento em uma aba válida e remove as configurações restritas.
+- A busca de clientes volta à primeira página na mesma atualização do campo. O resumo flexiona “cliente/clientes” e anuncia a mudança de página; a barra de saúde não é desenhada para avaliação ausente.
+- Atalhos do painel usam conteúdo HTML apropriado dentro dos botões e passam para uma coluna nas telas intermediárias.
+- O tema escuro externo do painel estratégico é explícito. A hipótese inicial de texto ilegível era parcial: o componente já tinha seu próprio fundo escuro; a correção preserva também o entorno.
+
+Testes adicionais verificam preservação de rascunhos ao trocar de canal e salvar o outro, abertura direta dos campos, foco no formulário e troca de perfil com o mesmo usuário. Nenhuma integração ou autorização de provedor é criada por essas correções.

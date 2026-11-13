@@ -431,7 +431,7 @@ const App: React.FC<WorkspaceProps> = ({company,companies=[],onCompanyChange,onC
   const podeSimular = realUser?.role === UserRole.ADMIN;
 
   return (
-    <div className={`crm-app min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex text-slate-900`}>
+    <div data-workspace-theme={nav.view === 'executive_bi' ? 'dark' : 'light'} className={`crm-app min-h-screen ${nav.view === ('executive_bi' as any) ? 'bg-[#050a15]' : 'bg-slate-50'} flex text-slate-900`}>
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <Sidebar demandAlerts={demandAlerts} brandName={company?.branding?.display_name} brandColor={company?.branding?.color} companyName={company?.nome} companyId={company?.id} companies={companies} onCompanyChange={onCompanyChange} onManageCompanies={company?.can_manage?()=>{setManageCompanies(true);setMobileMenuOpen(false);}:undefined} onOpenPlatform={company?.can_platform?()=>{setPlatformOpen(true);setMobileMenuOpen(false);}:undefined} mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} role={currentUser.role} currentView={nav.view} setView={(v) => { setNav({ view: v }); setMobileMenuOpen(false); }} onOpenNewLead={() => setShowNewLeadForm(true)} canCreate={currentUser.role !== UserRole.SUPPORT} />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
