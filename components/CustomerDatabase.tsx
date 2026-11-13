@@ -11,6 +11,7 @@ interface CustomerDatabaseProps {
   onImport?: () => void;
   onCreate?: () => void;
 }
+const customerName = (customer: Lead) => customer.tradeName || customer.legalName || customer.company || customer.name || 'Cliente sem nome';
 
 const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer, onDeleteCustomer, onImport, onCreate }) => {
   const customers = useMemo(() => leads.filter(l => l.status === LeadStatus.WON || l.relacao === 'cliente'), [leads]);
@@ -142,7 +143,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                  {filteredCustomers.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(c => (
                    <tr key={c.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedCustomerId(c.id)}>
                       <td className="px-10 py-6">
-                         <p className="font-bold text-[#0a192f] text-sm serif-authority">{c.tradeName}</p>
+                         <p className="font-bold text-[#0a192f] text-sm serif-authority">{customerName(c)}</p>
                          <div className="flex items-center gap-2 mt-1">
                             <span className="text-[9px] text-slate-300 font-mono">{c.cnpj}</span>
                             <span className="text-[8px] bg-indigo-50 text-indigo-500 font-black px-1.5 rounded uppercase">CT: {c.contractNumber || 'GERADO'}</span>
@@ -209,10 +210,10 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#c5a059]/5 rounded-full blur-[100px] -mr-64 -mt-64"></div>
          <div className="relative z-10 flex items-center gap-8">
             <div className="w-20 h-20 bg-[#0a192f] text-[#c5a059] rounded-3xl flex items-center justify-center text-4xl font-black serif-authority border-4 border-slate-50 shadow-2xl">
-               {selectedCustomer.tradeName.charAt(0)}
+               {customerName(selectedCustomer).charAt(0)}
             </div>
             <div>
-               <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight leading-none mb-2">{selectedCustomer.tradeName}</h2>
+               <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight leading-none mb-2">{customerName(selectedCustomer)}</h2>
                <div className="flex items-center gap-3">
                   <span className="text-[11px] text-slate-400 font-mono tracking-widest uppercase">{selectedCustomer.cnpj}</span>
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
