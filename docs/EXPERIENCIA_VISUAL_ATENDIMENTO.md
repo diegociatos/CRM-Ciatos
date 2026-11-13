@@ -23,3 +23,13 @@ Permanecem como próximos trabalhos funcionais: conexão guiada por autorizaçã
 Revisão visual no navegador em computador e celular de 390 px. Testes cobrem navegação da fila, configurações, rascunho e repetição segura do registro manual; testes adicionais verificam filtro pelos cartões, restrição da aba por perfil, ausência de transbordamento horizontal e paginação com avaliação ausente versus zero real.
 
 Revisão pelo Claude solicitada; o envio das novas alterações depende da autorização específica exigida pela análise automática. Não descrever como revisão concluída enquanto isso não ocorrer.
+
+## Publicação em 13/11/2026
+
+[PR 9](https://github.com/diegociatos/CRM-Ciatos/pull/9), integrado no commit `0bcd4146419ac1ca153f640549e90fea898564c9`.
+
+[Validação completa](https://github.com/diegociatos/CRM-Ciatos/actions/runs/43448816771): 110 testes de regras/banco e 68 testes de interface aprovados, além de TypeScript, build e verificação das funções existentes.
+
+[Publicação](https://github.com/diegociatos/CRM-Ciatos/actions/runs/43449487868) concluída. Conferidos no navegador autenticado de produção os cartões da fila e a aba de canais. Em viewport de 390 px, a página de canais não apresentou transbordamento horizontal. Restaurado o tamanho original do navegador.
+
+A validação também identificou e corrigiu a busca inicial que podia desfazer a página escolhida na fila de demandas, além de tornar o teste de tarefas explícito sobre aguardar o resultado persistido na lista.
