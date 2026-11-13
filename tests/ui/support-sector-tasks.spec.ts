@@ -53,3 +53,18 @@ test('client report is explicit about current backlog and updates after company 
   await expect(report.getByLabel('Cliente do relatório')).toHaveValue('');
   await expect(report.getByText('Revisar contrato do cliente', { exact: true })).toHaveCount(0);
 });
+
+for (const width of [390, 1440]) test(`sector task editor fits the viewport at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 950 });
+  await page.goto('/tests/ui/?demands');
+  await page.getByRole('button', { name: /Revisar contrato do cliente/ }).click();
+  const tasks = page.getByRole('region', { name: 'Tarefas por setor' });
+  await tasks.getByRole('button', { name: 'Nova tarefa' }).click();
+  await tasks.getByLabel('Título da tarefa').fill('Analisar cobrança e orientar o cliente');
+  await tasks.getByLabel('Setor', { exact: true }).selectOption('LEGAL');
+  await tasks.getByLabel('Executor', { exact: true }).selectOption('user-one');
+  await tasks.getByLabel('Prazo da tarefa').fill('2026-11-20T14:00');
+  const box = await tasks.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+  await tasks.screenshot({ path: `test-results/helpdesk-tarefas-${width}.png` });
+});

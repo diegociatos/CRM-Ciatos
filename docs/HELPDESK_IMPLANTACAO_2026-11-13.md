@@ -14,6 +14,7 @@ Projeto `rylbvqsjnmjohxvvzstm` (check-ciatos), organização App Planejar. A con
 
 - TypeScript e build de produção aprovados. Mantido aviso preexistente de tamanho de alguns pacotes.
 - 64 testes de interface aprovados, incluindo os três cenários novos.
+- Dois cenários visuais adicionais em 390 e 1440 pixels aprovados; formulário de tarefas inspecionado, identidade tipográfica do CRM preservada e alinhamento do campo de obrigatoriedade ajustado.
 - Suíte de regras/banco: 110 verificações executadas; 109 passaram na primeira execução. A expectativa antiga das chaves da exportação precisou ser atualizada para incluir tarefas. O arquivo afetado foi repetido: três testes aprovados. Testes novos de tarefas/relatório: nove verificações aprovadas, também após os ajustes da revisão.
 - Claude Code participou da revisão conceitual e do código novo, autorizado pelo usuário; correções incorporadas e descritas no guia operacional.
 
