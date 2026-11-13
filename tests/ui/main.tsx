@@ -1,3 +1,5 @@
+import CustomerListFixture from './CustomerListFixture';
+import '../../styles.css';
 import SupportDemandsFixture from './SupportDemandsFixture';
 import TemplateEditorFixture from './TemplateEditorFixture';
 import InboxMetaFixture from './InboxMetaFixture';
@@ -7,7 +9,6 @@ import OnboardingFixture from './OnboardingFixture';
 import {PlatformAdmin} from '../../components/PlatformAdmin';
 import WorkspaceApplication from '../../App';
 import FlowFixture from './FlowFixture';
-import '../../styles.css';
 import Dashboard from '../../components/Dashboard';
 import Sidebar from '../../components/Sidebar';
 import React, { useState } from 'react';
@@ -45,4 +46,4 @@ function SdrSwitchFixture(){
  return <main><button onClick={()=>setOrg('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')}>Trocar para empresa nova</button><SdrAgent org={org} admin sequences={[]} policyLive={false} onChanged={()=>{}}/></main>;
 }
 function RadarErrorFixture(){return <main className="p-5"><Prospector organizationId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" onAddAsLead={async()=>({success:false,message:'Teste'})} canImport={false} canSnov={true} existingLeads={[]}/></main>;}
-createRoot(document.getElementById('root')!).render(location.search==='?manual-demand'?<SupportDemandsFixture manual/>:location.search==='?demands'?<SupportDemandsFixture/>:location.search==='?inbox'?<InboxFixture/>:location.search==='?inbox-meta'?<InboxMetaFixture/>:location.search==='?desk'?<SupportDeskFixture manager={false}/>:location.search==='?desk-manager'?<SupportDeskFixture manager={true}/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?sdr-switch' ? <SdrSwitchFixture/> : location.search === '?radar-error' ? <RadarErrorFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
+createRoot(document.getElementById('root')!).render(location.search==='?customer-list'?<CustomerListFixture/>:location.search==='?manual-demand'?<SupportDemandsFixture manual/>:location.search==='?demands'?<SupportDemandsFixture/>:location.search==='?inbox'?<InboxFixture/>:location.search==='?inbox-meta'?<InboxMetaFixture/>:location.search==='?desk'?<SupportDeskFixture manager={false}/>:location.search==='?desk-manager'?<SupportDeskFixture manager={true}/>:location.search==='?template-editor'?<TemplateEditorFixture/>:location.search.startsWith('?onboarding') ? <OnboardingFixture/> : location.search === '?platform' ? <PlatformAdmin onClose={()=>{document.body.dataset.closed='true';}}/> : location.search === '?companies' ? <WorkspaceApplication/> : location.search === '?flow' ? <FlowFixture/> : location.search === '?design' ? <DesignFixture/> : location.search === '?cafeworking' ? <CafeCampaignFixture/> : location.search === '?sdr-switch' ? <SdrSwitchFixture/> : location.search === '?radar-error' ? <RadarErrorFixture/> : location.search === '?regressions' ? <RegressionFixture/> : <AiCenter/>);
