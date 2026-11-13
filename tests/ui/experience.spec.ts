@@ -34,6 +34,9 @@ test('configuração abre diretamente e preserva rascunhos ao trocar e salvar ou
  await page.getByRole('button',{name:/Configurar mensagens/}).click();
  const meta=page.getByRole('region',{name:'Configuração das mensagens'});
  await expect(meta).toBeFocused();
+ const headingTop=await meta.getByRole('heading',{name:'WhatsApp e Instagram desta empresa'}).evaluate(element=>element.getBoundingClientRect().top);
+ expect(headingTop).toBeGreaterThanOrEqual(80);
+ expect(headingTop).toBeLessThan(200);
  const wa=meta.getByRole('group',{name:/WhatsApp \(API oficial/});
  await wa.getByLabel(/identificador/).fill('109876543210');
  await page.getByRole('button',{name:/Configurar e-mail/}).click();

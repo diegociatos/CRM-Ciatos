@@ -209,11 +209,16 @@ function ChannelsWorkspace({organizationId,client}:{organizationId:string;client
   const [selected,setSelected]=useState<'email'|'meta'>('email');
   const emailPanel=useRef<HTMLDivElement>(null),metaPanel=useRef<HTMLDivElement>(null);
   const focusRequested=useRef(false);
+  const focusPanel=(next:'email'|'meta')=>{
+    const panel=(next==='email'?emailPanel:metaPanel).current;
+    panel?.focus({preventScroll:true});
+    panel?.scrollIntoView({block:'start'});
+  };
   const choose=(next:'email'|'meta')=>{
-    if(next===selected){(next==='email'?emailPanel:metaPanel).current?.focus();return;}
+    if(next===selected){focusPanel(next);return;}
     focusRequested.current=true;setSelected(next);
   };
-  useEffect(()=>{if(focusRequested.current){(selected==='email'?emailPanel:metaPanel).current?.focus();focusRequested.current=false;}},[selected]);
+  useEffect(()=>{if(focusRequested.current){focusPanel(selected);focusRequested.current=false;}},[selected]);
   return <div className="desk-channel-workspace">
     <div className="channel-intro"><p className="desk-eyebrow">CONECTAR · CONFERIR · ACOMPANHAR</p><h2>Todos os caminhos até o cliente.</h2><p>Escolha o canal para revisar o cadastro e as autorizações da empresa selecionada. Salvar os dados não confirma a conexão: confira o estado do provedor antes de contar com a importação.</p></div>
     <div className="channel-choices" role="group" aria-label="Escolher canal">
