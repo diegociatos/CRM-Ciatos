@@ -44,3 +44,13 @@ A validação também identificou e corrigiu a busca inicial que podia desfazer 
 - O tema escuro externo do painel estratégico é explícito. A hipótese inicial de texto ilegível era parcial: o componente já tinha seu próprio fundo escuro; a correção preserva também o entorno.
 
 Testes adicionais verificam preservação de rascunhos ao trocar de canal e salvar o outro, abertura direta dos campos, foco no formulário e troca de perfil com o mesmo usuário. Nenhuma integração ou autorização de provedor é criada por essas correções.
+
+### Publicação das correções
+
+[PR 10](https://github.com/diegociatos/CRM-Ciatos/pull/10) e [PR 11](https://github.com/diegociatos/CRM-Ciatos/pull/11) integrados. A conferência visual acrescentou rolagem explícita para posicionar o formulário abaixo do cabeçalho fixo ao escolher o canal.
+
+[Validação final](https://github.com/diegociatos/CRM-Ciatos/actions/runs/43493898969) aprovada, com 110 testes de regras/banco e 70 de interface. [Implantação final](https://github.com/diegociatos/CRM-Ciatos/actions/runs/43494419692) concluída no commit `6876e12f220c527b3c5b06a80b2bcd8f20b59a44`.
+
+No navegador autenticado de produção, o título da configuração ficou a aproximadamente 118 px do topo, abaixo do cabeçalho de 76 px no computador e de 72 px no celular. Em 390 px de largura, não houve transbordamento horizontal. Confirmado também o fundo externo escuro do painel estratégico. Nenhum cadastro de canal foi salvo durante a conferência; o tamanho do navegador foi restaurado.
+
+A segunda conferência do Claude considerou os apontamentos tratados resolvidos. Sua ressalva condicional de tipagem foi verificada: `executive_bi` já está em `NavigationState`, e a checagem de tipos foi aprovada.
