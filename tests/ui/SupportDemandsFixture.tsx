@@ -8,6 +8,7 @@ const user = { id: 'user-one', name: 'Diego', email: 'qa@example.test', role: Us
 const leads = [{ id: 'lead-one', organizationId: orgOne, company: 'Empresa Exemplo', name: 'Ana' }] as any;
 const initial = { id: 'demand-one', organization_id: orgOne, lead_id: 'lead-one', title: 'Revisar contrato do cliente', description: 'Conferir documentos recebidos.', status: 'OPEN', priority: 'HIGH', due_at: '2026-01-01T12:00:00Z', assigned_to: null, created_by: user.id, created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-01T10:00:00Z', resolved_at: null, version: 1 };
 const rows: Record<string, any[]> = {
+  support_demand_tasks: [],
   support_demands: [{ ...initial }, { ...initial, id: 'demand-done', title: 'Cadastro conferido', status: 'RESOLVED', priority: 'NORMAL' }],
   support_demand_alerts: [],
   support_demand_activity: [{ id: 'event-one', organization_id: orgOne, demand_id: initial.id, actor_id: user.id, kind: 'CREATED', body: null, changes: {}, created_at: initial.created_at }],
@@ -48,6 +49,10 @@ const fake = {
     }; return query;
   },
   async rpc(name: string, args: any) {
+    if (name === 'support_client_month') {
+      const items = rows.support_demands.filter(r => r.organization_id === args.org && r.lead_id === args.client_id);
+      return { data: { opened: items.length, resolved: items.filter(r => r.status === 'RESOLVED').length, open_now: items.filter(r => !['RESOLVED', 'CANCELLED'].includes(r.status)).length, avg_resolution_hours: null, total: items.length, items }, error: null };
+    }
     // Panel/avisos/configuracao: leituras independentes que nao devem consumir as falhas simuladas das gravacoes.
     if (name === 'support_demand_stats') { const open = rows.support_demands.filter(x => ['OPEN', 'IN_PROGRESS', 'WAITING'].includes(x.status)); return { data: { open: open.length, overdue: open.filter(x => x.due_at && x.due_at < new Date().toISOString()).length, due_today: 0, unassigned: open.filter(x => !x.assigned_to).length, avg_resolution_hours: null, by_assignee: [] }, error: null }; }
     if (name === 'get_support_settings') return { data: { triage_assignee: null, due_soon_hours: 4, escalate_after_hours: 4, can_manage: true, policies: { URGENT: 4, HIGH: 24, NORMAL: 72, LOW: 120 } }, error: null };
@@ -66,7 +71,17 @@ const fake = {
     }
     const row = rows.support_demands.find(x => x.id === args.demand);
     if (!row) return { data: null, error: { message: 'Not found' } };
+    if (name === 'save_support_task') {
+      const existing = rows.support_demand_tasks.find(t => t.id === args.task_id);
+      if (existing && Object.entries(args.task_data).every(([k,v]) => existing[k] === v)) return { data: row.version, error: null };
+      if (row.version !== args.expected_version) return { data: null, error: { code: '40001', message: 'Version conflict' } };
+      if (existing) Object.assign(existing, args.task_data); else rows.support_demand_tasks.push({ id: args.task_id, demand_id: row.id, organization_id: row.organization_id, ...args.task_data, created_at: new Date().toISOString() });
+      row.version++; writes++; addEvent(row, 'NOTE', { task_after: { ...args.task_data } }, 'Tarefa setorial: ' + args.task_data.title);
+      if (failAfterWrite) { failAfterWrite = false; return { data: null, error: { message: 'Resposta interrompida.' } }; }
+      return { data: row.version, error: null };
+    }
     if (name === 'update_support_demand') {
+      if (args.patch.status === 'RESOLVED' && rows.support_demand_tasks.some(t => t.demand_id === row.id && t.required && t.status === 'OPEN')) return { data: null, error: { code: '23514', message: 'Conclua todas as tarefas obrigatórias antes de resolver a demanda.' } };
       if (row.version !== args.expected_version) return { data: null, error: { message: 'Version conflict' } };
       const before = structuredClone(row); Object.assign(row, args.patch, { version: row.version + 1 }); addEvent(row, 'UPDATED', { before, after: structuredClone(row) }); writes++;
       return { data: row.version, error: null };

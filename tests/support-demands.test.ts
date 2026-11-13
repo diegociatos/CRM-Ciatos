@@ -104,7 +104,8 @@ test('demands: privacy export and erasure stay scoped to immutable client links'
  assert.equal(exported.inbox_messages.length,1,'existing inbox privacy export preserved');
  assert.equal(exported.inbox_messages[0].body,'Mensagem preservada');
  assert.equal(exported.inbox_messages[0].conversation_id,conversation);
- assert.deepEqual(Object.keys(exported).sort(),['lead','interactions','events','ai_runs','handoffs','inbox_messages','support_demands','support_demand_activity'].sort());
+ assert.deepEqual(Object.keys(exported).sort(),['lead','interactions','events','ai_runs','handoffs','inbox_messages','support_demands','support_demand_activity','support_demand_tasks'].sort());
+ assert.deepEqual(exported.support_demand_tasks,[],'task export is empty when no tasks belong to this contact');
  assert.deepEqual(exported.support_demands.map((d:any)=>d.id),[id]);
  assert.equal(exported.support_demand_activity.length,2);
  assert.ok(exported.support_demand_activity.every((a:any)=>a.demand_id===id));
