@@ -3,6 +3,10 @@ import { supabase } from '../lib/supabase';
 import { useDialog } from '../lib/useDialog';
 import SupportDemandsOverview from './SupportDemandsOverview';
 import SupportIntakeSummary from './SupportIntakeSummary';
+import SupportTasks from './SupportTasks';
+import SupportClientReport from './SupportClientReport';
+import { supportSectors, taskStates } from '../lib/supportTasks';
+import type { SupportTask } from '../lib/supportTasks';
 import { activeDemandStatuses, demandDate, demandError, demandPriorities, demandStatuses, isDefiniteDemandRejection, isDemandOverdue, toDeadline, toLocalDeadline } from '../lib/supportDemands';
 import type { DemandActivity, DemandPriority, DemandStatus, SupportDemand } from '../lib/supportDemands';
 import type { Lead, User } from '../types';
@@ -40,6 +44,7 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showReport, setShowReport] = useState(false);
   useEffect(() => { const timer = setTimeout(() => { setQuery(search.trim()); setPage(0); }, 250); return () => clearTimeout(timer); }, [search]);
   useEffect(() => {
     let active = true;
@@ -66,6 +71,8 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
   return <section className="demands-page" aria-label="Central de demandas">
     <header className="demands-header"><div><p className="demands-eyebrow">ATENDIMENTO E OPERAÇÃO</p><h1>Central de demandas<span>.</span></h1><p>Um responsável, um prazo e o histórico de cada solicitação, dentro do seu CRM.</p></div><button className="btn-navy" onClick={() => { setNotice(''); setCreating(true); }}>＋ Nova demanda</button></header>
     <p className="demands-scope">Espaço interno da empresa selecionada. Registrar ou atualizar uma demanda não envia mensagens ao cliente.</p>
+    <button type="button" className="demands-secondary" aria-expanded={showReport} onClick={() => setShowReport(v => !v)}>{showReport ? 'Fechar relatório do cliente' : 'Relatório mensal do cliente'}</button>
+    {showReport && <SupportClientReport organizationId={organizationId} leads={leads} users={users} client={client} />}
     {notice && <p className="demands-notice" role="status">{notice}</p>}
     <SupportDemandsOverview organizationId={organizationId} users={users} client={client} revision={revision} onOpenDemand={id => setSelected(id)} />
     <div className="demands-filters" role="group" aria-label="Filtrar demandas">{[['ACTIVE', 'Em aberto'], ['MINE', 'Minhas'], ['OVERDUE', 'Atrasadas'], ['UNASSIGNED', 'Sem responsável'], ['CLOSED', 'Encerradas'], ['ALL', 'Todas']].map(([id, label]) => <button key={id} aria-pressed={filter === id} onClick={() => { setFilter(id); setPage(0); }}>{label}</button>)}</div>
@@ -215,11 +222,18 @@ function DemandDetail({ id, organizationId, users, leads, currentUser, client, o
       <SupportIntakeSummary intake={row.intake}/>
       {row.lead_id && onOpenLead && <button className="demands-contact" onClick={() => onOpenLead(row.lead_id!)}>Abrir cadastro do contato ↗</button>}
       <form onSubmit={save}><fieldset disabled={busy}><DraftFields draft={draft} setDraft={setDraft} users={users} leads={leads} editing manual={row.intake?.source==='manual'} /><div className="demands-actions"><button type="button" className="demands-secondary" onClick={() => setDraft(old => ({ ...old, assigned_to: currentUser.id, status: 'IN_PROGRESS' }))}>Atribuir a mim</button><button className="btn-navy" disabled={!draft.title.trim()}>{busy ? 'Salvando…' : 'Salvar alterações'}</button></div></fieldset></form>
+      <SupportTasks key={`${row.id}:${row.version}`} demandId={row.id} organizationId={organizationId} version={row.version} users={row.confidential ? users.filter(u => u.id === row.created_by || u.id === row.assigned_to) : users} client={client} closed={['RESOLVED', 'CANCELLED'].includes(row.status)} disabled={busy || JSON.stringify(draft) !== JSON.stringify(draftFrom(row))} onChanged={() => { setReload(v => v + 1); refreshHistory(); onChanged(); }} />
       <form className="demand-note" onSubmit={addNote}><label>Nota interna<textarea aria-label="Nota interna" rows={3} maxLength={4000} value={note} disabled={busy || notePending} onChange={e => setNote(e.target.value)} placeholder="Registre uma atualização para a equipe." /></label>{notePending && !busy && <p>A confirmação não chegou. Tente registrar a mesma nota novamente; a solicitação é única e não será duplicada.</p>}<button className="demands-secondary" disabled={busy || !note.trim()}>Adicionar nota</button></form>
-      <section className="demand-history" aria-label="Histórico da demanda"><header><h3>Histórico interno</h3><button disabled={historyLoading} onClick={refreshHistory}>Atualizar histórico</button></header>{historyError && <p role="alert">{historyError}</p>}{historyLoading && <p>Carregando histórico…</p>}<ol>{activities.map(item => <li key={item.id}><div><strong>{item.kind === 'CREATED' ? 'Demanda criada' : item.kind === 'NOTE' ? 'Nota interna' : 'Demanda atualizada'}</strong><time>{demandDate(item.created_at)}</time></div><small>{users.find(user => user.id === item.actor_id)?.name || 'Equipe'}</small>{item.body && <p>{item.body}</p>}{item.kind === 'UPDATED' && <ActivityChanges changes={item.changes} users={users} leads={leads} />}</li>)}</ol>{!historyLoading && !activities.length && !historyError && <p>Nenhum registro no histórico.</p>}{(historyPage + 1) * pageSize < activityCount && <button disabled={historyLoading || !!historyError} onClick={() => setHistoryPage(v => v + 1)}>Carregar histórico anterior</button>}</section>
+      <section className="demand-history" aria-label="Histórico da demanda"><header><h3>Histórico interno</h3><button disabled={historyLoading} onClick={refreshHistory}>Atualizar histórico</button></header>{historyError && <p role="alert">{historyError}</p>}{historyLoading && <p>Carregando histórico…</p>}<ol>{activities.map(item => <li key={item.id}><div><strong>{item.kind === 'CREATED' ? 'Demanda criada' : item.kind === 'NOTE' ? 'Nota interna' : 'Demanda atualizada'}</strong><time>{demandDate(item.created_at)}</time></div><small>{users.find(user => user.id === item.actor_id)?.name || 'Equipe'}</small>{item.body && <p>{item.body}</p>}{item.kind === 'UPDATED' && <ActivityChanges changes={item.changes} users={users} leads={leads} />}{!!item.changes.task_after && <TaskHistory changes={item.changes} />}</li>)}</ol>{!historyLoading && !activities.length && !historyError && <p>Nenhum registro no histórico.</p>}{(historyPage + 1) * pageSize < activityCount && <button disabled={historyLoading || !!historyError} onClick={() => setHistoryPage(v => v + 1)}>Carregar histórico anterior</button>}</section>
     </> : null}
     <button className="demands-reload" disabled={busy || loading} onClick={() => setReload(v => v + 1)}>Recarregar dados e descartar alterações do formulário</button>
   </aside>;
+}
+
+function TaskHistory({ changes }: { changes: Record<string, unknown> }) {
+  const task = changes.task_after as SupportTask;
+  const before = changes.task_before as SupportTask | null;
+  return <p>{supportSectors[task.sector]} · {before ? `${taskStates[before.status]} → ` : ''}{taskStates[task.status]} · {task.required ? 'Obrigatória' : 'Opcional'}<br />Prazo: {demandDate(task.due_at)}{task.result ? ` · Resultado: ${task.result}` : ''}</p>;
 }
 
 function ActivityChanges({ changes, users, leads }: { changes: Record<string, unknown>; users: User[]; leads: Lead[] }) {
