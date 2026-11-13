@@ -5,6 +5,7 @@ import type { ChannelConfig, MetaAccountsConfig, DeskCase, DeskCounts, DeskOverv
 import { UserRole } from '../types';
 import type { User } from '../types';
 import './SupportDesk.css';
+import './Experience.css';
 import SupportIntake from './SupportIntake';
 const SupportDemands=lazy(()=>import('./SupportDemands'));
 
@@ -18,21 +19,22 @@ const fail = (error: unknown, fallback: string) => (error as { message?: string 
 export default function SupportDesk(props:Props){return <DeskWorkspace key={`${props.organizationId}:${props.currentUser.id}`} {...props}/>;}
 function DeskWorkspace({ organizationId, users, currentUser, client, onOpenConversation,onOpenDemand }: Props) {
   const manager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
-  const [tab, setTab] = useState<'queue' | 'manager' | 'demands'>('queue');
+  const [tab, setTab] = useState<'queue' | 'manager' | 'demands' | 'channels'>('queue');
   const [intakeOpen,setIntakeOpen]=useState(false);
   return <section className="desk" aria-label="Atendimento">
     <header className="desk-header">
       <div><p className="desk-eyebrow">ATENDIMENTO · EMPRESA SELECIONADA</p><h1>Atendimento<span>.</span></h1>
-        <p>O que chegou pelos canais conectados, quem está cuidando e o que ainda espera retorno. Entram as respostas a cadências e, só se a empresa configurar, o e-mail de suporte, o WhatsApp e o Instagram dela.</p></div>
+        <p>Cada solicitação, uma próxima ação. Acompanhe conversas, distribua demandas e cuide do retorno ao cliente.</p></div>
       <div className="desk-tabs" role="tablist" aria-label="Visão">
         <button role="tab" aria-selected={tab === 'queue'} className={tab === 'queue' ? 'is-on' : ''} onClick={() => setTab('queue')}>Minha fila</button>
         <button role="tab" aria-selected={tab === 'demands'} className={tab === 'demands' ? 'is-on' : ''} onClick={() => setTab('demands')}>Registros e demandas</button>
         {manager&&<button role="tab" aria-selected={tab === 'manager'} className={tab === 'manager' ? 'is-on' : ''} onClick={() => setTab('manager')}>Visão do gestor</button>}
+        {manager&&<button role="tab" aria-selected={tab === 'channels'} className={tab === 'channels' ? 'is-on' : ''} onClick={() => setTab('channels')}>Canais de atendimento</button>}
       </div>
     </header>
-    <div className="desk-intake-start"><div><strong>O cliente falou com a equipe fora do sistema?</strong><p>Registre ligações, WhatsApp do aplicativo, e-mails e atendimentos presenciais. O acompanhamento continua na Central de demandas.</p></div><button type="button" className="desk-primary" onClick={()=>setIntakeOpen(true)}>Novo atendimento</button></div>
+    <div className="desk-intake-start"><div><span className="desk-eyebrow">NENHUMA SOLICITAÇÃO PERDIDA</span><strong>Recebeu uma ligação ou mensagem?</strong><p>Registre aqui e acompanhe o responsável, o prazo e a solução.</p></div><button type="button" className="desk-primary" onClick={()=>setIntakeOpen(true)}>Novo atendimento</button></div>
     {intakeOpen&&<SupportIntake organizationId={organizationId} users={users} client={client} onClose={()=>setIntakeOpen(false)} onOpenDemand={onOpenDemand}/>}
-    {tab==='demands'?<Suspense fallback={<p role="status">Carregando registros…</p>}><SupportDemands organizationId={organizationId} users={users} currentUser={currentUser} leads={[]} client={client}/></Suspense>:tab === 'queue' || !manager ? <AgentView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} /> : <ManagerView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} />}
+    {tab==='channels'&&manager?<ChannelsWorkspace organizationId={organizationId} client={client}/>:tab==='demands'?<Suspense fallback={<p role="status">Carregando registros…</p>}><SupportDemands organizationId={organizationId} users={users} currentUser={currentUser} leads={[]} client={client}/></Suspense>:tab === 'queue' || !manager ? <AgentView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} /> : <ManagerView organizationId={organizationId} users={users} client={client} onOpen={onOpenConversation} />}
   </section>;
 }
 
@@ -51,6 +53,12 @@ function AgentView({ organizationId, users, client, onOpen }: { organizationId: 
   }, [client, organizationId, version]);
   return <>
     {countError && <p className="desk-error" role="alert">{countError}</p>}
+    <div className="desk-pulse" aria-label="Resumo da fila">{[
+      ['mine','Com você','Atendimentos sob sua responsabilidade','blue'],
+      ['unassigned','Para distribuir','Defina quem vai cuidar do próximo passo','amber'],
+      ['awaiting_reply','Esperam retorno','Conversas que aguardam a equipe','violet'],
+      ['attention','Exigem atenção','Revise os prazos e as pendências','rose'],
+    ].map(([key,label,help,tone])=><button key={key} className={`desk-pulse-card tone-${tone}`} aria-pressed={scope===key} onClick={()=>setScope(key as DeskScope)}><span>{label}</span><strong>{counts?counts[key as keyof DeskCounts]??0:'—'}</strong><small>{help}</small><span aria-hidden="true" className="pulse-arrow">↗</span></button>)}</div>
     <div className="desk-chips" role="group" aria-label="Filas">
       {agentScopes.map(key => <button key={key} aria-pressed={scope === key} className={`desk-chip ${scope === key ? 'is-on' : ''} ${key === 'attention' && counts?.attention ? 'is-alert' : ''}`} onClick={() => setScope(key)}>
         {scopeLabels[key]}<b>{counts ? counts[key as keyof DeskCounts] ?? 0 : '—'}</b></button>)}
@@ -184,7 +192,7 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
     <CaseList organizationId={organizationId} users={users} client={client} scope={scope} assignee={assignee || undefined} range={range} onOpen={onOpen} onChanged={() => setVersion(v => v + 1)} />
     <div className="desk-grid">
       <div className="desk-panel"><h2>Carga por atendente</h2>
-        {!overview.by_assignee.length ? <p className="desk-empty">Sem atendimentos abertos.</p> : <ul>{overview.by_assignee.map(row => <li key={row.assigned_to || 'none'}><span>{nameOf(row.assigned_to)}</span><span>{row.open} abertos · {row.waiting} aguardando retorno</span></li>)}</ul>}</div>
+        {!overview.by_assignee.length ? <p className="desk-empty">Sem atendimentos abertos.</p> : <ul className="desk-workload">{overview.by_assignee.map(row => <li key={row.assigned_to || 'none'}><div><strong>{nameOf(row.assigned_to)}</strong><span>{row.open} abertos · {row.waiting} aguardando retorno</span></div><div className="desk-workload-track" aria-hidden="true"><span style={{width:`${row.open/Math.max(1,...overview.by_assignee.map(r=>r.open))*100}%`}}/></div></li>)}</ul>}</div>
       <div className="desk-panel"><h2>Saúde e cobertura dos canais</h2>
         <ul>{overview.channels.map(channel => <li key={channel.channel} className="desk-channel"><div><strong>{channel.label || channelNames[channel.channel]}</strong><em className={`ch-${channel.status}`}>{channelStatusLabels[channel.status]}</em></div>
           <small>{channel.coverage}</small>
@@ -193,9 +201,22 @@ function ManagerView({ organizationId, users, client, onOpen }: { organizationId
         <p className="desk-fine">“Nenhum atendimento” só significa ausência de mensagens importadas; confira o estado do canal acima.</p></div>
     </div>
     <DeskSettingsPanel organizationId={organizationId} users={users} client={client} settings={settings} onSaved={() => setVersion(v => v + 1)} />
-    <ChannelPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={() => setVersion(v => v + 1)} />
-    <MetaPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={() => setVersion(v => v + 1)} />
   </>;
+}
+
+function ChannelsWorkspace({organizationId,client}:{organizationId:string;client:Client}) {
+  const [version,setVersion]=useState(0);
+  const [selected,setSelected]=useState<'email'|'meta'>('email');
+  return <div className="desk-channel-workspace">
+    <div className="channel-intro"><p className="desk-eyebrow">CONECTAR · CONFERIR · ACOMPANHAR</p><h2>Todos os caminhos até o cliente.</h2><p>Escolha o canal para revisar o cadastro e as autorizações da empresa selecionada. Salvar os dados não confirma a conexão: confira o estado do provedor antes de contar com a importação.</p></div>
+    <div className="channel-choices" role="group" aria-label="Escolher canal">
+      <button aria-pressed={selected==='email'} onClick={()=>setSelected('email')}><span className="channel-icon email-icon" aria-hidden="true">@</span><strong>E-mail de atendimento</strong><small>Microsoft 365 · caixa de suporte</small><span className="channel-choice-action">Configurar e-mail →</span></button>
+      <button aria-pressed={selected==='meta'} onClick={()=>setSelected('meta')}><span className="channel-icon whatsapp-icon" aria-hidden="true">◉</span><strong>WhatsApp e Instagram</strong><small>Meta · mensagens da empresa</small><span className="channel-choice-action">Configurar mensagens →</span></button>
+    </div>
+    <ol className="channel-steps"><li><b>1</b><span><strong>Identifique o canal</strong><small>Confira a empresa, o número ou a caixa de e-mail.</small></span></li><li><b>2</b><span><strong>Autorize o acesso</strong><small>A integração depende da conta Microsoft ou Meta e da configuração do servidor.</small></span></li><li><b>3</b><span><strong>Valide o recebimento</strong><small>Confira a verificação e a sincronização na Visão do gestor.</small></span></li></ol>
+    <div className="channel-scope-note" role="note">WhatsApp: o cadastro atual aceita um número por empresa selecionada. Os cinco números do grupo ainda precisam de uma atualização da integração para coexistirem na mesma empresa. Não substitua um número ativo para cadastrar outro.</div>
+    {selected==='email'?<ChannelPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={()=>setVersion(v=>v+1)}/>:<MetaPanel organizationId={organizationId} client={client} reloadKey={version} onSaved={()=>setVersion(v=>v+1)}/>}
+  </div>;
 }
 
 function DeskSettingsPanel({ organizationId, users, client, settings, onSaved }: { organizationId: string; users: User[]; client: Client; settings: DeskSettings; onSaved: () => void }) {

@@ -58,7 +58,7 @@ test('gestor: indicadores abrem a lista, canais sem prometer cobertura e perfil 
 
 test('gestor: texto da confirmação exige aprovação antes de habilitar o envio, sem prometer prazo', async ({ page }) => {
   await page.goto('/tests/ui/?desk-manager');
-  await page.getByRole('tab', { name: 'Visão do gestor' }).click();
+  await page.getByRole('tab', { name: 'Canais de atendimento' }).click();
   await page.getByText('E-mail de suporte e confirmação automática').click();
   await expect(page.getByText('Não criado')).toBeVisible();
   await expect(page.getByLabel('Prévia da confirmação')).toContainText('ATD-000123');
@@ -86,7 +86,8 @@ test('gestor: texto da confirmação exige aprovação antes de habilitar o envi
 
 test('gestor: WhatsApp e Instagram por empresa, sem campo de token e com o nome do segredo no servidor', async ({ page }) => {
   await page.goto('/tests/ui/?desk-manager');
-  await page.getByRole('tab', { name: 'Visão do gestor' }).click();
+  await page.getByRole('tab', { name: 'Canais de atendimento' }).click();
+  await page.getByRole('button', { name: /Configurar mensagens/ }).click();
   await page.getByText('WhatsApp e Instagram desta empresa').click();
   await expect(page.getByText('META_TOKEN_WHATSAPP_0A1B2C3D4E5F0A1B2C3D4E5F0A1B2C3D')).toBeVisible();
   await expect(page.getByText('META_TOKEN_INSTAGRAM_0A1B2C3D4E5F0A1B2C3D4E5F0A1B2C3D')).toBeVisible();

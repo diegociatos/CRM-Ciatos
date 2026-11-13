@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, LeadStatus, User, CustomerFeedbackPoint, Interaction, InteractionType, LeadPartner } from '../types';
 import WorkspaceEmpty from './WorkspaceEmpty';
 
@@ -11,6 +11,7 @@ interface CustomerDatabaseProps {
   onImport?: () => void;
   onCreate?: () => void;
 }
+const customerName = (customer: Lead) => customer.tradeName || customer.legalName || customer.company || customer.name || 'Cliente sem nome';
 
 const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser, onUpdateCustomer, onDeleteCustomer, onImport, onCreate }) => {
   const customers = useMemo(() => leads.filter(l => l.status === LeadStatus.WON || l.relacao === 'cliente'), [leads]);
@@ -19,6 +20,8 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackType, setFeedbackType] = useState<'POSITIVE' | 'NEGATIVE'>('POSITIVE');
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
 
   const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
 
@@ -27,6 +30,9 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
       [c.tradeName, c.legalName, c.company, c.name, c.cnpj].some(value => (value || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [customers, searchTerm]);
+  const pageCount = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  useEffect(()=>setPage(0),[searchTerm]);
 
   const unifiedTimeline = useMemo(() => {
     if (!selectedCustomer) return [];
@@ -134,10 +140,10 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                  </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                 {filteredCustomers.map(c => (
+                 {filteredCustomers.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(c => (
                    <tr key={c.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedCustomerId(c.id)}>
                       <td className="px-10 py-6">
-                         <p className="font-bold text-[#0a192f] text-sm serif-authority">{c.tradeName}</p>
+                         <p className="font-bold text-[#0a192f] text-sm serif-authority">{customerName(c)}</p>
                          <div className="flex items-center gap-2 mt-1">
                             <span className="text-[9px] text-slate-300 font-mono">{c.cnpj}</span>
                             <span className="text-[8px] bg-indigo-50 text-indigo-500 font-black px-1.5 rounded uppercase">CT: {c.contractNumber || 'GERADO'}</span>
@@ -150,9 +156,9 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                       <td className="px-6 py-6">
                          <div className="flex items-center gap-3">
                             <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                               <div className={`h-full ${c.healthScore && c.healthScore > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${c.healthScore || 0}%` }}></div>
+                               <div className={`h-full ${c.healthScore && c.healthScore > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${c.healthScore ?? 0}%` }}></div>
                             </div>
-                            <span className="text-[10px] font-black text-slate-400">{c.healthScore || 0}%</span>
+                            <span className="text-xs font-medium text-slate-500">{c.healthScore == null ? 'Sem avaliação' : c.healthScore + '%'}</span>
                          </div>
                       </td>
                       <td className="px-6 py-6">
@@ -165,6 +171,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
                  ))}
               </tbody>
            </table>
+           <nav className="customer-pagination" aria-label="Páginas de clientes"><span>{filteredCustomers.length} clientes · Página {currentPage + 1} de {pageCount}</span><div><button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>← Anterior</button><button disabled={currentPage>=pageCount-1} onClick={()=>setPage(currentPage+1)}>Próxima →</button></div></nav>
         </div>}
       </div>
     );
@@ -203,10 +210,10 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#c5a059]/5 rounded-full blur-[100px] -mr-64 -mt-64"></div>
          <div className="relative z-10 flex items-center gap-8">
             <div className="w-20 h-20 bg-[#0a192f] text-[#c5a059] rounded-3xl flex items-center justify-center text-4xl font-black serif-authority border-4 border-slate-50 shadow-2xl">
-               {selectedCustomer.tradeName.charAt(0)}
+               {customerName(selectedCustomer).charAt(0)}
             </div>
             <div>
-               <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight leading-none mb-2">{selectedCustomer.tradeName}</h2>
+               <h2 className="text-4xl font-black text-[#0a192f] serif-authority tracking-tight leading-none mb-2">{customerName(selectedCustomer)}</h2>
                <div className="flex items-center gap-3">
                   <span className="text-[11px] text-slate-400 font-mono tracking-widest uppercase">{selectedCustomer.cnpj}</span>
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
@@ -217,8 +224,8 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
 
          <div className="flex gap-8 relative z-10">
             <div className="text-center">
-               <p className="text-3xl font-black text-[#0a192f] serif-authority">{selectedCustomer.healthScore}%</p>
-               <p className="text-[9px] font-black text-slate-400 uppercase">Health Score</p>
+               <p className="text-3xl font-black text-[#0a192f] serif-authority">{selectedCustomer.healthScore == null ? 'Sem avaliação' : selectedCustomer.healthScore + '%'}</p>
+               <p className="text-xs font-medium text-slate-500">Saúde do relacionamento</p>
             </div>
             <div className="w-px h-12 bg-slate-100"></div>
             <div className="text-center">
@@ -505,7 +512,7 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ leads, currentUser,
            <div className="p-8 bg-amber-50 rounded-[2.5rem] border border-amber-100">
               <p className="text-[10px] font-black text-amber-800 uppercase mb-2">💡 Nota Strategist</p>
               <p className="text-xs text-amber-900/60 leading-relaxed font-medium italic">
-                "Prepare a reunião mensal com base nos feedbacks lançados. Clientes que percebem auditoria de erros e acertos têm 40% mais retenção."
+                Prepare a reunião mensal com o histórico de atendimentos e as avaliações registradas. Combine os próximos passos com o cliente.
               </p>
            </div>
         </div>

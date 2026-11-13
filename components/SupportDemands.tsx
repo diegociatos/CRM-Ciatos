@@ -45,7 +45,13 @@ function DemandWorkspace({ organizationId, users, leads, currentUser, onOpenLead
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showReport, setShowReport] = useState(false);
-  useEffect(() => { const timer = setTimeout(() => { setQuery(search.trim()); setPage(0); }, 250); return () => clearTimeout(timer); }, [search]);
+  useEffect(() => {
+    const next = search.trim();
+    // An unchanged search must not reset a page selected while the initial debounce settles.
+    if (next === query) return;
+    const timer = setTimeout(() => { setQuery(next); setPage(0); }, 250);
+    return () => clearTimeout(timer);
+  }, [search, query]);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(''); setRows([]);

@@ -20,7 +20,8 @@ test('sector execution prevents early resolution, records result and retains his
   await tasks.getByLabel('Situação da tarefa').selectOption('DONE');
   await tasks.getByLabel('Resultado ou justificativa').fill('Cobrança analisada e parecer validado.');
   await tasks.getByRole('button', { name: 'Salvar tarefa', exact: true }).click();
-  await expect(tasks.getByText('Cobrança analisada e parecer validado.')).toBeVisible();
+  // Wait for the persisted result in the refreshed list, not the editor's textarea.
+  await expect(tasks.getByRole('list').getByText('Cobrança analisada e parecer validado.')).toBeVisible();
   await detail.getByLabel('Estado', { exact: true }).selectOption('RESOLVED');
   await detail.getByRole('button', { name: 'Salvar alterações' }).click();
   await expect(tasks.getByText('Reabra a demanda para alterar tarefas.')).toBeVisible();
